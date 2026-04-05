@@ -1,0 +1,387 @@
+/**
+ * Extension 注册中心
+ *
+ * 管理所有 Extension 的注册信息（hooks、tools、gatewayMethods）。
+ * 支持按 extensionId 注册和批量卸载，为热插拔提供基础。
+ */
+
+import type { ToolDefinition } from '../../ai/tools/types';
+import type { MethodHandler } from '../../gateway/protocol/types';
+import type { ChannelPlugin } from '../../channels/types';
+import type {
+  ExtensionHookName,
+  RegisteredExtensionHook,
+  RegisteredExtensionTool,
+  RegisteredExtensionMethod,
+  RegisteredExtensionSkillDir,
+  RegisteredChannel,
+  RegisteredHttpRoute,
+  RegisteredBackgroundService,
+  RegisteredCronJob,
+  CronJobConfig
+} from './types';
+
+/** 受保护的 Gateway 核心命名空间，Extension 不可覆盖 */
+const PROTECTED_NAMESPACES = ['chat', 'stream', 'worker', 'hitl'];
+
+export class ExtensionRegistry {
+  private hooks: RegisteredExtensionHook[] = [];
+  private tools: RegisteredExtensionTool[] = [];
+  private gatewayMethods: RegisteredExtensionMethod[] = [];
+  private skillDirs: RegisteredExtensionSkillDir[] = [];
+  private channels: RegisteredChannel[] = [];
+  private httpRoutes: RegisteredHttpRoute[] = [];
+  private backgroundServices: RegisteredBackgroundService[] = [];
+  private cronJobs: RegisteredCronJob[] = [];
+  /** 失败的 Extension（extensionId → 错误信息） */
+  private failedExtensions = new Map<string, string>();
+  /** 注册的 ChannelPlugin（pluginId → { extensionId, plugin }） */
+  private channelPlugins = new Map<string, { extensionId: string; plugin: ChannelPlugin }>();
+  /** 自动注入的 Skill 名称（extensionId → skillName[]） */
+  private autoInjectSkills = new Map<string, string[]>();
+  /** 自动注入的指令（extensionId → instructions） */
+  private injectInstructions = new Map<string, string>();
+
+  // --- 工具 ---
+
+  registerTool(extensionId: string, tool: ToolDefinition): void {
+    if (this.tools.some((t) => t.tool.name === tool.name)) {
+      throw new Error(`[ExtensionRegistry] Tool "${tool.name}" already registered`);
+    }
+    this.tools.push({ extensionId, tool });
+  }
+
+  unregisterToolsByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.tools = this.tools.filter((t) => {
+      if (t.extensionId === extensionId) {
+        removed.push(t.tool.name);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getTools(): RegisteredExtensionTool[] {
+    return [...this.tools];
+  }
+
+  // --- Hook ---
+
+  registerHook<K extends ExtensionHookName>(hook: RegisteredExtensionHook<K>): void {
+    this.hooks.push(hook as unknown as RegisteredExtensionHook);
+  }
+
+  unregisterHooksByExtension(extensionId: string): void {
+    this.hooks = this.hooks.filter((h) => h.extensionId !== extensionId);
+  }
+
+  getHooks<K extends ExtensionHookName>(name: K): RegisteredExtensionHook<K>[] {
+    return this.hooks
+      .filter((h) => h.hookName === name)
+      .sort((a, b) => b.priority - a.priority) as unknown as RegisteredExtensionHook<K>[];
+  }
+
+  // --- Gateway 方法 ---
+
+  registerGatewayMethod(extensionId: string, method: string, handler: MethodHandler): void {
+    // 保护核心命名空间
+    const namespace = method.split('.')[0];
+    if (PROTECTED_NAMESPACES.includes(namespace)) {
+      throw new Error(`[ExtensionRegistry] Cannot register method "${method}": namespace "${namespace}" is protected`);
+    }
+    if (this.gatewayMethods.some((m) => m.method === method)) {
+      throw new Error(`[ExtensionRegistry] Gateway method "${method}" already registered`);
+    }
+    this.gatewayMethods.push({ extensionId, method, handler });
+  }
+
+  unregisterGatewayMethodsByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.gatewayMethods = this.gatewayMethods.filter((m) => {
+      if (m.extensionId === extensionId) {
+        removed.push(m.method);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getGatewayMethods(): RegisteredExtensionMethod[] {
+    return [...this.gatewayMethods];
+  }
+
+  // --- Skill 目录 ---
+
+  registerSkillDir(extensionId: string, dir: string): void {
+    // 同一扩展可以只贡献一个 Skill 目录，重复注册忽略
+    if (this.skillDirs.some((s) => s.extensionId === extensionId && s.dir === dir)) return;
+    this.skillDirs.push({ extensionId, dir });
+  }
+
+  unregisterSkillDirsByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.skillDirs = this.skillDirs.filter((s) => {
+      if (s.extensionId === extensionId) {
+        removed.push(s.dir);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getSkillDirs(): RegisteredExtensionSkillDir[] {
+    return [...this.skillDirs];
+  }
+
+  // --- 自动注入 Skill ---
+
+  registerAutoInjectSkills(extensionId: string, skillNames: string[]): void {
+    if (skillNames.length === 0) return;
+    this.autoInjectSkills.set(extensionId, skillNames);
+  }
+
+  unregisterAutoInjectSkillsByExtension(extensionId: string): string[] {
+    const skills = this.autoInjectSkills.get(extensionId) || [];
+    this.autoInjectSkills.delete(extensionId);
+    return skills;
+  }
+
+  getAutoInjectSkills(): string[] {
+    const allSkills: string[] = [];
+    for (const skills of this.autoInjectSkills.values()) {
+      allSkills.push(...skills);
+    }
+    // 去重
+    return Array.from(new Set(allSkills));
+  }
+
+  // --- 指令注入 ---
+
+  registerInjectInstructions(extensionId: string, instructions: string): void {
+    if (!instructions.trim()) return;
+    this.injectInstructions.set(extensionId, instructions);
+  }
+
+  unregisterInjectInstructionsByExtension(extensionId: string): string | undefined {
+    const instructions = this.injectInstructions.get(extensionId);
+    this.injectInstructions.delete(extensionId);
+    return instructions;
+  }
+
+  getInjectInstructions(): string[] {
+    return Array.from(this.injectInstructions.values());
+  }
+
+  // --- Channel ---
+
+  registerChannel(extensionId: string, channel: RegisteredChannel['channel']): void {
+    if (this.channels.some((c) => c.channel.id === channel.id)) {
+      throw new Error(`[ExtensionRegistry] Channel "${channel.id}" already registered`);
+    }
+    this.channels.push({ extensionId, channel });
+  }
+
+  unregisterChannelsByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.channels = this.channels.filter((c) => {
+      if (c.extensionId === extensionId) {
+        removed.push(c.channel.id);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getChannels(): RegisteredChannel[] {
+    return [...this.channels];
+  }
+
+  // --- ChannelPlugin ---
+
+  registerChannelPlugin(extensionId: string, plugin: ChannelPlugin): void {
+    if (this.channelPlugins.has(plugin.id)) {
+      throw new Error(
+        `[ExtensionRegistry] ChannelPlugin "${plugin.id}" already registered by "${this.channelPlugins.get(plugin.id)?.extensionId}"`
+      );
+    }
+    this.channelPlugins.set(plugin.id, { extensionId, plugin });
+  }
+
+  unregisterChannelPluginsByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    for (const [pluginId, entry] of this.channelPlugins.entries()) {
+      if (entry.extensionId === extensionId) {
+        this.channelPlugins.delete(pluginId);
+        removed.push(pluginId);
+      }
+    }
+    return removed;
+  }
+
+  getChannelPlugins(): Array<{ extensionId: string; plugin: ChannelPlugin }> {
+    return Array.from(this.channelPlugins.values());
+  }
+
+  getChannelPlugin(pluginId: string): ChannelPlugin | undefined {
+    return this.channelPlugins.get(pluginId)?.plugin;
+  }
+
+  // --- HTTP Route ---
+
+  registerHttpRoute(extensionId: string, route: RegisteredHttpRoute['route']): void {
+    if (this.httpRoutes.some((r) => r.route.path === route.path && r.route.method === route.method)) {
+      throw new Error(`[ExtensionRegistry] HTTP Route "${route.method} ${route.path}" already registered`);
+    }
+    this.httpRoutes.push({ extensionId, route });
+  }
+
+  unregisterHttpRoutesByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.httpRoutes = this.httpRoutes.filter((r) => {
+      if (r.extensionId === extensionId) {
+        removed.push(`${r.route.method} ${r.route.path}`);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getHttpRoutes(): RegisteredHttpRoute[] {
+    return [...this.httpRoutes];
+  }
+
+  // --- Background Service ---
+
+  registerService(extensionId: string, service: RegisteredBackgroundService['service']): void {
+    if (this.backgroundServices.some((s) => s.service.id === service.id)) {
+      throw new Error(`[ExtensionRegistry] Service "${service.id}" already registered`);
+    }
+    this.backgroundServices.push({ extensionId, service });
+  }
+
+  unregisterServicesByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.backgroundServices = this.backgroundServices.filter((s) => {
+      if (s.extensionId === extensionId) {
+        removed.push(s.service.id);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getServices(): RegisteredBackgroundService[] {
+    return [...this.backgroundServices];
+  }
+
+  // --- CronJob ---
+
+  registerCronJob(extensionId: string, config: CronJobConfig): void {
+    const jobKey = `${extensionId}:${config.name}`;
+    if (this.cronJobs.some((j) => `${j.extensionId}:${j.config.name}` === jobKey)) {
+      throw new Error(`[ExtensionRegistry] CronJob "${config.name}" already registered by "${extensionId}"`);
+    }
+    this.cronJobs.push({ extensionId, config });
+  }
+
+  unregisterCronJobsByExtension(extensionId: string): string[] {
+    const removed: string[] = [];
+    this.cronJobs = this.cronJobs.filter((j) => {
+      if (j.extensionId === extensionId) {
+        removed.push(j.config.name);
+        return false;
+      }
+      return true;
+    });
+    return removed;
+  }
+
+  getCronJobs(): RegisteredCronJob[] {
+    return [...this.cronJobs];
+  }
+
+  // --- 整体 ---
+
+  unregisterAll(extensionId: string): void {
+    this.unregisterToolsByExtension(extensionId);
+    this.unregisterHooksByExtension(extensionId);
+    this.unregisterGatewayMethodsByExtension(extensionId);
+    this.unregisterSkillDirsByExtension(extensionId);
+    this.unregisterAutoInjectSkillsByExtension(extensionId);
+    this.unregisterInjectInstructionsByExtension(extensionId);
+    this.unregisterChannelsByExtension(extensionId);
+    this.unregisterChannelPluginsByExtension(extensionId);
+    this.unregisterHttpRoutesByExtension(extensionId);
+    this.unregisterServicesByExtension(extensionId);
+    this.unregisterCronJobsByExtension(extensionId);
+  }
+
+  getExtensionIds(): string[] {
+    const ids = new Set<string>();
+    for (const t of this.tools) ids.add(t.extensionId);
+    for (const h of this.hooks) ids.add(h.extensionId);
+    for (const m of this.gatewayMethods) ids.add(m.extensionId);
+    for (const s of this.skillDirs) ids.add(s.extensionId);
+    for (const c of this.channels) ids.add(c.extensionId);
+    for (const [, entry] of this.channelPlugins.entries()) ids.add(entry.extensionId);
+    for (const r of this.httpRoutes) ids.add(r.extensionId);
+    for (const s of this.backgroundServices) ids.add(s.extensionId);
+    for (const j of this.cronJobs) ids.add(j.extensionId);
+    return [...ids];
+  }
+
+  clear(): void {
+    this.hooks = [];
+    this.tools = [];
+    this.gatewayMethods = [];
+    this.skillDirs = [];
+    this.autoInjectSkills.clear();
+    this.injectInstructions.clear();
+    this.channels = [];
+    this.channelPlugins.clear();
+    this.httpRoutes = [];
+    this.backgroundServices = [];
+    this.cronJobs = [];
+    this.failedExtensions.clear();
+  }
+
+  // --- 失败Extension管理 ---
+
+  /**
+   * 标记 Extension 加载/注册失败
+   */
+  markExtensionFailed(extensionId: string, error: string): void {
+    this.failedExtensions.set(extensionId, error);
+  }
+
+  /**
+   * 获取失败的 Extension 列表
+   */
+  getFailedExtensions(): Array<{ extensionId: string; error: string }> {
+    return Array.from(this.failedExtensions.entries()).map(([extensionId, error]) => ({
+      extensionId,
+      error
+    }));
+  }
+
+  /**
+   * 检查 Extension 是否失败
+   */
+  isExtensionFailed(extensionId: string): boolean {
+    return this.failedExtensions.has(extensionId);
+  }
+
+  /**
+   * 清除 Extension 的失败标记（用于重试）
+   */
+  clearExtensionFailure(extensionId: string): void {
+    this.failedExtensions.delete(extensionId);
+  }
+}

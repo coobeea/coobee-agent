@@ -1,0 +1,100 @@
+/**
+ * IPC 通道名称常量（前后端共用）
+ *
+ * 命名规范：前缀:动作
+ * - shell: Shell 窗口相关（invoke 拉取）
+ * - window: 窗口控制（invoke）
+ * - tab: Tab 操作（invoke）
+ * - ipc:event: 统一事件通道（主进程 -> 前端，通过 type 区分事件类型）
+ */
+
+/**
+ * 统一的事件通道（主进程 -> 前端）
+ * 所有事件都通过这个通道发送，通过 message.type 区分事件类型
+ */
+export const IPC_EVENT_CHANNEL = 'ipc:event' as const;
+
+/** Shell 相关通道（invoke 拉取） */
+export const ShellChannels = {
+  /** 拉取当前窗口完整信息（windowId、tabs、currentTabId 等） */
+  GET_WINDOW_INFO: 'shell:get-window-info',
+  /** 打开目录选择对话框，返回选中的路径或 null */
+  OPEN_DIRECTORY: 'shell:open-directory',
+  /** 打开文件选择对话框，返回选中的文件路径列表 */
+  OPEN_FILE: 'shell:open-file',
+  /** 读取剪贴板中的文件路径列表 */
+  GET_CLIPBOARD_FILES: 'shell:get-clipboard-files'
+} as const;
+
+/** 窗口控制通道（invoke） */
+export const WindowChannels = {
+  /** 最小化窗口 */
+  MINIMIZE: 'window:minimize',
+  /** 最大化/还原窗口 */
+  MAXIMIZE: 'window:maximize',
+  /** 关闭窗口 */
+  CLOSE: 'window:close'
+} as const;
+
+/** Tab 操作通道（invoke） */
+export const TabChannels = {
+  /** 创建 Tab */
+  CREATE: 'tab:create',
+  /** 关闭 Tab */
+  CLOSE: 'tab:close',
+  /** 切换 Tab */
+  SWITCH: 'tab:switch',
+  /** 更新 Tab */
+  UPDATE: 'tab:update'
+} as const;
+
+/** 应用级通道（invoke） */
+export const AppChannels = {
+  /** 检查后端是否就绪 */
+  IS_BACKEND_READY: 'app:is-backend-ready'
+} as const;
+
+/** 讨论室通道（invoke） */
+export const DiscussionChannels = {
+  /** 创建讨论室 */
+  CREATE: 'discussion:create',
+  /** 获取讨论列表 */
+  LIST: 'discussion:list',
+  /** 获取讨论详情 */
+  GET: 'discussion:get',
+  /** 添加消息 */
+  ADD_MESSAGE: 'discussion:add-message',
+  /** 暂停讨论 */
+  PAUSE: 'discussion:pause',
+  /** 继续讨论 */
+  RESUME: 'discussion:resume',
+  /** 结束讨论 */
+  END: 'discussion:end'
+} as const;
+
+/** 专家会诊通道（invoke） */
+export const ConsultationChannels = {
+  /** 创建会诊 */
+  CREATE: 'consultation:create',
+  /** 获取会诊列表 */
+  LIST: 'consultation:list',
+  /** 获取会诊详情 */
+  GET: 'consultation:get'
+} as const;
+
+/** 事件监听通道（on 监听） */
+export const EventChannels = {
+  /** Tab 列表更新 */
+  TABS_UPDATED: 'event:tabs-updated',
+  /** Tab 激活 */
+  TAB_ACTIVATED: 'event:tab-activated',
+  /** Tab 关闭 */
+  TAB_CLOSED: 'event:tab-closed'
+} as const;
+
+// 类型导出
+export type ShellChannel = (typeof ShellChannels)[keyof typeof ShellChannels];
+export type WindowChannel = (typeof WindowChannels)[keyof typeof WindowChannels];
+export type TabChannel = (typeof TabChannels)[keyof typeof TabChannels];
+export type AppChannel = (typeof AppChannels)[keyof typeof AppChannels];
+export type EventChannel = (typeof EventChannels)[keyof typeof EventChannels];

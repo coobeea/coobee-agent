@@ -1,0 +1,214 @@
+/**
+ * 配置加载器
+ *
+ * 加载管线：
+ * 1. 解析配置文件路径
+ * 2. 读取文件内容
+ * 3. JSON5 解析
+ * 4. ${VAR} 环境变量替换
+ * 4.5. 合并 secrets.json5 中的 API Key
+ * 5. Zod schema 校验
+ * 6. 默认值填充
+ * 7. 缓存结果
+ */
+import crypto from 'crypto';
+import fs from 'fs';
+import JSON5 from 'json5';
+import path from 'path';
+
+import { resolveEnvVars } from './ConfigEnv';
+import { mergeWithDefaults } from './ConfigDefaults';
+import { loadSecrets, mergeSecrets, secretsPath, ensureSecretsFile } from './ConfigSecrets';
+import { skillConfigPath, ensureSkillConfigFile } from '@main/ai/skills/SkillConfig';
+import { generateDefaultConfig } from './defaultConfigTemplate';
+import type { CoobeeConfig } from './schema';
+import { CoobeeConfigSchema } from './schema';
+import type { ConfigSnapshot, ConfigValidationIssue } from './types';
+
+/** 默认配置文件名 */
+const CONFIG_FILE_NAME = 'coobee.json5';
+
+export class ConfigLoader {
+  private configDir: string;
+  private secretsDir: string;
+  private cached: ConfigSnapshot | null = null;
+
+  /**
+   * @param configDir 配置目录路径（开发: <项目>/.home/config | 生产: ~/.coobee-ai/config）
+   * @param secretsDir 敏感信息目录路径（开发: <项目>/.home/secrets | 生产: ~/.coobee-ai/secrets）
+   */
+  constructor(configDir: string, secretsDir?: string) {
+    this.configDir = configDir;
+    // 兼容旧调用：如果不传 secretsDir，默认为 configDir（过渡期）
+    this.secretsDir = secretsDir || configDir;
+  }
+
+  /** 配置文件绝对路径 */
+  get configPath(): string {
+    return path.join(this.configDir, CONFIG_FILE_NAME);
+  }
+
+  /** secrets 目录绝对路径 */
+  get secretsDirPath(): string {
+    return this.secretsDir;
+  }
+
+  /** secrets.json5 绝对路径 */
+  get secretsFilePath(): string {
+    return secretsPath(this.secretsDir);
+  }
+
+  /** skills.json5 绝对路径 */
+  get skillConfigFilePath(): string {
+    return skillConfigPath(this.secretsDir);
+  }
+
+  /**
+   * 加载配置（带缓存）
+   *
+   * 首次调用读取文件并解析；后续调用返回缓存。
+   * 使用 clearCache() 清除缓存以强制重新加载。
+   */
+  load(): CoobeeConfig {
+    if (this.cached) {
+      return this.cached.config;
+    }
+    const snap = this.snapshot();
+    this.cached = snap;
+    return snap.config;
+  }
+
+  /**
+   * 直接读取文件快照（不使用缓存）
+   */
+  snapshot(): ConfigSnapshot {
+    const filePath = this.configPath;
+    const exists = fs.existsSync(filePath);
+
+    if (!exists) {
+      // 尝试自动重建配置文件
+      try {
+        this.ensureConfigFile();
+        if (fs.existsSync(filePath)) {
+          return this.snapshot(); // 重建后重新读取
+        }
+      } catch {
+        // 重建失败，返回默认配置
+      }
+      return this.buildEmptySnapshot(filePath);
+    }
+
+    let raw: string;
+    try {
+      raw = fs.readFileSync(filePath, 'utf-8');
+    } catch (err) {
+      const errCode = (err as NodeJS.ErrnoException).code;
+      return this.buildErrorSnapshot(filePath, '', '', [
+        { path: '', message: `文件读取失败 (${errCode}): ${(err as Error).message}` }
+      ]);
+    }
+
+    // hash 包含 coobee.json5 + secrets.json5 + skills.json5，任一变更都触发热重载
+    const hasher = crypto.createHash('md5').update(raw);
+    const secretsFile = this.secretsFilePath;
+    if (fs.existsSync(secretsFile)) {
+      hasher.update(fs.readFileSync(secretsFile, 'utf-8'));
+    }
+    const skillsFile = this.skillConfigFilePath;
+    if (fs.existsSync(skillsFile)) {
+      hasher.update(fs.readFileSync(skillsFile, 'utf-8'));
+    }
+    const hash = hasher.digest('hex');
+
+    // Step 3: JSON5 解析
+    let parsed: unknown;
+    try {
+      parsed = JSON5.parse(raw);
+    } catch (err) {
+      return this.buildErrorSnapshot(filePath, raw, hash, [
+        { path: '', message: `JSON5 parse error: ${(err as Error).message}` }
+      ]);
+    }
+
+    // Step 4: 环境变量替换
+    const envResolved = resolveEnvVars(parsed);
+
+    // Step 4.5: 合并 secrets.json5 中的 API Key
+    const secrets = loadSecrets(this.secretsDir);
+    const merged = mergeSecrets(envResolved, secrets);
+
+    // Step 5: Zod 校验
+    const result = CoobeeConfigSchema.safeParse(merged);
+
+    if (!result.success) {
+      const issues: ConfigValidationIssue[] = result.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message
+      }));
+      return this.buildErrorSnapshot(filePath, raw, hash, issues);
+    }
+
+    // Step 6: 默认值填充
+    const config = mergeWithDefaults(result.data);
+
+    return {
+      path: filePath,
+      exists: true,
+      raw,
+      config,
+      valid: true,
+      issues: [],
+      hash
+    };
+  }
+
+  /** 清除缓存 */
+  clearCache(): void {
+    this.cached = null;
+  }
+
+  /** 确保配置目录和文件存在 */
+  ensureConfigFile(): void {
+    if (!fs.existsSync(this.configDir)) {
+      fs.mkdirSync(this.configDir, { recursive: true });
+    }
+    if (!fs.existsSync(this.configPath)) {
+      fs.writeFileSync(this.configPath, generateDefaultConfig(), 'utf-8');
+    }
+
+    // 同时确保 secrets.json5 和 skills.json5 存在
+    ensureSecretsFile(this.secretsDir);
+    ensureSkillConfigFile(this.secretsDir);
+  }
+
+  // ─── 私有方法 ─────────────────────────────────────
+
+  private buildEmptySnapshot(filePath: string): ConfigSnapshot {
+    return {
+      path: filePath,
+      exists: false,
+      raw: null,
+      config: mergeWithDefaults({}),
+      valid: true,
+      issues: [],
+      hash: null
+    };
+  }
+
+  private buildErrorSnapshot(
+    filePath: string,
+    raw: string,
+    hash: string,
+    issues: ConfigValidationIssue[]
+  ): ConfigSnapshot {
+    return {
+      path: filePath,
+      exists: true,
+      raw,
+      config: mergeWithDefaults({}),
+      valid: false,
+      issues,
+      hash
+    };
+  }
+}

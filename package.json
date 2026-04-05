@@ -24,20 +24,34 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@duckdb/node-api": "1.4.0-r.2",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@koa/cors": "^5.0.0",
+    "@koa/router": "^15.3.0",
     "@vueuse/core": "^14.2.0",
     "axios": "^1.13.4",
+    "better-sqlite3-multiple-ciphers": "^12.6.2",
+    "chokidar": "^5.0.0",
+    "cron-parser": "^5.5.0",
     "dayjs": "^1.11.19",
     "electron-log": "^5.4.3",
     "electron-store": "8.2.0",
     "electron-updater": "^6.3.9",
     "electron-window-state": "^5.0.3",
+    "glob": "^13.0.1",
+    "jiti": "^2.6.1",
+    "koa": "^3.1.1",
+    "koa-bodyparser": "^4.4.1",
     "lodash": "^4.17.23",
+    "minimatch": "^10.1.2",
     "mitt": "^3.0.1",
+    "mkdirp": "^3.0.1",
     "nanoid": "^5.1.6",
+    "node-cron": "^4.2.1",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
+    "proper-lockfile": "^4.1.2",
     "vue-router": "^5.0.2",
     "vue-sonner": "^2.0.9",
     "zod": "^4.3.6"
@@ -101,7 +115,8 @@
     "onlyBuiltDependencies": [
       "electron",
       "esbuild",
-      "simple-git-hooks"
+      "simple-git-hooks",
+      "better-sqlite3-multiple-ciphers"
     ]
   }
 }

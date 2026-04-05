@@ -1,14 +1,34 @@
 /**
- * 共享常量定义
- * 在主进程和渲染进程之间共享的常量
+ * 共享常量
+ * 主进程和渲染进程都可以使用
  */
 
-export const APP_NAME = 'coobee-agent'
-export const APP_VERSION = '1.0.0'
+export const APP_NAME = 'Coobee AI';
+export const APP_VERSION = '1.0.0';
 
-// IPC 通道名称
+export const DEFAULT_WINDOW_WIDTH = 1200;
+export const DEFAULT_WINDOW_HEIGHT = 800;
+
+export const THEME = {
+  LIGHT: 'light',
+  DARK: 'dark',
+  AUTO: 'auto'
+} as const;
+
 export const IPC_CHANNELS = {
-  PING: 'ping',
-  GET_APP_VERSION: 'get-app-version',
-  GET_APP_PATH: 'get-app-path'
-} as const
+  // 日志
+  LOG_INFO: 'log:info',
+  LOG_ERROR: 'log:error',
+
+  // 存储
+  STORE_GET: 'store:get',
+  STORE_SET: 'store:set',
+
+  // 更新
+  CHECK_FOR_UPDATES: 'check-for-updates',
+
+  // 窗口
+  WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_MAXIMIZE: 'window:maximize',
+  WINDOW_CLOSE: 'window:close'
+} as const;
