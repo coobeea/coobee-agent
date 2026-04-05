@@ -10,43 +10,98 @@
     "lint": "eslint --cache .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev",
-    "build": "npm run typecheck && electron-vite build",
+    "dev": "cross-env VITE_DEV_MODE=true electron-vite dev --watch",
+    "build": "pnpm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:unpack": "pnpm run build && electron-builder --dir",
+    "build:win": "pnpm run build && electron-builder --win",
+    "build:mac": "pnpm run build && electron-builder --mac",
+    "build:linux": "pnpm run build && electron-builder --linux",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.3.9"
+    "@vueuse/core": "^14.2.0",
+    "axios": "^1.13.4",
+    "dayjs": "^1.11.19",
+    "electron-log": "^5.4.3",
+    "electron-store": "8.2.0",
+    "electron-updater": "^6.3.9",
+    "electron-window-state": "^5.0.3",
+    "lodash": "^4.17.23",
+    "mitt": "^3.0.1",
+    "nanoid": "^5.1.6",
+    "pinia": "^3.0.4",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "vue-router": "^5.0.2",
+    "vue-sonner": "^2.0.9",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@egoist/tailwindcss-icons": "^1.9.2",
     "@electron-toolkit/eslint-config-prettier": "3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@iconify-json/carbon": "^1.2.18",
+    "@iconify-json/heroicons": "^1.2.3",
+    "@iconify-json/mdi": "^1.2.3",
+    "@iconify-json/svg-spinners": "^1.2.4",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/lodash": "^4.17.0",
     "@types/node": "^22.19.1",
     "@vitejs/plugin-vue": "^6.0.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "cross-env": "^10.1.0",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
+    "electron-devtools-installer": "^4.0.0",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-vue": "^10.6.2",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
+    "sass": "^1.97.3",
+    "simple-git-hooks": "^2.13.1",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
+    "unplugin-icons": "^23.0.1",
+    "unplugin-vue-components": "^31.0.0",
     "vite": "^7.2.6",
+    "vitest": "^4.0.18",
     "vue": "^3.5.25",
     "vue-eslint-parser": "^10.2.0",
     "vue-tsc": "^3.1.6"
   },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs}": [
+      "prettier --write"
+    ],
+    "*.ts": [
+      "prettier --write",
+      "eslint --cache --fix"
+    ],
+    "*.vue": [
+      "prettier --write",
+      "eslint --cache --fix"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "esbuild"
+      "esbuild",
+      "simple-git-hooks"
     ]
   }
 }
