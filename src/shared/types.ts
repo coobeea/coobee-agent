@@ -4,12 +4,12 @@
  */
 
 export interface AppConfig {
-  version: string
-  env: 'development' | 'production'
+  version: string;
+  env: 'development' | 'production';
 }
 
 export interface IpcResponse<T = unknown> {
-  success: boolean
-  data?: T
-  error?: string
+  success: boolean;
+  data?: T;
+  error?: string;
 }
