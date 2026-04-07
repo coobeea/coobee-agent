@@ -1,0 +1,11 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="trayGradient" x1="256" y1="256" x2="768" y2="768" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827" />
+      <stop offset="1" stop-color="#374151" />
+    </linearGradient>
+  </defs>
+  <rect x="128" y="128" width="768" height="768" rx="192" fill="white" />
+  <path d="M512 224L792 512L512 800L232 512L512 224Z" fill="url(#trayGradient)" />
+  <path d="M512 320L700 512L512 704L324 512L512 320Z" fill="white" opacity="0.9" />
+</svg>
