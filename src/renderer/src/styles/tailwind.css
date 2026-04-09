@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import '@tailwindcss/typography';
+@plugin '@tailwindcss/typography';
 
 /* 自定义样式 */
 @layer base {
