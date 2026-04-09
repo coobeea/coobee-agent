@@ -126,7 +126,7 @@ export default defineConfig({
     },
     server: {
       host: '0.0.0.0',
-      port: 5173
+      port: 5178
     },
     plugins: [
       tailwindcss(),
@@ -153,9 +153,20 @@ export default defineConfig({
         }
       })
     ],
+    worker: {
+      format: 'es'
+    },
     build: {
       minify: 'esbuild',
-      cssCodeSplit: false
+      cssCodeSplit: false,
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          shell: resolve('src/renderer/shell.html'),
+          browser: resolve('src/renderer/browser.html'),
+          console: resolve('src/renderer/console.html')
+        }
+      }
     }
   }
 });

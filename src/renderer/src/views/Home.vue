@@ -30,8 +30,7 @@ const ipcHandle = () => window.electron.ipcRenderer.send('ping');
           href="https://electron-vite.org/"
           target="_blank"
           rel="noreferrer"
-          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-        >
+          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
           Documentation
         </a>
         <button @click="ipcHandle" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">
@@ -39,8 +38,7 @@ const ipcHandle = () => window.electron.ipcRenderer.send('ping');
         </button>
         <button
           @click="appStore.toggleTheme"
-          class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition"
-        >
+          class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition">
           Toggle Theme
         </button>
       </div>

@@ -1,23 +1,29 @@
+<template>
+  <div class="h-screen w-screen overflow-hidden bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+    <router-view v-slot="{ Component }">
+      <transition name="fade" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </router-view>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { useAppStore } from '@/stores/app';
-import { watch } from 'vue';
+import { onMounted } from 'vue';
 
-const appStore = useAppStore();
-
-// 监听主题变化
-watch(
-  () => appStore.isDark,
-  (isDark) => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  },
-  { immediate: true }
-);
+onMounted(() => {
+  console.log('App mounted');
+});
 </script>
 
-<template>
-  <router-view />
-</template>
+<style>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

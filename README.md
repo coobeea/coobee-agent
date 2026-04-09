@@ -61,15 +61,23 @@ coobee-agent/
 │   │   │   ├── assets/        # 静态资源
 │   │   │   ├── components/    # Vue 组件
 │   │   │   ├── composables/   # Composition API
+│   │   │   ├── layout/        # 布局组件
 │   │   │   ├── router/        # 路由配置
 │   │   │   ├── stores/        # Pinia 状态管理
 │   │   │   ├── styles/        # 样式文件
 │   │   │   ├── types/         # 类型定义
 │   │   │   ├── utils/         # 工具函数
 │   │   │   ├── views/         # 页面视图
+│   │   │   ├── windows/       # 多窗口应用
+│   │   │   │   ├── shell/     # Shell 窗口
+│   │   │   │   ├── browser/   # Browser 窗口
+│   │   │   │   └── console/   # Console 窗口
 │   │   │   ├── App.vue        # 根组件
-│   │   │   └── main.ts        # 应用入口
-│   │   └── index.html         # HTML 模板
+│   │   │   └── main.ts        # 主窗口入口
+│   │   ├── index.html         # 主窗口 HTML
+│   │   ├── shell.html         # Shell 窗口 HTML
+│   │   ├── browser.html       # Browser 窗口 HTML
+│   │   └── console.html       # Console 窗口 HTML
 │   └── shared/            # 共享代码（主进程与渲染进程）
 │       ├── types.ts       # 共享类型
 │       └── constants.ts   # 共享常量
@@ -169,6 +177,7 @@ pnpm build:unpack
 - 🌗 暗黑模式支持
 - 🔄 Pinia 状态管理 + 持久化
 - 🛣️ Vue Router 路由管理
+- 🪟 多窗口架构（主窗口、Shell、Browser、Console）
 
 ### 后端特性
 - 🔧 IPC 通信（主进程与渲染进程）

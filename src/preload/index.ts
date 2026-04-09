@@ -1,22 +1,86 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron';
+import { electronAPI } from '@electron-toolkit/preload';
+import { ShellChannels, TabChannels, AppChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
+import type {
+  WindowInfoResponse,
+  CreateTabRequest,
+  CreateTabResponse,
+  CloseTabRequest,
+  SwitchTabRequest,
+  UpdateTabRequest,
+  IpcResult,
+  IpcEventMessage
+} from '@shared/ipc';
 
 // Custom APIs for renderer
-const api = {}
+const api = {
+  /**
+   * 获取平台信息
+   */
+  getPlatform: (): string => process.platform,
+
+  /**
+   * 获取当前窗口完整信息（windowId、tabs、currentTabId 等）
+   */
+  getWindowInfo: (): Promise<WindowInfoResponse | null> => ipcRenderer.invoke(ShellChannels.GET_WINDOW_INFO),
+
+  /**
+   * Tab 操作
+   */
+  tab: {
+    create: (req: CreateTabRequest): Promise<IpcResult<CreateTabResponse>> =>
+      ipcRenderer.invoke(TabChannels.CREATE, req),
+    close: (req: CloseTabRequest): Promise<IpcResult<void>> => ipcRenderer.invoke(TabChannels.CLOSE, req),
+    switch: (req: SwitchTabRequest): Promise<IpcResult<void>> => ipcRenderer.invoke(TabChannels.SWITCH, req),
+    update: (req: UpdateTabRequest): Promise<IpcResult<void>> => ipcRenderer.invoke(TabChannels.UPDATE, req)
+  },
+
+  /**
+   * 打开目录选择对话框，返回选中的路径或 null
+   */
+  openDirectory: (): Promise<string | null> => ipcRenderer.invoke(ShellChannels.OPEN_DIRECTORY),
+
+  /**
+   * 打开文件选择对话框（支持多选），返回选中文件路径列表
+   */
+  openFile: (options?: {
+    properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>;
+    filters?: Array<{ name: string; extensions: string[] }>;
+  }): Promise<{ canceled: boolean; filePaths: string[] }> => ipcRenderer.invoke(ShellChannels.OPEN_FILE, options),
+
+  /**
+   * 读取剪贴板中的文件路径列表
+   */
+  getClipboardFiles: (): Promise<string[]> => ipcRenderer.invoke(ShellChannels.GET_CLIPBOARD_FILES),
+
+  /**
+   * 检查后端是否就绪（所有生命周期 Hook 完成）
+   */
+  isBackendReady: (): Promise<boolean> => ipcRenderer.invoke(AppChannels.IS_BACKEND_READY),
+
+  /**
+   * 监听 IPC 事件
+   */
+  onEvent: (callback: (message: IpcEventMessage) => void): void => {
+    ipcRenderer.on(IPC_EVENT_CHANNEL, (_, message: IpcEventMessage) => {
+      callback(message);
+    });
+  }
+};
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
 // just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('electron', electronAPI);
+    contextBridge.exposeInMainWorld('api', api);
   } catch (error) {
-    console.error(error)
+    console.error(error);
   }
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).electron = electronAPI;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).api = api;
 }

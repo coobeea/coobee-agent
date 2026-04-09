@@ -1,0 +1,89 @@
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+@plugin "@egoist/tailwindcss-icons";
+
+@layer base {
+  @import 'markstream-vue/index.tailwind.css';
+}
+
+/*
+ * 使用 @theme inline 注册设计令牌（Design Tokens）。
+ * inline 关键字保留 CSS 变量引用，使运行时主题切换（亮/暗模式、主题色）生效。
+ * CSS 变量定义在 base.css 的 @layer base 中。
+ *
+ * 注册后即可在模板中使用对应的 Tailwind 工具类，例如：
+ *   bg-primary  text-foreground  border-border  text-muted-foreground
+ *   bg-primary/10  （opacity 修饰符通过 color-mix() 实现）
+ */
+@theme inline {
+  /* ---- 颜色系统 ---- */
+
+  /* 基础 */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  /* 表面 */
+  --color-surface: hsl(var(--surface));
+  --color-surface-variant: hsl(var(--surface-variant));
+
+  /* 主色调 */
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-hover: hsl(var(--primary-hover));
+
+  /* 次要色调 */
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-hover: hsl(var(--secondary-hover));
+
+  /* 强调色 */
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-hover: hsl(var(--accent-hover));
+
+  /* 静音色 */
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  /* 卡片 */
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  /* 弹出层 */
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  /* 边框 & 输入 */
+  --color-border: hsl(var(--border));
+  --color-border-variant: hsl(var(--border-variant));
+  --color-divider: hsl(var(--divider));
+  --color-input: hsl(var(--input));
+  --color-input-background: hsl(var(--input-background));
+  --color-ring: hsl(var(--ring));
+
+  /* 状态色 */
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-error: hsl(var(--error));
+  --color-error-foreground: hsl(var(--error-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+
+  /* 遮罩 & 阴影 */
+  --color-overlay: hsl(var(--overlay));
+  --color-shadow: hsl(var(--shadow));
+
+  /* ---- 字体 ---- */
+  --font-sans: var(--font-family-system);
+  --font-serif: var(--font-family-serif);
+  --font-mono: var(--font-family-mono);
+
+  /* ---- 圆角 ---- */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
