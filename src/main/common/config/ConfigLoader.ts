@@ -19,7 +19,6 @@ import path from 'path';
 import { resolveEnvVars } from './ConfigEnv';
 import { mergeWithDefaults } from './ConfigDefaults';
 import { loadSecrets, mergeSecrets, secretsPath, ensureSecretsFile } from './ConfigSecrets';
-import { skillConfigPath, ensureSkillConfigFile } from '@main/ai/skills/SkillConfig';
 import { generateDefaultConfig } from './defaultConfigTemplate';
 import type { CoobeeConfig } from './schema';
 import { CoobeeConfigSchema } from './schema';
@@ -60,7 +59,7 @@ export class ConfigLoader {
 
   /** skills.json5 绝对路径 */
   get skillConfigFilePath(): string {
-    return skillConfigPath(this.secretsDir);
+    return path.join(this.secretsDir, 'skills.json5');
   }
 
   /**
@@ -176,9 +175,8 @@ export class ConfigLoader {
       fs.writeFileSync(this.configPath, generateDefaultConfig(), 'utf-8');
     }
 
-    // 同时确保 secrets.json5 和 skills.json5 存在
+    // 同时确保 secrets.json5 存在
     ensureSecretsFile(this.secretsDir);
-    ensureSkillConfigFile(this.secretsDir);
   }
 
   // ─── 私有方法 ─────────────────────────────────────

@@ -4,3 +4,17 @@ out
 .DS_Store
 .eslintcache
 *.log*
+*.tsbuildinfo
+.env
+.home/
+
+# 运行时二进制文件（会在需要时自动下载或构建）
+runtime/*/
+runtime/**/.gitkeep
+
+# 本地配置文件 (不提交)
+**/local_config.json
+
+# 测试结果和日志（每次运行生成）
+test-results/
+__pycache__/

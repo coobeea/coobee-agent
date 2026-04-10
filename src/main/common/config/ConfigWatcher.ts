@@ -6,7 +6,6 @@
 import { watch, type FSWatcher } from 'chokidar';
 
 import { log } from '@main/common/logger';
-import { SkillManager } from '@main/ai/skills/SkillManager';
 import { ConfigLoader } from './ConfigLoader';
 import { buildReloadPlan, diffConfigPaths } from './ConfigDiff';
 import type { ReloadPlan } from './types';
@@ -121,7 +120,6 @@ export class ConfigWatcher {
 
     // 清除缓存，重新读取
     this.loader.clearCache();
-    SkillManager.invalidateCache(); // skills.json5 变更时重新加载配置状态
     const nextSnap = this.loader.snapshot();
 
     // 如果 hash 没变，跳过

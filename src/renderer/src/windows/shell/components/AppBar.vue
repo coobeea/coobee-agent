@@ -14,6 +14,8 @@ import { usePlatform } from '../composables/usePlatform';
 const { isMacOS, isWindows } = usePlatform();
 const tabStore = useTabStore();
 
+console.log('[AppBar] setup executed, isMacOS:', isMacOS.value, 'isWindows:', isWindows.value);
+
 const isMaximized = ref(false);
 
 // 窗口控制

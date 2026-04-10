@@ -7,7 +7,9 @@ const tabStore = useTabStore();
 
 // 初始化：从主进程同步 Tab 状态
 onMounted(async () => {
+  console.log('[ShellApp] onMounted started');
   await tabStore.syncFromMain();
+  console.log('[ShellApp] syncFromMain completed, tabs:', tabStore.tabs);
 });
 </script>
 
