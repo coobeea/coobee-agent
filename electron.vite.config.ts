@@ -2,22 +2,25 @@ import { resolve } from 'path';
 import { defineConfig } from 'electron-vite';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
+import path from 'node:path';
 import Icons from 'unplugin-icons/vite';
 import IconsResolver from 'unplugin-icons/resolver';
 import Components from 'unplugin-vue-components/vite';
-import dotenv from 'dotenv';
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from 'fs';
 import type { Plugin } from 'vite';
+import dotenv from 'dotenv';
 
+// 手动加载 .env 文件到 process.env
 dotenv.config({ quiet: true });
 
+// 复制 WASM 等静态资源到构建输出目录
 function copyWasmAssetsPlugin(): Plugin {
   return {
     name: 'copy-wasm-assets',
     writeBundle() {
       const outDir = path.resolve(__dirname, 'out/main');
       const wasmFiles = [
+        // @silvia-odwyer/photon-node（pi-coding-agent 的图片处理依赖）
         {
           src: path.resolve(__dirname, 'node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm'),
           dest: path.resolve(outDir, 'photon_rs_bg.wasm')
@@ -26,7 +29,6 @@ function copyWasmAssetsPlugin(): Plugin {
 
       for (const { src, dest } of wasmFiles) {
         if (fs.existsSync(src)) {
-          fs.mkdirSync(path.dirname(dest), { recursive: true });
           fs.copyFileSync(src, dest);
           console.log(`[copy-wasm] Copied ${path.basename(src)} to output directory`);
         } else {
@@ -37,6 +39,7 @@ function copyWasmAssetsPlugin(): Plugin {
   };
 }
 
+// 复制 libs 目录下所有模块的插件
 function copyLibsPlugin(): Plugin {
   return {
     name: 'copy-libs',
@@ -44,14 +47,19 @@ function copyLibsPlugin(): Plugin {
       const sourceDir = path.resolve(__dirname, 'libs');
       const targetDir = path.resolve(__dirname, 'out/main/libs');
 
+      // 确保源目录存在
       if (!fs.existsSync(sourceDir)) {
         console.warn('[copy-libs] Source libs directory does not exist, skipping...');
         return;
       }
 
+      // 确保目标目录存在
       fs.mkdirSync(targetDir, { recursive: true });
+
+      // 复制整个 libs 目录
       fs.cpSync(sourceDir, targetDir, { recursive: true });
 
+      // 列出复制的模块
       const modules = fs.readdirSync(sourceDir).filter((item) => {
         return fs.statSync(path.join(sourceDir, item)).isDirectory();
       });
@@ -73,9 +81,10 @@ export default defineConfig({
       }
     },
     define: {
+      // 传递所有以 VITE_ 开头的环境变量
       ...Object.keys(process.env).reduce(
         (acc, key) => {
-          if (key.startsWith('VITE_') && process.env[key] !== undefined) {
+          if (key.startsWith('VITE_')) {
             acc[`process.env.${key}`] = JSON.stringify(process.env[key]);
           }
           return acc;
@@ -84,14 +93,20 @@ export default defineConfig({
       )
     },
     build: {
+      // ESM-only 的包从自动外部化中排除，强制打包进 bundle
+      externalizeDeps: {
+        exclude: ['@mariozechner/pi-coding-agent', '@mariozechner/pi-ai', 'ws']
+      },
       rollupOptions: {
+        // 原生模块标记为外部依赖
         external: [
           'better-sqlite3-multiple-ciphers',
-          'electron',
           'fs-ext',
           'node-pty',
+          'electron',
           'bufferutil',
           'utf-8-validate',
+          // 排除所有测试文件
           /\/__tests__\//,
           /\.test\.ts$/,
           /\.spec\.ts$/,
@@ -99,7 +114,7 @@ export default defineConfig({
         ],
         output: {
           inlineDynamicImports: true,
-          manualChunks: undefined
+          manualChunks: undefined // 禁用自动代码分割
         }
       }
     }
@@ -114,40 +129,43 @@ export default defineConfig({
   },
   renderer: {
     optimizeDeps: {
-      include: ['axios', 'dayjs', 'lodash']
+      include: ['monaco-editor', 'axios', 'dayjs', 'lodash']
     },
     resolve: {
       alias: {
         '@': resolve('src/renderer/src'),
+        '@types': resolve('src/renderer/types'),
         '@renderer': resolve('src/renderer/src'),
         '@shared': resolve('src/shared'),
         vue: 'vue/dist/vue.esm-bundler.js'
       }
     },
     server: {
-      host: '0.0.0.0',
-      port: 5178
+      host: '0.0.0.0', // 防止代理干扰，确保 Vite 和 Electron 之间通信正常
+      port: 5178 // 自定义端口，避免与其他项目冲突
     },
     plugins: [
       tailwindcss(),
       // 自动导入 Vue 组件
       Components({
+        // 指定 components.d.ts 文件的生成位置
         dts: resolve('src/renderer/src/types/components.d.ts'),
         resolvers: [
           // 自动导入图标组件
           IconsResolver({
-            prefix: 'icon'
+            prefix: 'icon' // 组件前缀，如 <icon-mdi-home />
           })
         ]
       }),
       // 图标插件
       Icons({
         compiler: 'vue3',
-        autoInstall: true
+        autoInstall: true // 自动安装需要的图标集
       }),
       vue({
         template: {
           compilerOptions: {
+            // 自定义元素配置（如果需要）
             isCustomElement: (tag) => tag.startsWith('custom-')
           }
         }
@@ -158,13 +176,13 @@ export default defineConfig({
     },
     build: {
       minify: 'esbuild',
+      // 确保构建时 CSS 顺序与开发时一致
       cssCodeSplit: false,
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
           shell: resolve('src/renderer/shell.html'),
-          browser: resolve('src/renderer/browser.html'),
-          console: resolve('src/renderer/console.html')
+          browser: resolve('src/renderer/browser.html')
         }
       }
     }

@@ -2,18 +2,22 @@ import './assets/tailwind.css';
 import './assets/main.css';
 
 import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import piniaPluginPersistedstate from 'pinia-plugin-persistedstate';
-
 import App from './App.vue';
 import router from './router';
+import ipcSetup from './plugins/ipcSetup';
+import eventbusSetup from './plugins/eventbusSetup';
+import gatewaySetup from './plugins/gatewaySetup';
+import pinia from './stores';
+import components from './components';
+import directives from './directives';
 
-const app = createApp(App);
-
-const pinia = createPinia();
-pinia.use(piniaPluginPersistedstate);
-
-app.use(pinia);
-app.use(router);
-
-app.mount('#app');
+// 注意：pinia 必须在其他插件之前注册，因为 ipcSetup / gatewaySetup 中使用了 Store
+createApp(App)
+  .use(pinia)
+  .use(router)
+  .use(components)
+  .use(directives)
+  .use(ipcSetup)
+  .use(eventbusSetup)
+  .use(gatewaySetup)
+  .mount('#app');
