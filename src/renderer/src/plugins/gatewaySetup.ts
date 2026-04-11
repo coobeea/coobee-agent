@@ -6,46 +6,44 @@
  * 使用方式：
  *   import { gateway } from '@/plugins/gatewaySetup'
  *   const result = await gateway.request('worker.list')
- *   gateway.on('stream.message', (payload) => { ... })
+ *   gateway.on('stream:message', (payload) => { ... })
  */
 
 import type { App } from 'vue';
-// import configManager from '@/config';
-// import eventBus from '@/eventbus';
-// import { EventTypes } from '@shared/ipc/events';
-// import { GatewayClient } from '@/services/GatewayClient';
-// import { initThreadWs } from '@/composables/useThreadWs';
-// import { initAgentEvents } from '@/composables/useAgentEvents';
+import configManager from '@/config';
+import eventBus from '@/eventbus';
+import { EventTypes } from '@shared/ipc/events';
+import { GatewayClient } from '@/services/GatewayClient';
 
 // ==================== 全局单例 ====================
 
-// export const gateway = new GatewayClient(configManager.getGatewayWsUrl());
-export const gateway = null as any; // 临时占位
+export const gateway = new GatewayClient(configManager.getGatewayWsUrl());
 
 // ==================== Vue Plugin ====================
 
-// const READY_TIMEOUT_MS = 5000;
+const READY_TIMEOUT_MS = 5000;
 let isInitialized = false;
 
-// async function connectWhenReady(): Promise<void> {
-//   // 监听 backend:ready 事件
-//   let settled = false;
-//   const settle = (): void => {
-//     if (settled) return;
-//     settled = true;
-//     gateway.connect();
-//   };
+async function connectWhenReady(): Promise<void> {
+  // 监听 backend:ready 事件
+  let settled = false;
+  const settle = (): void => {
+    if (settled) return;
+    settled = true;
+    console.log('[gatewaySetup] Backend ready, connecting to Gateway WebSocket...');
+    gateway.connect();
+  };
 
-//   eventBus.once(EventTypes.BACKEND_READY, settle);
+  eventBus.once(EventTypes.BACKEND_READY, settle);
 
-//   // 超时兜底
-//   setTimeout(() => {
-//     if (!settled) {
-//       console.warn('[gatewaySetup] Backend ready timeout, connecting anyway');
-//       settle();
-//     }
-//   }, READY_TIMEOUT_MS);
-// }
+  // 超时兜底（确保即使没有收到事件也能连接）
+  setTimeout(() => {
+    if (!settled) {
+      console.warn('[gatewaySetup] Backend ready timeout, connecting anyway');
+      settle();
+    }
+  }, READY_TIMEOUT_MS);
+}
 
 export default {
   install(_app: App): void {
@@ -55,9 +53,7 @@ export default {
     }
 
     isInitialized = true;
-    // initThreadWs();
-    // initAgentEvents();
-    // connectWhenReady();
-    console.log('[gatewaySetup] Plugin installed (业务逻辑暂时禁用)');
+    connectWhenReady();
+    console.log('[gatewaySetup] Waiting for backend ready before connecting');
   }
 };

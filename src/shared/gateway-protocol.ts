@@ -51,6 +51,13 @@ export type GatewayOutMessage = GatewayResponse | GatewayEvent;
 /** 所有 Gateway 消息联合类型（含入站） */
 export type GatewayMessage = GatewayRequest | GatewayOutMessage;
 
+// ==================== 连接状态 ====================
+
+/**
+ * WebSocket 连接状态
+ */
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
+
 // ==================== 错误码 ====================
 
 /**
