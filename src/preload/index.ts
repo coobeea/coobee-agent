@@ -54,7 +54,7 @@ const api = {
   getClipboardFiles: (): Promise<string[]> => ipcRenderer.invoke(ShellChannels.GET_CLIPBOARD_FILES),
 
   /**
-   * 检查后端是否就绪（所有生命周期 Hook 完成）
+   * 检查后端是否就绪（生命周期完成 + Gateway 启动成功）
    */
   isBackendReady: (): Promise<boolean> => ipcRenderer.invoke(AppChannels.IS_BACKEND_READY),
 

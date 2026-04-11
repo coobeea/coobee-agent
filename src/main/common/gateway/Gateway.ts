@@ -240,6 +240,20 @@ export class Gateway implements GatewayApi {
   // ==================== 生命周期 ====================
 
   /**
+   * 检查 Gateway 是否已启动
+   */
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /**
+   * 检查 Gateway 是否已启动且运行正常
+   */
+  isReady(): boolean {
+    return this.initialized && this.server !== null && this.server.isStarted;
+  }
+
+  /**
    * 关闭 Gateway
    */
   async close(): Promise<void> {

@@ -184,7 +184,20 @@ export class AppManager implements IAppManager {
 
       // 注册 IPC handler（渲染端可能在 READY 阶段完成前就加载，需要先注册）
       let backendReady = false;
-      ipcMain.handle(AppChannels.IS_BACKEND_READY, () => backendReady);
+      ipcMain.handle(AppChannels.IS_BACKEND_READY, async () => {
+        // 检查：1) 生命周期完成 && 2) Gateway 已启动
+        if (!backendReady) {
+          return false;
+        }
+
+        try {
+          const { gateway } = await import('@main/common/gateway');
+          return gateway.isReady();
+        } catch (error) {
+          log.warn('[App] 检查 Gateway 状态失败:', error);
+          return false;
+        }
+      });
 
       // 1. 应用基础配置
       electronApp.setAppUserModelId('com.coobee');
