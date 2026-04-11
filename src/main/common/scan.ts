@@ -160,23 +160,23 @@ export function scanCronJobs(): DiscoveredModule[] {
 }
 
 /**
- * 扫描 Gateway 事件桥接文件
- * 扫描 @main/bridges 目录下所有 *Bridge.ts 文件
+ * 扫描 Gateway 事件推送配置文件
+ * 扫描 @main/publishers 目录下所有 *Publisher.ts 文件
  *
- * 桥接命名规范：
- * - 文件名以 Bridge.ts 结尾（如 StreamBridge.ts）
- * - 必须导出 EventBridgeInit 类型的函数（函数名以 'init' 开头）
+ * 推送配置命名规范：
+ * - 文件名以 Publisher.ts 结尾（如 StreamPublisher.ts）
+ * - 必须 export default 一个配置（数组或对象形式）
  */
-export function scanGatewayBridges(): DiscoveredModule[] {
-  log.info('[Scan] 开始扫描 Gateway 事件桥接文件...');
+export function scanGatewayPublishers(): DiscoveredModule[] {
+  log.info('[Scan] 开始扫描 Gateway 事件推送配置文件...');
 
-  const modules = import.meta.glob('@main/bridges/**/*Bridge.ts', { eager: true });
+  const modules = import.meta.glob('@main/publishers/**/*Publisher.ts', { eager: true });
   const totalFound = Object.keys(modules).length;
 
   const filteredModules = filterModules(modules, ['__tests__']);
   const filteredCount = filteredModules.length;
 
-  log.info(`[Scan] Gateway 事件桥接扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
+  log.info(`[Scan] Gateway 事件推送配置扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
 
   return filteredModules;
 }

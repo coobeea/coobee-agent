@@ -14,7 +14,8 @@
  */
 
 import { log } from '@main/common/logger';
-import { scanGatewayBridges, scanGatewayRoutes } from '@main/common/scan';
+import { eventBus } from '@main/common/eventbus';
+import { scanGatewayPublishers, scanGatewayRoutes } from '@main/common/scan';
 import { GatewayServer } from './GatewayServer';
 import type { GatewayApi, EventBridgeInit, RouteRegistrar, GatewayEvent, ClientMeta, ClientPredicate } from './types';
 import type { WebSocket } from 'ws';
@@ -48,8 +49,8 @@ export class Gateway implements GatewayApi {
     // 1. 创建 GatewayServer（统一管理 HTTP + WebSocket）
     this.server = new GatewayServer();
 
-    // 2. 自动发现并注册事件桥接
-    this.discoverEventBridges();
+    // 2. 自动发现并注册事件推送配置
+    this.discoverEventPublishers();
 
     // 3. 自动发现并注册 HTTP 路由
     this.discoverHttpRoutes();
@@ -62,35 +63,110 @@ export class Gateway implements GatewayApi {
   }
 
   /**
-   * 自动发现并注册事件桥接
+   * 自动发现并注册事件推送配置
    *
-   * 扫描 @main/gateway/bridges/*Bridge.ts 文件
-   * 查找导出的 EventBridgeInit 函数并执行初始化
+   * 扫描 @main/publishers/*Publisher.ts 文件
+   * 支持三种配置格式：
+   *   1. 数组：['event1', 'event2'] - 事件名相同，直接转发
+   *   2. 对象：{ 'event1': 'targetEvent1', 'event2': true } - 支持改名
+   *   3. 函数：EventBridgeInit - 兼容复杂场景
    */
-  private discoverEventBridges(): void {
-    const modules = scanGatewayBridges();
+  private discoverEventPublishers(): void {
+    const modules = scanGatewayPublishers();
 
     let registeredCount = 0;
 
     for (const { path: filePath, module } of modules) {
-      for (const [exportName, exportValue] of Object.entries(module)) {
-        // 查找所有以 'init' 开头的函数导出（约定：EventBridge 初始化函数）
-        if (typeof exportValue === 'function' && exportName.startsWith('init')) {
-          try {
+      try {
+        // 方案 1：数组形式（最简）
+        if (module.default && Array.isArray(module.default)) {
+          const events = module.default as string[];
+          this.registerArrayPublisher(events, filePath);
+          registeredCount++;
+          continue;
+        }
+
+        // 方案 2：对象形式（支持改名和转换）
+        if (module.default && typeof module.default === 'object' && !Array.isArray(module.default)) {
+          const config = module.default as Record<string, unknown>;
+          this.registerObjectPublisher(config, filePath);
+          registeredCount++;
+          continue;
+        }
+
+        // 方案 3：函数形式（兼容复杂场景）
+        for (const [exportName, exportValue] of Object.entries(module)) {
+          if (typeof exportValue === 'function' && exportName.startsWith('init')) {
             const cleanup = (exportValue as EventBridgeInit)(this);
             if (cleanup) {
               this.eventBridgeCleanups.push(cleanup);
             }
-            log.debug(`[Gateway] 初始化事件桥接: ${exportName} (来自 ${filePath})`);
+            log.debug(`[Gateway] 初始化事件推送（函数）: ${exportName} (来自 ${filePath})`);
             registeredCount++;
-          } catch (error) {
-            log.error(`[Gateway] 事件桥接初始化失败: ${exportName}`, error);
           }
         }
+      } catch (error) {
+        log.error(`[Gateway] 事件推送配置加载失败: ${filePath}`, error);
       }
     }
 
-    log.info(`[Gateway] 事件桥接发现完成: 共 ${registeredCount} 个`);
+    log.info(`[Gateway] 事件推送配置发现完成: 共 ${registeredCount} 个`);
+  }
+
+  /**
+   * 注册数组形式的推送配置
+   * 示例：export default ['event1', 'event2']
+   */
+  private registerArrayPublisher(events: string[], filePath: string): void {
+    const handlers: Array<() => void> = [];
+
+    for (const eventName of events) {
+      const handler = (data: unknown): void => {
+        this.broadcastEvent(eventName, data);
+      };
+
+      eventBus.on(eventName, handler);
+      handlers.push(() => eventBus.off(eventName, handler));
+    }
+
+    this.eventBridgeCleanups.push(() => {
+      handlers.forEach((cleanup) => cleanup());
+    });
+
+    log.debug(`[Gateway] 注册推送配置（数组）: ${filePath} (${events.length} 个事件)`);
+  }
+
+  /**
+   * 注册对象形式的推送配置
+   * 示例：export default { 'event1': 'targetEvent1', 'event2': true }
+   */
+  private registerObjectPublisher(config: Record<string, unknown>, filePath: string): void {
+    const handlers: Array<() => void> = [];
+
+    for (const [busEvent, target] of Object.entries(config)) {
+      const handler = (data: unknown): void => {
+        if (typeof target === 'function') {
+          // 支持数据转换函数
+          const transformed = target(data);
+          this.broadcastEvent(busEvent, transformed);
+        } else if (typeof target === 'string') {
+          // 支持改名
+          this.broadcastEvent(target, data);
+        } else {
+          // 直接转发（target === true）
+          this.broadcastEvent(busEvent, data);
+        }
+      };
+
+      eventBus.on(busEvent, handler);
+      handlers.push(() => eventBus.off(busEvent, handler));
+    }
+
+    this.eventBridgeCleanups.push(() => {
+      handlers.forEach((cleanup) => cleanup());
+    });
+
+    log.debug(`[Gateway] 注册推送配置（对象）: ${filePath} (${Object.keys(config).length} 个事件)`);
   }
 
   /**
