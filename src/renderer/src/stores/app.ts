@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 

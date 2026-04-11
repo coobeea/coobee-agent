@@ -9,7 +9,6 @@
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { useIpc } from '@/composables/useIpc';
 import type { WindowInfoResponse } from '@shared/ipc';
 
 export const useWindowStore = defineStore('window', () => {
@@ -28,9 +27,8 @@ export const useWindowStore = defineStore('window', () => {
    */
   async function refreshWindowInfo(): Promise<void> {
     try {
-      const ipc = useIpc();
-      // 使用 invoke 替代 getWindowInfo
-      const info = await ipc.invoke<WindowInfoResponse>('window:getInfo');
+      // 使用 preload 暴露的 API
+      const info = await window.api?.getWindowInfo?.();
       if (info) {
         windowInfo.value = info;
         windowId.value = info.windowId;

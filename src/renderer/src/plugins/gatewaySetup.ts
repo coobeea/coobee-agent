@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Gateway 初始化插件
  *
@@ -10,54 +11,55 @@
  */
 
 import type { App } from 'vue';
-import configManager from '@/config';
-import eventBus from '@/eventbus';
-import { EventTypes } from '@shared/ipc/events';
-import { GatewayClient } from '@/services/GatewayClient';
-import { initThreadWs } from '@/composables/useThreadWs';
-import { initAgentEvents } from '@/composables/useAgentEvents';
+// import configManager from '@/config';
+// import eventBus from '@/eventbus';
+// import { EventTypes } from '@shared/ipc/events';
+// import { GatewayClient } from '@/services/GatewayClient';
+// import { initThreadWs } from '@/composables/useThreadWs';
+// import { initAgentEvents } from '@/composables/useAgentEvents';
 
 // ==================== 全局单例 ====================
 
-export const gateway = new GatewayClient(configManager.getGatewayWsUrl());
+// export const gateway = new GatewayClient(configManager.getGatewayWsUrl());
+export const gateway = null as any; // 临时占位
 
 // ==================== Vue Plugin ====================
 
-const READY_TIMEOUT_MS = 5000;
+// const READY_TIMEOUT_MS = 5000;
 let isInitialized = false;
 
-async function connectWhenReady(): Promise<void> {
-  // 先检查后端是否已就绪
-  try {
-    const ready = await window.api?.isBackendReady?.();
-    if (ready) {
-      gateway.connect();
-      return;
-    }
-  } catch {
-    // preload API 不可用 → 直接连接（非 Electron 环境或者 handler 未注册）
-    gateway.connect();
-    return;
-  }
+// async function connectWhenReady(): Promise<void> {
+//   // 先检查后端是否已就绪
+//   try {
+//     const ready = await window.api?.isBackendReady?.();
+//     if (ready) {
+//       gateway.connect();
+//       return;
+//     }
+//   } catch {
+//     // preload API 不可用 → 直接连接（非 Electron 环境或者 handler 未注册）
+//     gateway.connect();
+//     return;
+//   }
 
-  // 监听 backend:ready 事件
-  let settled = false;
-  const settle = (): void => {
-    if (settled) return;
-    settled = true;
-    gateway.connect();
-  };
+//   // 监听 backend:ready 事件
+//   let settled = false;
+//   const settle = (): void => {
+//     if (settled) return;
+//     settled = true;
+//     gateway.connect();
+//   };
 
-  eventBus.once(EventTypes.BACKEND_READY, settle);
+//   eventBus.once(EventTypes.BACKEND_READY, settle);
 
-  // 超时兜底
-  setTimeout(() => {
-    if (!settled) {
-      console.warn('[gatewaySetup] Backend ready timeout, connecting anyway');
-      settle();
-    }
-  }, READY_TIMEOUT_MS);
-}
+//   // 超时兜底
+//   setTimeout(() => {
+//     if (!settled) {
+//       console.warn('[gatewaySetup] Backend ready timeout, connecting anyway');
+//       settle();
+//     }
+//   }, READY_TIMEOUT_MS);
+// }
 
 export default {
   install(_app: App): void {
@@ -67,9 +69,9 @@ export default {
     }
 
     isInitialized = true;
-    initThreadWs();
-    initAgentEvents();
-    connectWhenReady();
-    console.log('[gatewaySetup] Waiting for backend ready before connecting');
+    // initThreadWs();
+    // initAgentEvents();
+    // connectWhenReady();
+    console.log('[gatewaySetup] Plugin installed (业务逻辑暂时禁用)');
   }
 };
