@@ -646,8 +646,8 @@ export class WindowManager implements IWindowManager {
     try {
       // 根据窗口类型创建默认 Tab
       const defaultTabConfig: TabConfig = {
-        url: windowType === 'agent' ? 'local://agent' : 'about:blank',
-        title: windowType === 'agent' ? 'Agent' : 'New Tab',
+        url: windowType === 'agent' ? 'local://home' : 'about:blank',
+        title: windowType === 'agent' ? 'Home' : 'New Tab',
         active: true,
         closable: true // 都可以关闭
       };
