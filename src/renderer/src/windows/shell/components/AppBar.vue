@@ -111,7 +111,7 @@ const handleWheel = (e: WheelEvent): void => {
     <!-- Tabs Container -->
     <div
       ref="tabsContainer"
-      class="flex h-full shrink min-w-0 items-center overflow-x-auto overflow-y-hidden scrollbar-hide px-1"
+      class="flex h-full shrink min-w-0 items-end overflow-x-auto overflow-y-hidden scrollbar-hide pt-[4px]"
       @wheel="handleWheel">
       <TabItem
         v-for="tab in tabStore.tabs"
