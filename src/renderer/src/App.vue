@@ -1,100 +1,37 @@
 <script setup lang="ts">
 /**
- * App.vue — 根组件（Tab 内容区域）
+ * App.vue — 根组件
  *
- * 这是 Tab 内容区域的根组件，被嵌入到 Shell 窗口的 WebContentsView 中。
- * 当前保持最简结构，只包含基础的路由视图。
+ * 应用的根组件，包含路由视图和全局 UI 容器。
  */
 
-import { ref, onMounted, onUnmounted } from 'vue';
-import eventBus from '@/eventbus';
-import { EventTypes } from '@shared/ipc/events';
+import { useRoute } from 'vue-router';
+import Container from '@/components/Container.vue';
+import ConfirmContainer from '@/components/Confirm/ConfirmContainer.vue';
+import MessageContainer from '@/components/Message/MessageContainer.vue';
+import StatusBar from '@/components/StatusBar.vue';
 
-const isReady = ref(false);
-let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-function markReady(): void {
-  if (isReady.value) return;
-  isReady.value = true;
-  if (timeoutId) {
-    clearTimeout(timeoutId);
-    timeoutId = null;
-  }
-}
-
-function onBackendReady(): void {
-  markReady();
-}
-
-onMounted(async () => {
-  // 监听后端就绪事件
-  eventBus.once(EventTypes.BACKEND_READY, onBackendReady);
-
-  // 超时兜底
-  timeoutId = setTimeout(() => {
-    markReady();
-  }, 5000);
-});
-
-onUnmounted(() => {
-  eventBus.off(EventTypes.BACKEND_READY, onBackendReady);
-  if (timeoutId) clearTimeout(timeoutId);
-});
+const route = useRoute();
 </script>
 
 <template>
-  <!-- 加载中 -->
-  <Transition name="fade">
-    <div v-if="!isReady" class="app-loading">
-      <div class="loading-spinner" />
-      <p class="loading-text">加载中...</p>
+  <div class="bg-background text-foreground transition-theme flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div class="flex min-h-0 flex-1 flex-col">
+      <router-view />
+      <Container />
     </div>
-  </Transition>
-
-  <!-- 真实内容 -->
-  <div v-if="isReady" class="flex h-full w-full flex-col overflow-hidden bg-gray-50">
-    <router-view />
+    <StatusBar v-if="!route.meta.fullscreen" />
   </div>
+
+  <!-- 全局容器 -->
+  <ConfirmContainer />
+  <MessageContainer />
 </template>
 
 <style scoped>
-.app-loading {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: hsl(var(--background, 0 0% 100%));
-  z-index: 99999;
-}
-
-.loading-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid hsl(var(--border, 0 0% 90%));
-  border-top-color: hsl(var(--primary, 220 90% 56%));
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.loading-text {
-  margin-top: 16px;
-  font-size: 14px;
-  color: hsl(var(--muted-foreground, 0 0% 45%));
-  letter-spacing: 0.5px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-leave-to {
-  opacity: 0;
+.transition-theme {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 </style>
