@@ -109,9 +109,9 @@ const handleWheel = (e: WheelEvent): void => {
     <div v-if="isMacOS" class="h-full w-20 shrink-0"></div>
 
     <!-- Tabs Container -->
-    <div 
+    <div
       ref="tabsContainer"
-      class="flex h-full shrink min-w-0 items-center overflow-x-auto overflow-y-hidden scrollbar-hide pt-[2px]"
+      class="flex h-full shrink min-w-0 items-center overflow-x-auto overflow-y-hidden scrollbar-hide px-1"
       @wheel="handleWheel">
       <TabItem
         v-for="tab in tabStore.tabs"
