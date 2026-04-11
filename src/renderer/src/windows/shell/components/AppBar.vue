@@ -88,17 +88,6 @@ const addNewTab = async (): Promise<void> => {
 
 // 标签页容器引用
 const tabsContainer = ref<HTMLElement | null>(null);
-
-// 处理鼠标滚轮事件，将垂直滚动转换为水平滚动
-const handleWheel = (e: WheelEvent): void => {
-  if (tabsContainer.value) {
-    // 只有在没有按住 Shift 键（Shift 默认就是水平滚动）且有垂直滚动时才转换
-    if (e.deltaY !== 0 && !e.shiftKey) {
-      e.preventDefault(); // 阻止默认的垂直滚动
-      tabsContainer.value.scrollLeft += e.deltaY;
-    }
-  }
-};
 </script>
 
 <template>
@@ -111,8 +100,7 @@ const handleWheel = (e: WheelEvent): void => {
     <!-- Tabs Container -->
     <div
       ref="tabsContainer"
-      class="flex h-full shrink min-w-0 items-end overflow-x-auto overflow-y-hidden scrollbar-hide pt-[4px]"
-      @wheel="handleWheel">
+      class="flex h-full flex-1 items-end overflow-hidden pt-[4px]">
       <TabItem
         v-for="tab in tabStore.tabs"
         :key="tab.id"

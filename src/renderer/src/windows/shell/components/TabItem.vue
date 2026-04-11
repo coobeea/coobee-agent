@@ -31,7 +31,7 @@ const onClose = (): void => {
 <template>
   <div
     ref="tabItem"
-    class="window-no-drag-region group relative flex h-full min-w-[120px] max-w-[220px] shrink-0 cursor-pointer items-center justify-between px-3 text-xs font-medium transition-colors rounded-t-md"
+    class="window-no-drag-region group relative flex h-full w-[220px] shrink min-w-[48px] max-w-[220px] cursor-pointer items-center justify-between px-2 text-xs font-medium transition-colors rounded-t-md"
     :class="[
       active
         ? 'bg-gray-50 text-gray-800' // 激活状态：与主内容区背景色一致，无缝衔接
@@ -39,7 +39,7 @@ const onClose = (): void => {
     ]"
     @click="onClick">
     <!-- Tab Content -->
-    <div class="flex flex-1 items-center overflow-hidden pr-2">
+    <div class="flex flex-1 items-center overflow-hidden pr-1">
       <slot></slot>
     </div>
 
@@ -47,14 +47,14 @@ const onClose = (): void => {
     <button
       v-if="canClose"
       type="button"
-      class="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-all"
+      class="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded transition-all"
       :class="[
         active
           ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-800'
           : 'text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-300 hover:text-gray-800'
       ]"
       @click.stop="onClose">
-      <IconMdiClose class="text-[14px]" />
+      <IconMdiClose class="text-[12px]" />
     </button>
   </div>
 </template>
