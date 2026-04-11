@@ -31,7 +31,7 @@ const onClose = (): void => {
 <template>
   <div
     ref="tabItem"
-    class="window-no-drag-region group relative flex h-full w-[220px] shrink min-w-[48px] max-w-[220px] cursor-pointer items-center justify-between px-2 text-xs font-medium transition-colors rounded-t-md"
+    class="window-no-drag-region group relative flex h-full w-[160px] shrink min-w-[48px] max-w-[160px] cursor-pointer items-center justify-between px-2 text-xs font-medium transition-colors rounded-t-md"
     :class="[
       active
         ? 'bg-gray-50 text-gray-800' // 激活状态：与主内容区背景色一致，无缝衔接
