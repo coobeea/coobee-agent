@@ -25,11 +25,18 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.101",
     "@duckdb/node-api": "1.4.0-r.2",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@koa/cors": "^5.0.0",
     "@koa/router": "^15.3.0",
+    "@mariozechner/pi-agent-core": "^0.66.1",
+    "@mariozechner/pi-ai": "^0.66.1",
+    "@mariozechner/pi-coding-agent": "^0.66.1",
+    "@mariozechner/pi-tui": "^0.66.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@openai/agents": "^0.8.3",
     "@vueuse/core": "^14.2.0",
     "axios": "^1.13.4",
     "better-sqlite3-multiple-ciphers": "^12.6.2",
