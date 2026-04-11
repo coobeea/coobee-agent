@@ -71,8 +71,8 @@ const handleTabClose = async (tabId: string): Promise<void> => {
 const addNewTab = async (): Promise<void> => {
   try {
     const result = await window.api.tab.create({
-      title: 'New Chat',
-      url: 'local://chat' // 使用 local:// 协议
+      title: 'Coobee Agent',
+      url: 'local://' // 跳转到根路径，由前端路由控制
     });
 
     if (result.success) {
