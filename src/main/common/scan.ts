@@ -2,29 +2,14 @@ import { log } from './logger';
 import { DiscoveredModule } from './types';
 
 /**
- * 扫描 API 文件
+ * 模块扫描工具
+ *
+ * 提供统一的自动扫描机制，支持：
+ * - 生命周期 Hooks
+ * - 事件处理器
+ * - Gateway Publishers（WebSocket 推送配置）
+ * - Gateway Routes（HTTP 路由）
  */
-export function scanApis(): DiscoveredModule[] {
-  log.info('[Scan] 开始扫描API文件...');
-
-  const modules = import.meta.glob(
-    ['../api/**/*.ts', '!../api/**/__tests__/**', '!../api/**/*.test.ts', '!../api/**/*.spec.ts'],
-    { eager: true }
-  );
-  const totalFound = Object.keys(modules).length;
-
-  log.info(`[Scan] 发现 ${totalFound} 个API文件:`);
-  Object.keys(modules).forEach((path, index) => {
-    log.info(`[Scan]   ${index + 1}. ${path}`);
-  });
-
-  const filteredModules = filterModules(modules, ['/__tests__/', '.test.ts', '.spec.ts']);
-  const filteredCount = filteredModules.length;
-
-  log.info(`[Scan] API文件扫描完成，共 ${filteredCount} 个文件`);
-
-  return filteredModules;
-}
 
 /**
  * 扫描生命周期 Hook 文件
@@ -64,97 +49,6 @@ export function scanEventHandlers(): DiscoveredModule[] {
   const filteredCount = filteredModules.length;
 
   log.info(`[Scan] 事件处理器文件扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
-
-  return filteredModules;
-}
-
-/**
- * 扫描 WebSocket Channel 文件
- * 扫描 @main/channels 目录下所有 *Channel.ts 文件
- *
- * Channel 命名规范：
- * - 文件名以 Channel.ts 结尾（如 StreamChannel.ts、WorkerChannel.ts）
- * - 必须导出一个实现 WsChannel 接口的对象
- * - prefix 字段用于消息路由（如 'stream'、'worker'）
- */
-export function scanWsChannels(): DiscoveredModule[] {
-  log.info('[Scan] 开始扫描 WebSocket Channel 文件...');
-
-  const modules = import.meta.glob('@main/channels/**/*Channel.ts', { eager: true });
-  const totalFound = Object.keys(modules).length;
-
-  const filteredModules = filterModules(modules, ['BaseChannel', '__tests__']);
-  const filteredCount = filteredModules.length;
-
-  log.info(`[Scan] WebSocket Channel 扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
-
-  return filteredModules;
-}
-
-/**
- * 扫描 Gateway 方法组文件
- * 扫描 @main/gateway/methods 目录下所有 *.ts 文件
- *
- * 方法组命名规范：
- * - 文件名为业务领域（如 chat.ts、stream.ts、worker.ts）
- * - 必须导出实现 MethodGroup 接口的对象
- * - namespace 字段用于方法路由（如 'chat' → 'chat.send'）
- */
-export function scanGatewayMethods(): DiscoveredModule[] {
-  log.info('[Scan] 开始扫描 Gateway 方法组文件...');
-
-  const modules = import.meta.glob('@main/gateway/methods/**/*.ts', { eager: true });
-  const totalFound = Object.keys(modules).length;
-
-  const filteredModules = filterModules(modules, ['__tests__']);
-  const filteredCount = filteredModules.length;
-
-  log.info(`[Scan] Gateway 方法组扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
-
-  return filteredModules;
-}
-
-/**
- * 扫描 Gateway 事件桥接文件
- * 扫描 @main/gateway/events 目录下所有 *.ts 文件
- *
- * 事件桥接命名规范：
- * - 文件名以 Bridge.ts 结尾（如 StreamBridge.ts）
- * - 必须导出 EventBridgeInit 类型的函数
- */
-export function scanGatewayEventBridges(): DiscoveredModule[] {
-  log.info('[Scan] 开始扫描 Gateway 事件桥接文件...');
-
-  const modules = import.meta.glob('@main/gateway/events/**/*.ts', { eager: true });
-  const totalFound = Object.keys(modules).length;
-
-  // 过滤掉测试文件
-  const filteredModules = filterModules(modules, ['/__tests__/', '.test.ts', '.spec.ts']);
-  const filteredCount = filteredModules.length;
-
-  log.info(`[Scan] Gateway 事件桥接扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
-
-  return filteredModules;
-}
-
-/**
- * 扫描声明式 CronJob 文件
- * 扫描 @main/jobs 目录下所有 *Job.ts 文件
- *
- * Job 命名规范：
- * - 文件名以 Job.ts 结尾（如 HealthCheckJob.ts、DataSyncJob.ts）
- * - 必须默认导出一个继承 BaseCronJob 的类
- */
-export function scanCronJobs(): DiscoveredModule[] {
-  log.info('[Scan] 开始扫描声明式 CronJob 文件...');
-
-  const modules = import.meta.glob('@main/jobs/**/*Job.ts', { eager: true });
-  const totalFound = Object.keys(modules).length;
-
-  const filteredModules = filterModules(modules, ['BaseCronJob', '__tests__', '.test.ts', '.spec.ts']);
-  const filteredCount = filteredModules.length;
-
-  log.info(`[Scan] 声明式 CronJob 扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
 
   return filteredModules;
 }
@@ -205,9 +99,10 @@ export function scanGatewayRoutes(): DiscoveredModule[] {
 
 /**
  * 通用过滤函数 - 过滤掉指定的文件
+ *
  * @param modules 扫描结果对象 (使用 eager: true 时，值直接是模块内容)
  * @param excludePatterns 要排除的文件名模式数组
- * @returns 过滤后的模块对象
+ * @returns 过滤后的模块数组
  */
 export function filterModules(modules: Record<string, unknown>, excludePatterns: string[] = []): DiscoveredModule[] {
   const filteredModules: DiscoveredModule[] = [];
