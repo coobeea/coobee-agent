@@ -36,12 +36,26 @@ vi.mock('@main/common/logger', () => ({
   }))
 }));
 
+const tmpDir = path.join(os.tmpdir(), `worker-test-${Date.now()}`);
+
 vi.mock('@main/common/env', () => {
-  const tmpDir = path.join(os.tmpdir(), `worker-test-${Date.now()}`);
   return {
     Env: {
-      paths: {
-        workersDir: path.join(tmpDir, 'workers')
+      paths: {},
+      main: {
+        serverHost: 'localhost'
+      },
+      isDev: true,
+      isWindows: process.platform === 'win32'
+    }
+  };
+});
+
+vi.mock('@main/config', () => {
+  return {
+    BusinessPaths: {
+      workers: {
+        scripts: tmpDir
       }
     }
   };
@@ -57,8 +71,8 @@ describe('WorkerManager 配置文件监控', () => {
     WorkerManager = module.WorkerManager;
 
     // 获取测试目录
-    const { Env } = await import('@main/common/env');
-    testWorkersDir = Env.paths.workersDir;
+    const { BusinessPaths } = await import('@main/config');
+    testWorkersDir = BusinessPaths.workers.scripts;
 
     // 清理并创建测试目录
     if (fs.existsSync(testWorkersDir)) {

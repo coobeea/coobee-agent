@@ -45,5 +45,22 @@ export default defineConfig(
       ]
     }
   },
+  {
+    // 从 coobee-ai 迁移的基础组件（临时放宽规则）
+    files: [
+      '**/src/main/config/**/*.ts',
+      '**/src/renderer/src/components/**/*.{ts,vue}',
+      '**/src/renderer/src/composables/**/*.ts',
+      '**/src/renderer/src/plugins/**/*.ts',
+      '**/src/renderer/src/stores/**/*.ts',
+      '**/src/renderer/src/utils/**/*.ts'
+    ],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-this-alias': 'off',
+      'vue/no-v-html': 'off'
+    }
+  },
   eslintConfigPrettier
 );

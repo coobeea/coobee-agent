@@ -28,8 +28,14 @@
 
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue';
-import { quickChatStream } from '@/composables/useQuickChat';
+// import { quickChatStream } from '@/composables/useQuickChat';
 import Popup from '@/components/Popup/index.vue';
+
+// 临时占位函数
+const quickChatStream = async (_agent: string, _prompt: string, _onData: (data: any) => void) => {
+  console.warn('[AIGenerate] quickChatStream 暂未实现');
+  return '';
+};
 
 /**
  * 提示词构建函数类型

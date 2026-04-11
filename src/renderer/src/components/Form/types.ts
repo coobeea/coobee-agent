@@ -32,7 +32,7 @@ export interface SelectOption {
   description?: string;
   disabled?: boolean;
   icon?: string; // 添加图标支持
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   [key: string]: any;
 }
 

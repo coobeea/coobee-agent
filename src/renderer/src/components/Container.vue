@@ -41,7 +41,6 @@ function updateActiveContainers(): void {
   activeContainers.value = containers;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const lazyLoadContainer = (importFn: () => Promise<any>): Component => {
   return markRaw(defineAsyncComponent(importFn));
 };

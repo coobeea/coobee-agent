@@ -11,11 +11,12 @@
 
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { useWorkerStore } from '@/stores/worker';
+// import { useWorkerStore } from '@/stores/worker';
 
 const router = useRouter();
 const route = useRoute();
-const workerStore = useWorkerStore();
+// const workerStore = useWorkerStore();
+const workerStore = { workerList: [] } as any; // 临时占位
 
 const activeMenuId = computed(() => route.name as string);
 

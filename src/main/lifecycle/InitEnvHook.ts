@@ -8,6 +8,7 @@
 import { LifecyclePhase, LifecycleContext, LifecycleHook } from '@main/common/types';
 import { log } from '@main/common/logger';
 import { Env } from '@main/common/env';
+import { BusinessPaths } from '@main/config';
 
 /**
  * 环境信息 Hook
@@ -71,8 +72,8 @@ export const InitEnvHook: LifecycleHook = {
 
     // 运行时目录
     try {
-      const appRuntimeDir = Env.getAppRuntimeDir();
-      const platformRuntimeDir = Env.getPlatformRuntimeDir();
+      const appRuntimeDir = BusinessPaths.getAppRuntimeDir();
+      const platformRuntimeDir = BusinessPaths.getPlatformRuntimeDir();
 
       log.info('');
       log.info('【运行时目录】');

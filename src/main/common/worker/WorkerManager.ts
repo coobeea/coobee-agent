@@ -21,6 +21,7 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from '@main/common/logger';
 import { Env } from '@main/common/env';
+import { BusinessPaths } from '@main/config';
 import { WorkerMetricsCollector } from './WorkerMetricsCollector';
 import type { WorkerConfig, WorkerInfo, WorkerStatus } from './types';
 
@@ -121,7 +122,7 @@ export class WorkerManager extends EventEmitter {
    * @returns 已注册的 Worker 数量
    */
   scanAndRegister(): number {
-    const workersDir = Env.paths.workersDir;
+    const workersDir = BusinessPaths.workers.scripts;
 
     if (!fs.existsSync(workersDir)) {
       log.warn(`[WorkerManager] Workers 目录不存在: ${workersDir}`);
@@ -439,8 +440,8 @@ export class WorkerManager extends EventEmitter {
 
     const args = [entryPath, '--port', String(config.port), '--host', Env.main.serverHost, ...(config.args || [])];
 
-    // 模型目录：统一由 .env VITE_MODEL_DIR 管理（Env.paths.modelsDir 已读取）
-    const modelDir = Env.paths.modelsDir;
+    // 模型目录：统一由 .env VITE_MODEL_DIR 管理（BusinessPaths.workers.models 已读取）
+    const modelDir = BusinessPaths.workers.models;
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
@@ -473,7 +474,7 @@ export class WorkerManager extends EventEmitter {
    */
   private async spawnNativeWorker(worker: ManagedWorker): Promise<void> {
     const { config } = worker;
-    const platformDir = Env.getPlatformRuntimeDir();
+    const platformDir = BusinessPaths.getPlatformRuntimeDir();
     const binaryName = config.entry;
     const binaryPath = path.join(platformDir, binaryName);
 
@@ -482,7 +483,7 @@ export class WorkerManager extends EventEmitter {
     }
 
     const scriptsDir = this.getWorkerScriptsDir(config.name);
-    const modelDir = config.modelDir || Env.paths.modelsDir;
+    const modelDir = config.modelDir || BusinessPaths.workers.models;
 
     // 构建启动参数，替换 ${MODEL_DIR} 等变量
     const rawArgs = [...(config.args || []), '--port', String(config.port), '--host', Env.main.serverHost];
@@ -813,7 +814,7 @@ export class WorkerManager extends EventEmitter {
 
   /** Worker 脚本目录（只读） */
   private getWorkerScriptsDir(name: string): string {
-    return path.join(Env.paths.workersDir, name);
+    return path.join(BusinessPaths.workers.scripts, name);
   }
 
   /**
@@ -842,7 +843,7 @@ export class WorkerManager extends EventEmitter {
 
   /** uv 可执行文件路径 */
   private getUvBin(): string {
-    const platformDir = Env.getPlatformRuntimeDir();
+    const platformDir = BusinessPaths.getPlatformRuntimeDir();
     return Env.isWindows ? path.join(platformDir, 'uv.exe') : path.join(platformDir, 'uv');
   }
 
@@ -903,7 +904,7 @@ export class WorkerManager extends EventEmitter {
    * 监控 Worker 配置文件变化（热重载）
    */
   private watchWorkerConfig(workerName: string): void {
-    const configPath = path.join(Env.paths.workersDir, workerName, 'worker.json');
+    const configPath = path.join(BusinessPaths.workers.scripts, workerName, 'worker.json');
 
     if (!fs.existsSync(configPath)) {
       log.warn(`[WorkerManager] 配置文件不存在，跳过监控: ${configPath}`);
@@ -954,7 +955,7 @@ export class WorkerManager extends EventEmitter {
    */
   private async reloadWorkerConfig(workerName: string): Promise<void> {
     try {
-      const configPath = path.join(Env.paths.workersDir, workerName, 'worker.json');
+      const configPath = path.join(BusinessPaths.workers.scripts, workerName, 'worker.json');
 
       if (!fs.existsSync(configPath)) {
         log.warn(`[WorkerManager] 配置文件已删除: ${workerName}`);
