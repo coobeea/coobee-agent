@@ -85,6 +85,20 @@ const addNewTab = async (): Promise<void> => {
     console.error('Error creating tab:', error);
   }
 };
+
+// 标签页容器引用
+const tabsContainer = ref<HTMLElement | null>(null);
+
+// 处理鼠标滚轮事件，将垂直滚动转换为水平滚动
+const handleWheel = (e: WheelEvent): void => {
+  if (tabsContainer.value) {
+    // 只有在没有按住 Shift 键（Shift 默认就是水平滚动）且有垂直滚动时才转换
+    if (e.deltaY !== 0 && !e.shiftKey) {
+      e.preventDefault(); // 阻止默认的垂直滚动
+      tabsContainer.value.scrollLeft += e.deltaY;
+    }
+  }
+};
 </script>
 
 <template>
@@ -95,7 +109,10 @@ const addNewTab = async (): Promise<void> => {
     <div v-if="isMacOS" class="h-full w-20 shrink-0"></div>
 
     <!-- Tabs Container -->
-    <div class="flex h-full items-center overflow-x-auto overflow-y-hidden scrollbar-hide">
+    <div 
+      ref="tabsContainer"
+      class="flex h-full shrink min-w-0 items-center overflow-x-auto overflow-y-hidden scrollbar-hide pt-[2px]"
+      @wheel="handleWheel">
       <TabItem
         v-for="tab in tabStore.tabs"
         :key="tab.id"
@@ -109,7 +126,7 @@ const addNewTab = async (): Promise<void> => {
 
     <!-- New Tab Button -->
     <button
-      class="window-no-drag-region flex h-full w-10 shrink-0 items-center justify-center text-gray-700 transition-colors hover:bg-gray-400 active:bg-gray-500"
+      class="window-no-drag-region flex h-full w-10 shrink-0 items-center justify-center text-gray-600 transition-colors hover:bg-gray-400 active:bg-gray-500"
       @click="addNewTab">
       <IconMdiPlus class="text-base" />
     </button>

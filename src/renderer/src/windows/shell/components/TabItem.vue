@@ -19,8 +19,8 @@ const onClick = (): void => {
 
   // 平滑滚动到可见区域
   setTimeout(() => {
-    tabItem.value?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  }, 100);
+    tabItem.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, 50);
 };
 
 const onClose = (): void => {
@@ -31,15 +31,22 @@ const onClose = (): void => {
 <template>
   <div
     ref="tabItem"
-    class="window-no-drag-region group flex h-full shrink-0 cursor-pointer items-center justify-between px-3 text-xs font-medium transition-colors"
+    class="window-no-drag-region group relative flex h-full min-w-[120px] max-w-[220px] shrink-0 cursor-pointer items-center justify-between px-3 text-xs font-medium transition-colors"
     :class="[
       active
-        ? 'bg-gray-600 text-white hover:bg-gray-500 active:bg-gray-500'
-        : 'bg-gray-700 text-gray-200 hover:bg-gray-600 active:bg-gray-500'
+        ? 'bg-gray-50 text-gray-800' // 激活状态：与主内容区背景色一致，无缝衔接
+        : 'text-gray-500 hover:bg-gray-200/80 hover:text-gray-700' // 未激活状态
     ]"
     @click="onClick">
+    
+    <!-- 激活状态的顶部强调线 -->
+    <div v-if="active" class="absolute left-0 top-0 h-[2px] w-full bg-blue-500"></div>
+
+    <!-- 非激活状态的右侧分隔线 -->
+    <div v-if="!active" class="absolute right-0 top-1/4 h-1/2 w-px bg-gray-400/40 group-hover:bg-transparent"></div>
+
     <!-- Tab Content -->
-    <div class="flex max-w-36 items-center truncate">
+    <div class="flex flex-1 items-center overflow-hidden pr-2">
       <slot></slot>
     </div>
 
@@ -47,9 +54,14 @@ const onClose = (): void => {
     <button
       v-if="canClose"
       type="button"
-      class="ml-2 rounded p-0.5 text-gray-300 opacity-0 transition-all hover:bg-gray-400 hover:text-white active:bg-gray-300 group-hover:opacity-100"
+      class="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-all"
+      :class="[
+        active 
+          ? 'text-gray-500 hover:bg-gray-200 hover:text-gray-900' 
+          : 'text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-300 hover:text-gray-800'
+      ]"
       @click.stop="onClose">
-      <IconMdiClose class="text-sm" />
+      <IconMdiClose class="text-[14px]" />
     </button>
   </div>
 </template>
