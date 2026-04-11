@@ -100,7 +100,7 @@ const tabsContainer = ref<HTMLElement | null>(null);
     <!-- Tabs Container -->
     <div
       ref="tabsContainer"
-      class="flex h-full flex-1 items-end overflow-hidden pt-[4px]">
+      class="flex h-full shrink min-w-0 items-end overflow-hidden pt-[4px]">
       <TabItem
         v-for="tab in tabStore.tabs"
         :key="tab.id"
