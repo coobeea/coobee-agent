@@ -30,18 +30,6 @@ onMounted(async () => {
   // 监听后端就绪事件
   eventBus.once(EventTypes.BACKEND_READY, onBackendReady);
 
-  // 主动查询后端状态
-  try {
-    const ready = await window.api?.isBackendReady?.();
-    if (ready) {
-      markReady();
-      return;
-    }
-  } catch {
-    markReady();
-    return;
-  }
-
   // 超时兜底
   timeoutId = setTimeout(() => {
     markReady();

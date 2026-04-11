@@ -50,8 +50,7 @@ export const TabChannels = {
 
 /** 应用级通道（invoke） */
 export const AppChannels = {
-  /** 检查后端是否就绪 */
-  IS_BACKEND_READY: 'app:is-backend-ready'
+  // 暂无应用级通道
 } as const;
 
 /** 讨论室通道（invoke） */

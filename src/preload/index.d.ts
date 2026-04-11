@@ -28,7 +28,6 @@ declare global {
         filters?: Array<{ name: string; extensions: string[] }>;
       }) => Promise<{ canceled: boolean; filePaths: string[] }>;
       getClipboardFiles: () => Promise<string[]>;
-      isBackendReady: () => Promise<boolean>;
       onEvent: (callback: (message: IpcEventMessage) => void) => void;
     };
   }

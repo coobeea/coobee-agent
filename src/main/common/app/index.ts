@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { electronApp } from '@electron-toolkit/utils';
 import { optimizer } from '@electron-toolkit/utils';
 import { log } from '../logger';
@@ -8,7 +8,6 @@ import type { IAppManager } from './types';
 import { ElectronAppEvents } from './types';
 import { eventBus } from '../eventbus';
 import { EventTypes } from '@shared/ipc/events';
-import { AppChannels } from '@shared/ipc/channels';
 
 /**
  * 预加载核心模块（确保尽早初始化）
@@ -182,23 +181,6 @@ export class AppManager implements IAppManager {
 
       log.info('[App] 开始初始化应用...');
 
-      // 注册 IPC handler（渲染端可能在 READY 阶段完成前就加载，需要先注册）
-      let backendReady = false;
-      ipcMain.handle(AppChannels.IS_BACKEND_READY, async () => {
-        // 检查：1) 生命周期完成 && 2) Gateway 已启动
-        if (!backendReady) {
-          return false;
-        }
-
-        try {
-          const { gateway } = await import('@main/common/gateway');
-          return gateway.isReady();
-        } catch (error) {
-          log.warn('[App] 检查 Gateway 状态失败:', error);
-          return false;
-        }
-      });
-
       // 1. 应用基础配置
       electronApp.setAppUserModelId('com.coobee');
 
@@ -216,10 +198,9 @@ export class AppManager implements IAppManager {
       // 3. 触发 READY 阶段生命周期（IPC 注册、窗口创建等由 Hook 处理）
       await this.lifecycleManager.executePhase(LifecyclePhase.READY);
 
-      // 4. 所有 Hook 完成 → 标记后端就绪并通知前端
-      backendReady = true;
+      // 4. 所有 Hook 完成 → 通知前端
       eventBus.emit(EventTypes.BACKEND_READY, { timestamp: Date.now() });
-      log.info('[App] 应用初始化完成，后端就绪信号已发送');
+      log.info('[App] 应用初始化完成');
     } catch (error) {
       log.error('[App] 应用初始化失败:', error);
       throw error;

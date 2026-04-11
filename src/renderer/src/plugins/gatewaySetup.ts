@@ -28,19 +28,6 @@ export const gateway = null as any; // 临时占位
 let isInitialized = false;
 
 // async function connectWhenReady(): Promise<void> {
-//   // 先检查后端是否已就绪
-//   try {
-//     const ready = await window.api?.isBackendReady?.();
-//     if (ready) {
-//       gateway.connect();
-//       return;
-//     }
-//   } catch {
-//     // preload API 不可用 → 直接连接（非 Electron 环境或者 handler 未注册）
-//     gateway.connect();
-//     return;
-//   }
-
 //   // 监听 backend:ready 事件
 //   let settled = false;
 //   const settle = (): void => {

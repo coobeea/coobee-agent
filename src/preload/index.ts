@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
-import { ShellChannels, TabChannels, AppChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
+import { ShellChannels, TabChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
 import type {
   WindowInfoResponse,
   CreateTabRequest,
@@ -52,11 +52,6 @@ const api = {
    * 读取剪贴板中的文件路径列表
    */
   getClipboardFiles: (): Promise<string[]> => ipcRenderer.invoke(ShellChannels.GET_CLIPBOARD_FILES),
-
-  /**
-   * 检查后端是否就绪（生命周期完成 + Gateway 启动成功）
-   */
-  isBackendReady: (): Promise<boolean> => ipcRenderer.invoke(AppChannels.IS_BACKEND_READY),
 
   /**
    * 监听 IPC 事件
