@@ -160,6 +160,50 @@ export function scanCronJobs(): DiscoveredModule[] {
 }
 
 /**
+ * 扫描 Gateway 事件桥接文件
+ * 扫描 @main/bridges 目录下所有 *Bridge.ts 文件
+ *
+ * 桥接命名规范：
+ * - 文件名以 Bridge.ts 结尾（如 StreamBridge.ts）
+ * - 必须导出 EventBridgeInit 类型的函数（函数名以 'init' 开头）
+ */
+export function scanGatewayBridges(): DiscoveredModule[] {
+  log.info('[Scan] 开始扫描 Gateway 事件桥接文件...');
+
+  const modules = import.meta.glob('@main/bridges/**/*Bridge.ts', { eager: true });
+  const totalFound = Object.keys(modules).length;
+
+  const filteredModules = filterModules(modules, ['__tests__']);
+  const filteredCount = filteredModules.length;
+
+  log.info(`[Scan] Gateway 事件桥接扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
+
+  return filteredModules;
+}
+
+/**
+ * 扫描 Gateway HTTP 路由文件
+ * 扫描 @main/routes 目录下所有 *Routes.ts 文件
+ *
+ * 路由命名规范：
+ * - 文件名以 Routes.ts 结尾（如 AgentRoutes.ts）
+ * - 必须导出 RouteRegistrar 类型的函数（函数名以 'register' 开头）
+ */
+export function scanGatewayRoutes(): DiscoveredModule[] {
+  log.info('[Scan] 开始扫描 Gateway HTTP 路由文件...');
+
+  const modules = import.meta.glob('@main/routes/**/*Routes.ts', { eager: true });
+  const totalFound = Object.keys(modules).length;
+
+  const filteredModules = filterModules(modules, ['__tests__']);
+  const filteredCount = filteredModules.length;
+
+  log.info(`[Scan] Gateway HTTP 路由扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
+
+  return filteredModules;
+}
+
+/**
  * 通用过滤函数 - 过滤掉指定的文件
  * @param modules 扫描结果对象 (使用 eager: true 时，值直接是模块内容)
  * @param excludePatterns 要排除的文件名模式数组
