@@ -93,7 +93,6 @@ class EnvClass {
     logPath: string;
     installDir: string;
     userHome: string;
-    agentsMdPath: string;
     configDir: string;
     secretsDir: string;
     sharedDriveDir: string;
@@ -134,18 +133,6 @@ class EnvClass {
       installDir: !is.dev && app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath(),
       /** 用户主目录 (开发: <项目>/.home | 生产: ~/.coobee-ai) */
       userHome: _userHome,
-
-      // === 全局协议文件（AGENTS.md）===
-      /**
-       * 全局智能体协议文件路径
-       *
-       * 所有智能体启动时硬注入此文件内容到 system prompt。
-       * 包含系统身份信息、全局规则和共享上下文。
-       * 智能体运行时可通过 write 工具修改。
-       *
-       * @example 开发: <项目>/.home/AGENTS.md | 生产: ~/.coobee-ai/AGENTS.md
-       */
-      agentsMdPath: path.join(_userHome, 'AGENTS.md'),
 
       // === 配置目录（Config）===
       /** 用户配置目录 @example 开发: <项目>/.home/config | 生产: ~/.coobee-ai/config */
