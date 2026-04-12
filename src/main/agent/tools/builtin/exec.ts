@@ -1,0 +1,300 @@
+/**
+ * exec — Shell 命令执行工具
+ *
+ * 在系统 shell 中执行命令，支持前台和后台两种模式。
+ *
+ * 前台模式（默认）：
+ *   - 等待命令完成，返回 stdout/stderr 和退出码
+ *   - 通过 AsyncGenerator 实时流式输出
+ *   - 超时自动终止
+ *
+ * 后台模式（background: true）：
+ *   - 立即返回 processId，进程在后台运行
+ *   - 通过 process 工具管理（查看输出、发送输入、终止）
+ *   - 适用于 dev server、watch 任务等长进程
+ *
+ * 安全：
+ *   - 工作目录限制在 workspaceRoot 内
+ *   - 支持 AbortSignal 取消
+ *   - 超时自动终止（前台模式）
+ *   - 命令安全策略（黑名单/白名单）由 HITL 审批层处理，工具层不参与安全判断
+ *   - HITL 审批由上层 AgentExecutor 统一编排
+ *
+ * 分类：Execute | 风险：高（可执行任意系统命令）
+ */
+import { spawn } from 'node:child_process';
+import { z } from 'zod';
+import type { ToolDefinition, ToolStreamUpdate, ToolResult, ToolExecutionContext } from '../types';
+import { ToolCategory } from '../types';
+import { resolveWorkingDirectory } from '../../sandbox';
+
+import { checkExecPolicy } from '../../sandbox/exec-policy';
+import { scanCommand } from '../security/command-scanner';
+// import { getPtyManager } from '@main/terminal/PtyManager'; // 最小化模式下禁用
+
+/** 默认超时（ms）— 2 分钟，覆盖大部分构建/测试场景 */
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+/** 最大输出字节数（约 100KB，防止 token 爆炸） */
+const MAX_OUTPUT_BYTES = 100_000;
+
+export const execTool: ToolDefinition = {
+  name: 'exec',
+  description:
+    'Execute a shell command. Supports two modes:\n' +
+    '- Foreground (default): waits for completion, returns stdout/stderr/exit code.\n' +
+    '- Background (background=true): starts the process in background, returns a processId immediately. ' +
+    'Use the `process` tool to manage background processes (read output, send input, kill).\n' +
+    'Use background mode for long-running tasks like dev servers, watchers, or builds.',
+  category: ToolCategory.Execute,
+  needUserConfirm: true,
+  parameters: z.object({
+    command: z.string().describe('The shell command to execute'),
+    background: z
+      .boolean()
+      .optional()
+      .describe('Run in background mode. Returns processId immediately. Use `process` tool to manage.'),
+    terminal: z
+      .boolean()
+      .optional()
+      .describe(
+        'Run command in the interactive PTY terminal. ' +
+          'Output is streamed to the user-visible terminal panel in real-time. ' +
+          'Use for commands that benefit from real-time visual output (builds, tests, dev servers).'
+      ),
+    timeout: z
+      .number()
+      .optional()
+      .describe(
+        `Timeout in milliseconds (foreground only). Defaults to ${DEFAULT_TIMEOUT_MS / 1000}s. Set higher for builds/tests.`
+      )
+  }),
+
+  execute: async function* (
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+    context?: ToolExecutionContext
+  ): AsyncGenerator<ToolStreamUpdate, ToolResult, unknown> {
+    const command = params.command as string;
+    const background = params.background as boolean | undefined;
+    const terminal = params.terminal as boolean | undefined;
+    const timeout = (params.timeout as number) || DEFAULT_TIMEOUT_MS;
+    const startTime = Date.now();
+
+    if (!command || typeof command !== 'string') {
+      return {
+        success: false,
+        llmContent: 'Error: command must be a non-empty string',
+        error: { code: 'INVALID_PARAM', message: 'command must be a non-empty string' }
+      };
+    }
+
+    // 工作目录：限制在 workspaceRoot 内
+    const cwd = resolveWorkingDirectory(context);
+
+    // 敏感路径和危险命令扫描（第一道防线）
+    const scanError = scanCommand(command, cwd);
+    if (scanError) {
+      return {
+        success: false,
+        llmContent: `Error: ${scanError}`,
+        error: { code: 'DANGEROUS_COMMAND', message: scanError }
+      };
+    }
+
+    // 安全兜底：即使 Extension 未加载，黑名单/未知命令仍被拦截
+    // Extension hook (tool-approval) 提供完整的 allow/ask/deny + HITL 逻辑，
+    // 这里做 deny + ask（无审批能力时）的防线
+    const policyResult = checkExecPolicy(command);
+    if (policyResult.action === 'deny') {
+      return {
+        success: false,
+        llmContent: `Error: ${policyResult.reason}`,
+        error: { code: 'EXEC_POLICY_DENY', message: policyResult.reason }
+      };
+    }
+
+    // 注意：审批逻辑已移至 ToolExecutionPipeline 统一处理
+    // 如果到达这里，说明已经通过审批（或配置为 allow）
+    // 即使 policyResult.action === 'ask'，也应该继续执行
+    // （审批在 Pipeline 层完成，工具层只负责执行）
+
+    // ==================== 终端模式 ====================
+    if (terminal) {
+      yield { type: 'progress', content: `[terminal] $ ${command}`, percentage: 0 };
+
+      const llmContent = "[Terminal] Terminal mode is disabled in minimal mode. Use foreground mode instead.";
+      
+      yield {
+        type: 'output',
+        content: llmContent
+      };
+
+      const duration = Date.now() - startTime;
+      return {
+        success: true,
+        llmContent,
+        userContent: llmContent,
+        metadata: {
+          startTime,
+          endTime: Date.now(),
+          duration,
+          cwd
+        }
+      };
+    }
+
+    // ==================== 后台模式 ====================
+    if (background) {
+      yield { type: 'progress', content: `[background] $ ${command}`, percentage: 0 };
+
+      const llmContent = "[Background] Process started, but background process management is disabled in minimal mode.";
+
+      yield {
+        type: 'output',
+        content: llmContent
+      };
+
+      return {
+        success: true,
+        llmContent,
+        userContent: llmContent,
+        metadata: {
+          startTime,
+          endTime: Date.now(),
+          duration: Date.now() - startTime,
+          background: true,
+          cwd
+        }
+      };
+    }
+
+    // ==================== 前台模式 ====================
+    yield { type: 'progress', content: `$ ${command}`, percentage: 0 };
+
+    const result: ToolResult = await new Promise<ToolResult>((resolveResult) => {
+      const stdout: Buffer[] = [];
+      const stderr: Buffer[] = [];
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
+      let stdoutTruncated = false;
+      let stderrTruncated = false;
+      let timedOut = false;
+
+      // 合并上下文环境变量（COOBEE_* 等），供 Skill 脚本读取配置
+      const fgEnv = { ...process.env, ...context?.envVars };
+
+      const child = spawn(command, {
+        shell: true,
+        timeout,
+        cwd,
+        env: fgEnv,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      // 支持外部取消
+      const abortHandler = (): void => {
+        child.kill('SIGTERM');
+      };
+      if (signal) {
+        signal.addEventListener('abort', abortHandler, { once: true });
+      }
+
+      child.stdout.on('data', (data: Buffer) => {
+        if (stdoutBytes < MAX_OUTPUT_BYTES) {
+          stdout.push(data);
+          stdoutBytes += data.length;
+        } else {
+          stdoutTruncated = true;
+        }
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        if (stderrBytes < MAX_OUTPUT_BYTES) {
+          stderr.push(data);
+          stderrBytes += data.length;
+        } else {
+          stderrTruncated = true;
+        }
+      });
+
+      child.on('error', (err: Error) => {
+        signal?.removeEventListener('abort', abortHandler);
+        resolveResult({
+          success: false,
+          llmContent: `Error executing command: ${err.message}`,
+          error: { code: 'EXEC_ERROR', message: err.message },
+          metadata: { startTime, endTime: Date.now(), duration: Date.now() - startTime }
+        });
+      });
+
+      child.on('close', (code: number | null, sig: string | null) => {
+        signal?.removeEventListener('abort', abortHandler);
+
+        if (sig === 'SIGTERM') {
+          timedOut = true;
+        }
+
+        let stdoutStr = Buffer.concat(stdout).toString('utf-8');
+        let stderrStr = Buffer.concat(stderr).toString('utf-8');
+
+        if (stdoutTruncated) {
+          stdoutStr += `\n... [stdout truncated at ${MAX_OUTPUT_BYTES} bytes]`;
+        }
+        if (stderrTruncated) {
+          stderrStr += `\n... [stderr truncated at ${MAX_OUTPUT_BYTES} bytes]`;
+        }
+
+        const parts: string[] = [];
+
+        if (timedOut) {
+          parts.push(`[Timed out after ${timeout}ms]`);
+        }
+
+        parts.push(`Exit code: ${code ?? 'null (killed)'}`);
+
+        if (stdoutStr.trim()) {
+          parts.push(`stdout:\n${stdoutStr.trim()}`);
+        }
+        if (stderrStr.trim()) {
+          parts.push(`stderr:\n${stderrStr.trim()}`);
+        }
+
+        const llmContent = parts.join('\n\n');
+        const duration = Date.now() - startTime;
+        const success = code === 0 && !timedOut;
+
+        resolveResult({
+          success,
+          llmContent,
+          userContent: llmContent,
+          error: success
+            ? undefined
+            : {
+                code: timedOut ? 'TIMEOUT' : 'EXIT_CODE',
+                message: timedOut ? `Command timed out after ${timeout}ms` : `Exit code: ${code}`
+              },
+          metadata: {
+            startTime,
+            endTime: Date.now(),
+            duration,
+            exitCode: code,
+            timedOut,
+            stdoutBytes,
+            stderrBytes,
+            cwd
+          }
+        });
+      });
+    });
+
+    // 输出最终结果摘要
+    const exitInfo = result.metadata?.exitCode === 0 ? 'completed' : `failed (exit ${result.metadata?.exitCode})`;
+    yield {
+      type: 'output',
+      content: `Command ${exitInfo} in ${result.metadata?.duration}ms`
+    };
+
+    return result;
+  }
+};

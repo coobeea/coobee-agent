@@ -22,6 +22,9 @@ declare global {
         switch: (req: SwitchTabRequest) => Promise<IpcResult<void>>;
         update: (req: UpdateTabRequest) => Promise<IpcResult<void>>;
       };
+      agent: {
+        submit: (req: { sessionId: string; message: string }) => Promise<any>;
+      };
       openDirectory: () => Promise<string | null>;
       openFile: (options?: {
         properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>;

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
-import { ShellChannels, TabChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
+import { ShellChannels, TabChannels, AgentChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
 import type {
   WindowInfoResponse,
   CreateTabRequest,
@@ -33,6 +33,14 @@ const api = {
     close: (req: CloseTabRequest): Promise<IpcResult<void>> => ipcRenderer.invoke(TabChannels.CLOSE, req),
     switch: (req: SwitchTabRequest): Promise<IpcResult<void>> => ipcRenderer.invoke(TabChannels.SWITCH, req),
     update: (req: UpdateTabRequest): Promise<IpcResult<void>> => ipcRenderer.invoke(TabChannels.UPDATE, req)
+  },
+
+  /**
+   * Agent 操作
+   */
+  agent: {
+    submit: (req: { sessionId: string; message: string }): Promise<any> =>
+      ipcRenderer.invoke(AgentChannels.SUBMIT, req)
   },
 
   /**

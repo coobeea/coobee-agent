@@ -87,7 +87,7 @@ const addNewTab = async (): Promise<void> => {
 };
 
 // 标签页容器引用
-const tabsContainer = ref<HTMLElement | null>(null);
+// const tabsContainer = ref<HTMLElement | null>(null);
 </script>
 
 <template>

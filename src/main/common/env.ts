@@ -100,6 +100,16 @@ class EnvClass {
     downloads: string;
     documents: string;
     desktop: string;
+    builtinSkillsDir: string;
+    userSkillsDir: string;
+    builtinExtensionsDir: string;
+    userExtensionsDir: string;
+    homesDir: string;
+    agentsMdPath: string;
+    workspacesDir: string;
+    threadsDir: string;
+    builtinAgentsDir: string;
+    userAgentsDir: string;
   } {
     // === 基础路径计算 ===
     const _userHome = is.dev
@@ -126,18 +136,19 @@ class EnvClass {
       configDir: path.join(_userHome, 'config'),
 
       // === 敏感信息目录（Secrets）===
-      /**
-       * 敏感信息目录（API Keys、Tokens 等）
-       *
-       * 独立于 config 目录，更严格的权限控制（700/600）
-       *
-       * 存储内容：
-       *   - secrets.json5  — Provider API Keys
-       *   - skills.json5   — Skill 专属配置（可能含 Key/Token）
-       *
-       * @example 开发: <项目>/.home/secrets | 生产: ~/.coobee-ai/secrets
-       */
       secretsDir: path.join(_userHome, 'secrets'),
+
+      // === Agent Paths ===
+      builtinSkillsDir: path.join(app.getAppPath(), 'resources', 'skills'),
+      userSkillsDir: path.join(_userHome, 'skills'),
+      builtinExtensionsDir: path.join(app.getAppPath(), 'resources', 'extensions'),
+      userExtensionsDir: path.join(_userHome, 'extensions'),
+      homesDir: path.join(_userHome, 'homes'),
+      agentsMdPath: path.join(_userHome, 'agents.md'),
+      workspacesDir: path.join(_userHome, 'workspaces'),
+      threadsDir: path.join(_userHome, 'threads'),
+      builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
+      userAgentsDir: path.join(_userHome, 'agents'),
 
       // === 系统路径（System Paths）===
       /** 系统用户目录 (如: /Users/username) */
@@ -184,6 +195,30 @@ class EnvClass {
       await mkdirp(upgradeDir);
     }
     return upgradeDir;
+  }
+
+  async getAgentWorkspaceDir(sessionId: string): Promise<string> {
+    const dir = path.join(this.paths.workspacesDir, sessionId);
+    if (!fs.existsSync(dir)) {
+      await mkdirp(dir);
+    }
+    return dir;
+  }
+
+  async getAgentHomeDir(agentId: string): Promise<string> {
+    const dir = path.join(this.paths.homesDir, agentId);
+    if (!fs.existsSync(dir)) {
+      await mkdirp(dir);
+    }
+    return dir;
+  }
+
+  getSkillSearchPaths(_workspace?: string, _agentHome?: string): string[] {
+    return [this.paths.userSkillsDir, this.paths.builtinSkillsDir];
+  }
+
+  getExtensionSearchPaths(_workspace?: string): string[] {
+    return [this.paths.userExtensionsDir, this.paths.builtinExtensionsDir];
   }
 }
 

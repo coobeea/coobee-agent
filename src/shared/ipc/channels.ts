@@ -53,6 +53,11 @@ export const AppChannels = {
   // 暂无应用级通道
 } as const;
 
+/** Agent 通道（invoke） */
+export const AgentChannels = {
+  SUBMIT: 'agent:submit'
+} as const;
+
 /** 讨论室通道（invoke） */
 export const DiscussionChannels = {
   /** 创建讨论室 */
@@ -97,3 +102,4 @@ export type WindowChannel = (typeof WindowChannels)[keyof typeof WindowChannels]
 export type TabChannel = (typeof TabChannels)[keyof typeof TabChannels];
 export type AppChannel = (typeof AppChannels)[keyof typeof AppChannels];
 export type EventChannel = (typeof EventChannels)[keyof typeof EventChannels];
+export type AgentChannel = (typeof AgentChannels)[keyof typeof AgentChannels];
