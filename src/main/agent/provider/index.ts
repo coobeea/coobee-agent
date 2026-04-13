@@ -8,6 +8,7 @@ export { ModelFallback } from './ModelFallback';
 export { CostTracker } from './CostTracker';
 export { resolveApiKey } from './ApiKeyResolver';
 export { builtinProviders } from './builtin';
+export { ProviderConfigManager } from './ProviderConfigManager';
 export type {
   FallbackResult,
   ModelApi,

@@ -40,7 +40,19 @@ docs/
 
 ### 02-guides/ - 开发指南
 
-（待添加）
+开发指南和使用说明，帮助开发者快速上手。
+
+**当前文档**：
+
+- **01-provider-config-migration.md** - Provider 配置迁移指南
+  - 创建时间：2026-04-13
+  - 状态：✅ 当前推荐方案
+  - 内容：将 Provider 配置从 coobee.json5 独立到 providers.json5 的详细指南
+
+- **02-provider-quickstart.md** - Provider 配置快速开始
+  - 创建时间：2026-04-13
+  - 状态：✅ 快速入门文档
+  - 内容：Provider 配置迁移的快速开始指南
 
 ### 03-rfcs/ - RFC 文档
 
