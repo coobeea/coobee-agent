@@ -19,7 +19,7 @@ import path from 'path';
 import { resolveEnvVars } from './ConfigEnv';
 import { mergeWithDefaults } from './ConfigDefaults';
 import { loadSecrets, mergeSecrets, secretsPath, ensureSecretsFile } from './ConfigSecrets';
-import { generateDefaultConfig } from './defaultConfigTemplate';
+import { generateDefaultConfig } from '@main/config/default-template';
 import type { CoobeeConfig } from './schema';
 import { CoobeeConfigSchema } from './schema';
 import type { ConfigSnapshot, ConfigValidationIssue } from './types';

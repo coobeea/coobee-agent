@@ -70,9 +70,34 @@ function copyLibsPlugin(): Plugin {
   };
 }
 
+// 复制配置资源文件（.json5）到构建输出目录
+function copyConfigAssetsPlugin(): Plugin {
+  return {
+    name: 'copy-config-assets',
+    writeBundle() {
+      const configFiles = [
+        {
+          src: path.resolve(__dirname, 'src/main/config/default-config.json5'),
+          dest: path.resolve(__dirname, 'out/main/config/default-config.json5')
+        }
+      ];
+
+      for (const { src, dest } of configFiles) {
+        if (fs.existsSync(src)) {
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.copyFileSync(src, dest);
+          console.log(`[copy-config] Copied ${path.basename(src)} to output directory`);
+        } else {
+          console.warn(`[copy-config] Config file not found: ${src}`);
+        }
+      }
+    }
+  };
+}
+
 export default defineConfig({
   main: {
-    plugins: [copyLibsPlugin(), copyWasmAssetsPlugin()],
+    plugins: [copyLibsPlugin(), copyWasmAssetsPlugin(), copyConfigAssetsPlugin()],
     resolve: {
       alias: {
         '@': resolve('src/main/'),

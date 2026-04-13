@@ -12,29 +12,28 @@ src/main/config/
 ├── skills.ts           # Skill 配置路径
 ├── extensions.ts       # Extension 配置路径
 ├── workers.ts          # Worker 配置路径
-├── sessions.ts         # Session 配置路径
+├── threads.ts          # Thread/工作空间配置路径
 ├── shared-drive.ts     # 共享存储配置
-└── providers.ts        # Provider 配置（新增）
+├── providers.ts        # Provider 配置加载/管理
+└── default-template.ts # 默认配置模板（首次启动生成 coobee.json5）
 ```
 
 ## 模块说明
 
-### 现有模块
+### 配置模块
 
 - **Agents** - Agent 定义路径（builtin/agents、.home/agents）
 - **Skills** - Skill 路径（builtin/skills、user/skills）
 - **Extensions** - Extension 路径
 - **Workers** - Worker 相关路径（scripts、envs、models）
-- **Sessions** - Session 工作区路径
+- **Threads** - Thread 元数据和工作空间路径
 - **SharedDrive** - 共享存储路径
-
-### 新增模块：Providers
-
-**功能**：管理 AI 模型 Provider 配置
+- **Providers** - AI 模型 Provider 配置加载与管理
+- **DefaultTemplate** - 默认配置模板生成器
 
 **配置文件**：
 - `.home/config/providers.json5` - Provider 配置（推荐）
-- `.home/config/coobee.json5` - 主配置（兼容模式）
+- `.home/config/coobee.json5` - 主配置（兼容，从 `models.providers` 读取）
 
 **使用示例**：
 
@@ -51,6 +50,31 @@ Providers.save(config, configDir, secretsDir);
 Providers.clearCache();
 ```
 
+### DefaultTemplate 模块
+
+**功能**：生成默认的 `coobee.json5` 配置文件
+
+**文件**：
+- `default-template.ts` - 读取默认配置模板的工具函数
+- `default-config.json5` - 默认配置模板文件（1000+ 行）
+
+**用途**：
+- 首次启动时自动创建配置文件
+- 包含所有预置的 AI 模型供应商配置（API Key 为空，默认禁用）
+- 用户只需填入 API Key 并启用即可使用
+
+**使用**：
+```typescript
+import { generateDefaultConfig } from '@main/config/default-template';
+
+// 获取默认配置内容（JSON5 格式字符串）
+const configContent = generateDefaultConfig();
+```
+
+**注意**：
+- 配置模板使用独立的 `.json5` 文件，便于维护和编辑
+- 构建时会自动复制到 `out/main/config/` 目录（通过 electron-vite 插件）
+
 ## 设计原则
 
 1. **业务配置分离**：每个业务模块一个配置文件
@@ -65,14 +89,8 @@ Providers.clearCache();
 | `common/config/` | 通用配置基础设施 | ConfigStore, ConfigLoader, Schema |
 | `main/config/` | 业务配置管理 | Agents, Skills, Providers |
 
-## Provider 配置迁移
+## 注意事项
 
-如需将 Provider 配置从 `coobee.json5` 独立出来，运行迁移脚本：
-
-```bash
-pnpm tsx scripts/migrate-providers.ts
-```
-
-详细说明请查看：
-- [Provider 配置迁移指南](../../docs/02-guides/01-provider-config-migration.md)
-- [Provider 快速开始](../../docs/02-guides/02-provider-quickstart.md)
+1. **文件位置**：业务配置文件应放在 `src/main/config/`，通用配置工具放在 `src/main/common/config/`
+2. **命名规范**：配置模块使用单数或复数名词（如 `threads.ts`、`providers.ts`），与业务概念对应
+3. **导出规范**：统一从 `index.ts` 导出，使用 PascalCase 命名（如 `Threads`、`Providers`）
