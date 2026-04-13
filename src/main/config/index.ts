@@ -21,7 +21,6 @@ export { Skills } from './skills';
 export { Extensions } from './extensions';
 export { Workers } from './workers';
 export { Threads } from './threads';
-export { SharedDrive } from './shared-drive';
 export { Providers } from './providers';
 
 // 向后兼容：保留 BusinessPaths 别名（逐步迁移后可移除）

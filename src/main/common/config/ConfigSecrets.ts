@@ -163,25 +163,23 @@ export function ensureSecretsFile(secretsDir: string): void {
     fs.mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
   }
 
-  const template = `// Coobee AI — API Key 配置
+  // 从模板文件读取默认内容
+  let template: string;
+  try {
+    const { generateDefaultSecrets } = require('@main/config/default-template');
+    template = generateDefaultSecrets();
+  } catch (err) {
+    // 如果模板文件不存在，使用最小化的回退模板
+    log.warn('[ConfigSecrets] 无法加载默认模板，使用回退模板:', err);
+    template = `// Coobee AI — API Key 配置
 // 在这里填写各供应商的 API Key，保存后自动生效
 // 格式：供应商ID: "你的Key"
-// 也可通过界面「设置 → 模型设置」配置
 {
   dashscope: "",
-  "dashscope-subscription": "",
-  "volcengine-plan": "",
-  silicon: "",
-  "302ai": "",
-  deepseek: "",
-  minimax: "",
-  doubao: "",
-  moonshot: "",
-  hunyuan: "",
-  "baidu-cloud": "",
-  zhipu: "",
 }
 `;
+  }
+
   fs.writeFileSync(filePath, template, { mode: 0o600, encoding: 'utf-8' });
 
   // 确保父目录也是 700 权限

@@ -6,16 +6,18 @@
 
 ```
 src/main/config/
-├── README.md           # 本文件
-├── index.ts            # 统一导出
-├── agents.ts           # Agent 配置路径
-├── skills.ts           # Skill 配置路径
-├── extensions.ts       # Extension 配置路径
-├── workers.ts          # Worker 配置路径
-├── threads.ts          # Thread/工作空间配置路径
-├── shared-drive.ts     # 共享存储配置
-├── providers.ts        # Provider 配置加载/管理
-└── default-template.ts # 默认配置模板（首次启动生成 coobee.json5）
+├── README.md                   # 本文件
+├── index.ts                    # 统一导出
+├── agents.ts                   # Agent 配置路径
+├── skills.ts                   # Skill 配置路径
+├── extensions.ts               # Extension 配置路径
+├── workers.ts                  # Worker 配置路径
+├── threads.ts                  # Thread/工作空间配置路径
+├── providers.ts                # Provider 配置加载/管理
+├── default-template.ts         # 默认配置模板生成器
+├── default-config.json5        # 主配置模板（32行）
+├── default-providers.json5     # Providers 配置模板（911行）
+└── default-secrets.json5       # Secrets 配置模板（16行）
 ```
 
 ## 模块说明
@@ -52,28 +54,38 @@ Providers.clearCache();
 
 ### DefaultTemplate 模块
 
-**功能**：生成默认的 `coobee.json5` 配置文件
+**功能**：管理所有配置文件的默认模板
 
-**文件**：
-- `default-template.ts` - 读取默认配置模板的工具函数
-- `default-config.json5` - 默认配置模板文件（1000+ 行）
+**配置模板文件**：
+- `default-config.json5` (32行) - 主配置模板（models.defaults、UI、日志、安全等）
+- `default-providers.json5` (911行) - 供应商配置模板（11个供应商，所有模型预置）
+- `default-secrets.json5` (16行) - API Key 配置模板（供应商ID → 空值）
+
+**工具函数**：
+- `default-template.ts` - 提供三个模板生成函数
 
 **用途**：
-- 首次启动时自动创建配置文件
-- 包含所有预置的 AI 模型供应商配置（API Key 为空，默认禁用）
+- 首次启动时自动创建用户配置文件（`.home/config/`）
+- 所有模板使用 JSON5 格式，便于维护和编辑
+- 配置分离：主配置、供应商、密钥各自独立
 - 用户只需填入 API Key 并启用即可使用
 
 **使用**：
 ```typescript
-import { generateDefaultConfig } from '@main/config/default-template';
+import { 
+  generateDefaultConfig,      // 主配置
+  generateDefaultProviders,    // 供应商配置
+  generateDefaultSecrets       // Secrets 配置
+} from '@main/config/default-template';
 
-// 获取默认配置内容（JSON5 格式字符串）
-const configContent = generateDefaultConfig();
+const coobee = generateDefaultConfig();
+const providers = generateDefaultProviders();
+const secrets = generateDefaultSecrets();
 ```
 
-**注意**：
-- 配置模板使用独立的 `.json5` 文件，便于维护和编辑
-- 构建时会自动复制到 `out/main/config/` 目录（通过 electron-vite 插件）
+**构建配置**：
+- 所有 `default-*.json5` 文件在构建时自动复制到 `out/main/config/` 目录
+- 通过 `electron.vite.config.ts` 中的 `copyConfigAssetsPlugin()` 插件处理
 
 ## 设计原则
 

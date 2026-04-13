@@ -391,7 +391,7 @@ class AgentExecutor {
     sessionId: string,
     onChunk?: (chunk: StreamChunk) => void,
     signal?: AbortSignal,
-    workspaceDir?: string,
+    _workspaceDir?: string,
     agentId?: string
   ): Promise<ExecutionResult> {
     // Turn 状态跟踪（用于 turn_end 事件数据）
@@ -399,7 +399,7 @@ class AgentExecutor {
     let turnToolCallCount = 0;
 
     // 标记开始执行
-    this.updateSessionStatus(sessionId, 'running', workspaceDir);
+    this.updateSessionStatus(sessionId, 'running');
 
     let r = await gen.next();
     while (!r.done) {
@@ -407,7 +407,7 @@ class AgentExecutor {
       if (signal?.aborted) {
         log.info(`[AgentExecutor] Aborted: sessionId=${sessionId}`);
         await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
-        this.updateSessionStatus(sessionId, 'idle', workspaceDir);
+        this.updateSessionStatus(sessionId, 'idle');
         return { output: '', error: 'Aborted by user' };
       }
 
@@ -417,7 +417,7 @@ class AgentExecutor {
       eventWriter.dispatch(chunk);
 
       // === 检查点更新（fire-and-forget） ===
-      this.updateCheckpoint(sessionId, chunk, workspaceDir);
+      this.updateCheckpoint(sessionId, chunk);
 
       if (chunk.type === 'run:error') {
         log.error(`[AgentExecutor] API error in execute: error=${chunk.content}`);
@@ -472,7 +472,7 @@ class AgentExecutor {
         if (signal.aborted && !r.done) {
           log.info(`[AgentExecutor] Aborted during gen.next(): sessionId=${sessionId}`);
           await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
-          this.updateSessionStatus(sessionId, 'idle', workspaceDir);
+          this.updateSessionStatus(sessionId, 'idle');
           return { output: '', error: 'Aborted by user' };
         }
       } else {
@@ -481,7 +481,7 @@ class AgentExecutor {
     }
 
     // 执行完成
-    this.updateSessionStatus(sessionId, 'completed', workspaceDir);
+    this.updateSessionStatus(sessionId, 'completed');
 
     return r.value;
   }
@@ -492,7 +492,7 @@ class AgentExecutor {
    * fire-and-forget：不阻塞流式输出。
    * 同步更新 Thread 的 runStatus。
    */
-  private updateSessionStatus(sessionId: string, status: string, workspaceDir?: string): void {
+  private updateSessionStatus(sessionId: string, status: string): void {
     const isSubAgent = sessionId.includes(':');
 
     // 子 Agent 状态更新已移除（不再关注子智能体）
@@ -505,19 +505,19 @@ class AgentExecutor {
     }
   }
 
-  private updateCheckpoint(sessionId: string, chunk: StreamChunk, workspaceDir?: string): void {
+  private updateCheckpoint(sessionId: string, chunk: StreamChunk): void {
     switch (chunk.type) {
       case 'tool:start':
-        this.updateSessionStatus(sessionId, 'tool-pending', workspaceDir);
+        this.updateSessionStatus(sessionId, 'tool-pending');
         break;
       case 'tool:done':
-        this.updateSessionStatus(sessionId, 'running', workspaceDir);
+        this.updateSessionStatus(sessionId, 'running');
         break;
       case 'run:error':
-        this.updateSessionStatus(sessionId, 'error', workspaceDir);
+        this.updateSessionStatus(sessionId, 'error');
         break;
       case 'run:done':
-        this.updateSessionStatus(sessionId, 'completed', workspaceDir);
+        this.updateSessionStatus(sessionId, 'completed');
         break;
     }
   }
@@ -625,10 +625,6 @@ class AgentExecutor {
       const workspace = await injectEnv(sessionId, builder);
       eventWriter = new AgentEventWriter(workspace);
       eventWriter.register(sessionId);
-
-      // 重置审批计数器（会话开始）
-      const { resetApprovalCounter } = await import('./runtime/shared/ToolExecutionPipeline');
-      resetApprovalCounter(sessionId);
 
       // === Extension Hooks: message_received + session_start + before_agent_start ===
       await Promise.race([
@@ -815,10 +811,6 @@ class AgentExecutor {
         durationMs
       });
       await runner.runVoidHook('session_end', { sessionId });
-
-      // 清理审批计数器（会话结束）
-      const { resetApprovalCounter } = await import('./runtime/shared/ToolExecutionPipeline');
-      resetApprovalCounter(sessionId);
     } catch (err) {
       log.warn('[AgentExecutor] Extension hooks (end) failed:', err);
     }

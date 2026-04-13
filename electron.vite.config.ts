@@ -79,6 +79,14 @@ function copyConfigAssetsPlugin(): Plugin {
         {
           src: path.resolve(__dirname, 'src/main/config/default-config.json5'),
           dest: path.resolve(__dirname, 'out/main/config/default-config.json5')
+        },
+        {
+          src: path.resolve(__dirname, 'src/main/config/default-providers.json5'),
+          dest: path.resolve(__dirname, 'out/main/config/default-providers.json5')
+        },
+        {
+          src: path.resolve(__dirname, 'src/main/config/default-secrets.json5'),
+          dest: path.resolve(__dirname, 'out/main/config/default-secrets.json5')
         }
       ];
 

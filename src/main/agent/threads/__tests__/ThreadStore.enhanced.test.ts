@@ -80,8 +80,8 @@ describe('ThreadStore 增强字段', () => {
     const updated = await store.update(thread.id, { runStatus: 'running' });
     expect(updated!.runStatus).toBe('running');
 
-    const updated2 = await store.update(thread.id, { runStatus: 'approval-pending' });
-    expect(updated2!.runStatus).toBe('approval-pending');
+    const updated2 = await store.update(thread.id, { runStatus: 'idle' });
+    expect(updated2!.runStatus).toBe('idle');
   });
 
   it('list 返回的索引条目包含 runStatus、agentType 和 workspacePath', async () => {

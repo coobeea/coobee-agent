@@ -389,7 +389,6 @@ export type StreamChunkData =
   | ToolDeltaData
   | ToolPendingData
   | ToolDoneData
-  | HitlRequiredData
   | HandoffData
   | CompressionStartData
   | CompressionDoneData

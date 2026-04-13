@@ -103,6 +103,7 @@ export class Providers {
 }
 
 class ProviderConfigLoader {
+  private configDir: string;
   private configPath: string;
   private secretsPath: string;
   private cache: ProviderConfigSource | null = null;
@@ -110,8 +111,41 @@ class ProviderConfigLoader {
   private watchInterval: NodeJS.Timeout | null = null;
 
   constructor(configDir: string, secretsDir: string) {
+    this.configDir = configDir;
     this.configPath = path.join(configDir, 'providers.json5');
     this.secretsPath = path.join(secretsDir, 'secrets.json5');
+    
+    // 确保 providers.json5 文件存在
+    this.ensureConfigFile();
+  }
+  
+  /**
+   * 确保 providers.json5 文件存在
+   * 
+   * 如果文件不存在，从默认模板创建。
+   */
+  private ensureConfigFile(): void {
+    if (fs.existsSync(this.configPath)) {
+      return;
+    }
+    
+    // 确保目录存在
+    if (!fs.existsSync(this.configDir)) {
+      fs.mkdirSync(this.configDir, { recursive: true });
+    }
+    
+    // 从默认模板创建
+    try {
+      const { generateDefaultProviders } = require('./default-template');
+      const template = generateDefaultProviders();
+      fs.writeFileSync(this.configPath, template, 'utf-8');
+      log.info('[Providers] 已创建默认 providers.json5');
+    } catch (err) {
+      log.error('[Providers] 无法创建默认 providers.json5:', err);
+      // 使用最小化回退模板
+      const fallback = '// AI 模型供应商配置\n{\n  dashscope: {\n    id: "dashscope",\n    name: "百炼",\n    api: "openai-compatible",\n    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",\n    apiKey: "",\n    enabled: false,\n    models: []\n  }\n}\n';
+      fs.writeFileSync(this.configPath, fallback, 'utf-8');
+    }
   }
 
   /**
@@ -185,18 +219,27 @@ class ProviderConfigLoader {
 
   /**
    * 创建默认配置文件
+   * 
+   * 从 default-providers.json5 模板读取并写入 providers.json5。
    */
   private createDefaultConfig(): void {
-    const defaultConfig: ProviderConfigSource = {
-      // 添加一个示例 Provider
-      dashscope: {
-        id: 'dashscope',
-        name: '百炼',
-        description: '阿里云百炼平台，提供企业级AI模型服务',
-        api: 'openai-compatible',
-        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        apiKey: '${DASHSCOPE_API_KEY}',
-        enabled: false,
+    try {
+      const { generateDefaultProviders } = require('./default-template');
+      const template = generateDefaultProviders();
+      fs.writeFileSync(this.configPath, template, 'utf-8');
+      log.info('[ProviderConfigLoader] 已创建默认 providers.json5');
+    } catch (err) {
+      log.error('[ProviderConfigLoader] 无法加载默认模板，使用回退配置:', err);
+      // 回退方案：最小化配置
+      const defaultConfig: ProviderConfigSource = {
+        dashscope: {
+          id: 'dashscope',
+          name: '百炼',
+          description: '阿里云百炼平台，提供企业级AI模型服务',
+          api: 'openai-compatible',
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+          apiKey: '${DASHSCOPE_API_KEY}',
+          enabled: false,
         billingMode: 'pay-as-you-go',
         websites: {
           official: 'https://www.aliyun.com/product/bailian',
@@ -216,18 +259,12 @@ class ProviderConfigLoader {
           }
         ]
       }
-    };
-
-    // 确保目录存在
-    const dir = path.dirname(this.configPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      };
+      
+      const content = JSON5.stringify(defaultConfig, null, 2);
+      fs.writeFileSync(this.configPath, content, 'utf-8');
+      log.info('[ProviderConfigLoader] 已使用回退配置创建 providers.json5');
     }
-
-    // 写入文件
-    const content = JSON5.stringify(defaultConfig, null, 2);
-    fs.writeFileSync(this.configPath, content, 'utf-8');
-    log.info('[ProviderConfigLoader] Created default providers.json5');
   }
 
   /**

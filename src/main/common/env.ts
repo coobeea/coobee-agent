@@ -136,7 +136,8 @@ class EnvClass {
       configDir: path.join(_userHome, 'config'),
 
       // === 敏感信息目录（Secrets）===
-      secretsDir: path.join(_userHome, 'secrets'),
+      /** 敏感信息目录（统一存放在 config 目录下） @example 开发: <项目>/.home/config | 生产: ~/.coobee-ai/config */
+      secretsDir: path.join(_userHome, 'config'),
 
       // === Agent Paths ===
       builtinSkillsDir: path.join(app.getAppPath(), 'resources', 'skills'),

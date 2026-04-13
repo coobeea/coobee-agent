@@ -102,7 +102,6 @@ export class ProviderConfigManager {
         models: providerConf.models.map((m) => ({
           id: m.id,
           name: m.name,
-          api: m.api as 'openai-compatible' | 'anthropic' | 'google' | undefined,
           reasoning: m.reasoning ?? false,
           input: m.input?.filter((type): type is 'text' | 'image' => 
             type === 'text' || type === 'image'

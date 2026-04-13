@@ -23,7 +23,6 @@ import { skillListTool } from './skill_list';
 import { taskPlanTool } from './task-plan';
 import { todoWriteTool } from './todo-write';
 import { emitEventTool } from './emit-event';
-import { switchExecutionModeTool } from './switch-execution-mode';
 
 // 单独导出
 export { readTool } from './read';
@@ -38,7 +37,6 @@ export { skillListTool } from './skill_list';
 export { taskPlanTool } from './task-plan';
 export { todoWriteTool } from './todo-write';
 export { emitEventTool } from './emit-event';
-export { switchExecutionModeTool } from './switch-execution-mode';
 
 /**
  * 所有内置工具
@@ -82,6 +80,5 @@ export const builtinTools: ToolDefinition[] = [
   skillListTool,
   taskPlanTool,
   todoWriteTool,
-  emitEventTool,
-  switchExecutionModeTool
+  emitEventTool
 ];

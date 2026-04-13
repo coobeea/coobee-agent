@@ -26,7 +26,6 @@ export {
   searchTool,
   globTool,
   skillListTool,
-  delegateToAgentTool,
   taskPlanTool,
   todoWriteTool
 } from './builtin';

@@ -272,7 +272,6 @@ export async function executeToolPipeline(
   opts: PipelineOptions
 ): Promise<PipelineResult> {
   const typedParams = params;
-  const sessionId = opts.sandboxContext.sessionId || '';
 
   // === Phase 1: ExecPolicy 检查（仅 exec 工具）===
 
