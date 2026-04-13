@@ -327,4 +327,50 @@ class ProviderConfigLoader {
       this.watchInterval = null;
     }
   }
+
+  /**
+   * 更新 Provider 配置
+   * 
+   * @param providerId Provider ID
+   * @param updates 要更新的字段
+   */
+  updateProvider(providerId: string, updates: Partial<ProviderConfigSource[string]>): void {
+    const config = this.load();
+
+    if (!config[providerId]) {
+      throw new Error(`Provider "${providerId}" not found`);
+    }
+
+    // 合并更新
+    config[providerId] = {
+      ...config[providerId],
+      ...updates,
+      id: providerId // 确保 ID 不被覆盖
+    };
+
+    this.save(config);
+    log.info(`[ProviderConfigLoader] Updated provider: ${providerId}`);
+  }
+
+  /**
+   * 切换 Provider 启用状态
+   * 
+   * @param providerId Provider ID
+   * @param enabled 是否启用
+   */
+  toggleProvider(providerId: string, enabled: boolean): void {
+    this.updateProvider(providerId, { enabled });
+    log.info(`[ProviderConfigLoader] Toggled provider "${providerId}": ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * 更新 Provider Base URL
+   * 
+   * @param providerId Provider ID
+   * @param baseUrl 新的 Base URL
+   */
+  updateProviderBaseUrl(providerId: string, baseUrl: string): void {
+    this.updateProvider(providerId, { baseUrl });
+    log.info(`[ProviderConfigLoader] Updated baseUrl for provider "${providerId}": ${baseUrl}`);
+  }
 }

@@ -23,16 +23,45 @@ export interface UnifiedRequest {
 }
 
 /**
- * 通用响应接口
+ * 标准 API 响应格式
+ * 
+ * 前后端统一的响应格式，用于所有 HTTP REST API 和 RPC 调用
+ * 
+ * @template T 响应数据类型
+ * 
+ * @example
+ * // 成功响应
+ * const response: ApiResponse<UserVO> = {
+ *   success: true,
+ *   data: { id: '1', name: '张三' }
+ * };
+ * 
+ * // 错误响应
+ * const response: ApiResponse = {
+ *   success: false,
+ *   error: '用户不存在'
+ * };
  */
-export interface Result<T = unknown> {
+export interface ApiResponse<T = unknown> {
+  /** 请求是否成功 */
   success: boolean;
+  /** 成功时的返回数据 */
   data?: T;
+  /** 失败时的错误信息 */
   error?: string;
+  /** 附加消息（可选） */
   message?: string;
+  /** 错误码（可选） */
   code?: string;
+  /** 时间戳（可选） */
   timestamp?: number;
 }
+
+/**
+ * @deprecated 使用 ApiResponse<T> 替代
+ * 为了向后兼容保留的别名
+ */
+export type Result<T = unknown> = ApiResponse<T>;
 
 /**
  * Stream 数据流结果类型
