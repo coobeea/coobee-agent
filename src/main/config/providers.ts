@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import JSON5 from 'json5';
 import { log } from '@main/common/logger';
+import { generateDefaultProviders } from './default-template';
 
 export interface ProviderConfigSource {
   [providerId: string]: {
@@ -136,7 +137,6 @@ class ProviderConfigLoader {
     
     // 从默认模板创建
     try {
-      const { generateDefaultProviders } = require('./default-template');
       const template = generateDefaultProviders();
       fs.writeFileSync(this.configPath, template, 'utf-8');
       log.info('[Providers] 已创建默认 providers.json5');
@@ -224,7 +224,6 @@ class ProviderConfigLoader {
    */
   private createDefaultConfig(): void {
     try {
-      const { generateDefaultProviders } = require('./default-template');
       const template = generateDefaultProviders();
       fs.writeFileSync(this.configPath, template, 'utf-8');
       log.info('[ProviderConfigLoader] 已创建默认 providers.json5');

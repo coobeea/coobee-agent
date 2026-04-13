@@ -14,6 +14,7 @@ import fs from 'fs';
 import JSON5 from 'json5';
 import path from 'path';
 import { createLogger } from '@main/common/logger';
+import { generateDefaultSecrets } from '@main/config/default-template';
 
 const log = createLogger('ConfigSecrets');
 
@@ -166,7 +167,6 @@ export function ensureSecretsFile(secretsDir: string): void {
   // 从模板文件读取默认内容
   let template: string;
   try {
-    const { generateDefaultSecrets } = require('@main/config/default-template');
     template = generateDefaultSecrets();
   } catch (err) {
     // 如果模板文件不存在，使用最小化的回退模板

@@ -1,6 +1,30 @@
+<script setup lang="ts">
+/**
+ * Layout — 全局布局容器
+ *
+ * 结构：
+ *   ┌──────────┬────────────────────────────┐
+ *   │ Sidebar  │                            │
+ *   │ (220px)  │       router-view          │
+ *   │          │                            │
+ *   │ 导航菜单  │  （各页面自行决定内部布局）  │
+ *   │ 会话列表  │                            │
+ *   └──────────┴────────────────────────────┘
+ */
+
+import Sidebar from './Sidebar.vue';
+import { useRoute } from 'vue-router';
+
+const route = useRoute();
+</script>
+
 <template>
-  <div class="flex h-screen w-screen overflow-hidden">
-    <main class="flex-1 overflow-auto bg-white dark:bg-gray-900">
+  <div class="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+    <!-- 左侧导航 (fullscreen 模式下隐藏) -->
+    <Sidebar v-if="!route.meta.fullscreen" />
+
+    <!-- 主内容区域 -->
+    <main class="min-h-0 min-w-0 flex-1 overflow-hidden">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />
@@ -9,14 +33,6 @@
     </main>
   </div>
 </template>
-
-<script setup lang="ts">
-import { onMounted } from 'vue';
-
-onMounted(() => {
-  console.log('Layout mounted');
-});
-</script>
 
 <style scoped>
 .fade-enter-active,
