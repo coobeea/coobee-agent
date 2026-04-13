@@ -7,7 +7,6 @@
  * - StreamEmitter (IStreamEmitter 接口)
  *
  * 消费者：
- * - StreamStore (持久化到数据库)
  * - StreamChannel (WebSocket 推送，已迁移至 src/main/channels/StreamChannel.ts)
  * - StreamMonitor (监控统计)
  */
@@ -20,9 +19,6 @@ export { type IStreamEmitter, StreamEmitter, createStreamEmitter } from './Strea
 
 // ========== 消费者 ==========
 export {
-  // 持久化消费者
-  StreamStore,
-  streamStore,
   // 监控消费者
   StreamMonitor,
   streamMonitor,

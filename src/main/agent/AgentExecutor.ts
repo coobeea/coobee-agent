@@ -37,8 +37,6 @@ import { AgentEventWriter } from './AgentEventWriter';
 import { ProviderInjector, type ProviderSystem } from './provider/ProviderInjector';
 import { fireHooks, recordMetrics } from './runtime/ChunkProcessor';
 import { SkillManager } from './skills/SkillManager';
-import { CheckpointManager } from './threads/CheckpointManager';
-import { WorkspaceManager } from './storage/WorkspaceManager';
 
 // ==================== 类型定义 ====================
 
@@ -489,32 +487,21 @@ class AgentExecutor {
   }
 
   /**
-   * 根据 StreamChunk 类型更新检查点状态
+   * 根据 StreamChunk 类型更新会话状态
    *
    * fire-and-forget：不阻塞流式输出。
-   * 同步更新 checkpoint.json 和 Thread 的 runStatus。
+   * 同步更新 Thread 的 runStatus。
    */
   private updateSessionStatus(sessionId: string, status: string, workspaceDir?: string): void {
     const isSubAgent = sessionId.includes(':');
 
-    if (isSubAgent && workspaceDir) {
-      WorkspaceManager.updateCheckpoint(workspaceDir, {
-        status,
-        updatedAt: new Date().toISOString(),
-        ...(status === 'completed' || status === 'error' ? { completedAt: new Date().toISOString() } : {})
-      });
+    // 子 Agent 状态更新已移除（不再关注子智能体）
+    if (isSubAgent) {
       return;
     }
 
-    if (!isSubAgent) {
-      const checkpoint = CheckpointManager.getInstance();
-      checkpoint
-        .updateStatus(sessionId, status as 'running' | 'tool-pending' | 'error' | 'idle' | 'completed')
-        .catch(() => {});
-
-      if (status === 'tool-pending' || status === 'running' || status === 'error' || status === 'completed') {
-        this.syncThreadRunStatus(sessionId, status as 'running' | 'tool-pending' | 'error' | 'idle' | 'completed');
-      }
+    if (status === 'tool-pending' || status === 'running' || status === 'error' || status === 'completed') {
+      this.syncThreadRunStatus(sessionId, status as 'running' | 'tool-pending' | 'error' | 'idle' | 'completed');
     }
   }
 

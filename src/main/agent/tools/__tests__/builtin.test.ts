@@ -1105,7 +1105,7 @@ describe('builtinTools 集合', () => {
       'skill_list',
       // config_get, config_patch 已迁移到 config-manager Skill
       // manage_agent, manage_skill 已移除
-      'delegate_to_agent',
+      // delegate_to_agent 已删除（不再关注子智能体）
       'task_plan',
       'todo_write',
       'emit_event'

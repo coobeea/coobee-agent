@@ -57,9 +57,9 @@ class SkillsConfig {
    */
   async getSearchPaths(workspace?: string, agentHome?: string): Promise<string[]> {
     // 导入 Sessions 配置（避免循环依赖）
-    const { Sessions } = await import('./sessions');
+    const { Threads } = await import('./threads');
 
-    const coreDirs = [this.userHome, Env.paths.configDir, Sessions.workspaces, this.user];
+    const coreDirs = [this.userHome, Env.paths.configDir, Threads.workspaces, this.user];
     const skillPaths = [this.builtin, this.user];
 
     // Agent 级 Skills（如果有 agentHome）

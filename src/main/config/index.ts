@@ -13,14 +13,14 @@
  *
  *   const agentDir = Agents.builtin;
  *   const modelDir = Workers.models;
- *   const workspace = await Sessions.getWorkspaceDir(sessionId);
+ *   const workspace = await Threads.getWorkspaceDir(threadId);
  */
 
 export { Agents } from './agents';
 export { Skills } from './skills';
 export { Extensions } from './extensions';
 export { Workers } from './workers';
-export { Sessions } from './sessions';
+export { Threads } from './threads';
 export { SharedDrive } from './shared-drive';
 export { Providers } from './providers';
 

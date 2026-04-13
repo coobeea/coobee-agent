@@ -5,46 +5,11 @@
  *   1. 子 Agent sessionId 命名规范（{parentSessionId}:delegate:{agentId}）
  *   2. 子 Agent 使用 sessionMode('file')（持久化）
  *   3. Orchestrator/Swarm sessionId 命名规范
- *   4. CheckpointManager 与多 Agent 场景的联动
- *   5. 文件系统目录结构验证
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
-vi.mock('@main/common/logger', () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn()
-  })
-}));
-
-let tmpDir: string;
-
-vi.mock('@main/common/env', () => ({
-  get Env() {
-    return { paths: { workspacesDir: tmpDir } };
-  }
-}));
+import { describe, it, expect } from 'vitest';
 
 describe('多 Agent 集成', () => {
-  let CheckpointManager: typeof import('../CheckpointManager').CheckpointManager;
-
-  beforeEach(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'multi-agent-test-'));
-    vi.resetModules();
-    const cpMod = await import('../CheckpointManager');
-    CheckpointManager = cpMod.CheckpointManager;
-    CheckpointManager.resetInstance();
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
 
   // ========== SessionId 命名规范 ==========
 
@@ -91,140 +56,6 @@ describe('多 Agent 集成', () => {
 
       expect(mainSessionId.includes(':')).toBe(false);
       expect(subSessionId.includes(':')).toBe(true);
-    });
-  });
-
-  // ========== Checkpoint 与多 Agent 联动 ==========
-
-  describe('checkpoint 多层嵌套', () => {
-    const mainThreadId = '400000000000000001';
-    const subAgentSessionId = `${mainThreadId}:delegate:code-reviewer`;
-
-    it('主 thread 记录 activeAgent 信息', async () => {
-      const mgr = CheckpointManager.getInstance();
-
-      await mgr.save({
-        threadId: mainThreadId,
-        updatedAt: new Date().toISOString(),
-        runStatus: 'tool-pending',
-        activeAgent: {
-          sessionId: subAgentSessionId,
-          agentId: 'code-reviewer',
-          role: 'delegate',
-          workspace: `tasks/task-001/agents/code-reviewer`
-        }
-      });
-
-      const cp = await mgr.load(mainThreadId);
-      expect(cp!.activeAgent).toBeDefined();
-      expect(cp!.activeAgent!.sessionId).toBe(subAgentSessionId);
-      expect(cp!.activeAgent!.agentId).toBe('code-reviewer');
-      expect(cp!.activeAgent!.role).toBe('delegate');
-    });
-
-    it('子 Agent 审批时主 thread checkpoint 记录完整上下文', async () => {
-      const mgr = CheckpointManager.getInstance();
-
-      await mgr.save({
-        threadId: mainThreadId,
-        updatedAt: new Date().toISOString(),
-        runStatus: 'approval-pending',
-        activeAgent: {
-          sessionId: subAgentSessionId,
-          agentId: 'code-reviewer',
-          role: 'delegate',
-          workspace: `tasks/task-001/agents/code-reviewer`
-        },
-        pendingOperation: {
-          type: 'approval',
-          approvalId: `${subAgentSessionId}:0`,
-          toolName: 'exec',
-          toolCallId: 'tc-sub-1',
-          agentSessionId: subAgentSessionId
-        }
-      });
-
-      const cp = await mgr.load(mainThreadId);
-      expect(cp!.runStatus).toBe('approval-pending');
-      expect(cp!.pendingOperation!.agentSessionId).toBe(subAgentSessionId);
-      expect(cp!.pendingOperation!.toolName).toBe('exec');
-      expect(cp!.activeAgent!.agentId).toBe('code-reviewer');
-    });
-
-    it('子 Agent 完成后清除 activeAgent', async () => {
-      const mgr = CheckpointManager.getInstance();
-
-      await mgr.save({
-        threadId: mainThreadId,
-        updatedAt: '',
-        runStatus: 'tool-pending',
-        activeAgent: {
-          sessionId: subAgentSessionId,
-          agentId: 'code-reviewer',
-          role: 'delegate',
-          workspace: 'w'
-        }
-      });
-
-      // 子 Agent 完成后更新主 thread
-      await mgr.updateStatus(mainThreadId, 'running');
-      const cp = await mgr.load(mainThreadId);
-      expect(cp!.runStatus).toBe('running');
-      // updateStatus 不会自动清除 activeAgent（仅 idle/completed 会清除）
-      expect(cp!.activeAgent).toBeDefined();
-
-      // 主 thread 最终完成
-      await mgr.updateStatus(mainThreadId, 'idle');
-      const final = await mgr.load(mainThreadId);
-      expect(final!.activeAgent).toBeUndefined();
-    });
-  });
-
-  // ========== 文件系统结构验证 ==========
-
-  describe('文件系统结构', () => {
-    it('checkpoint.json 在 workspace/{threadId}/ 目录下', async () => {
-      const mgr = CheckpointManager.getInstance();
-      const threadId = '500000000000000001';
-
-      await mgr.save({
-        threadId,
-        updatedAt: '',
-        runStatus: 'running'
-      });
-
-      const expectedPath = path.join(tmpDir, threadId, 'checkpoint.json');
-      expect(fs.existsSync(expectedPath)).toBe(true);
-
-      const raw = JSON.parse(fs.readFileSync(expectedPath, 'utf-8'));
-      expect(raw.threadId).toBe(threadId);
-      expect(raw.runStatus).toBe('running');
-    });
-
-    it('多个 thread 各有独立的 checkpoint 目录', async () => {
-      const mgr = CheckpointManager.getInstance();
-
-      await mgr.save({ threadId: 't-1', updatedAt: '', runStatus: 'running' });
-      await mgr.save({ threadId: 't-2', updatedAt: '', runStatus: 'idle' });
-      await mgr.save({ threadId: 't-3', updatedAt: '', runStatus: 'approval-pending' });
-
-      expect(fs.existsSync(path.join(tmpDir, 't-1', 'checkpoint.json'))).toBe(true);
-      expect(fs.existsSync(path.join(tmpDir, 't-2', 'checkpoint.json'))).toBe(true);
-      expect(fs.existsSync(path.join(tmpDir, 't-3', 'checkpoint.json'))).toBe(true);
-    });
-
-    it('checkpoint.json 内容是格式化的 JSON', async () => {
-      const mgr = CheckpointManager.getInstance();
-      await mgr.save({
-        threadId: 'pretty',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-        runStatus: 'running'
-      });
-
-      const raw = fs.readFileSync(path.join(tmpDir, 'pretty', 'checkpoint.json'), 'utf-8');
-      // 格式化 JSON 应包含换行和缩进
-      expect(raw).toContain('\n');
-      expect(raw).toContain('  ');
     });
   });
 

@@ -7,10 +7,7 @@
  * 文件结构：
  *   {workspace}/tasks/{taskId}/
  *   ├── plan.md         — 自然语言计划（LLM 生成）
- *   ├── status.json     — 机器可读状态（步骤、进度）
- *   ├── agents/          — 子 Agent 工作目录（delegate_to_agent 创建）
- *   ├── results/         — 子 Agent 结果汇总
- *   └── experiences/     — 共享经验
+ *   └── status.json     — 机器可读状态（步骤、进度）
  *
  * 支持操作：
  *   - create       — 创建新任务计划
@@ -86,8 +83,7 @@ export const taskPlanTool: ToolDefinition = {
     'Create and manage structured task plans for multi-agent delegation. ' +
     'Plans are persisted to tasks/{taskId}/ directory with plan.md (human-readable) and status.json (machine-readable). ' +
     'Use "create" to start a plan with steps, "update_step" to track progress, "get" to check status, ' +
-    '"list" to see all tasks, "complete" to finalize. ' +
-    'Pass the taskId to delegate_to_agent to group related delegations under the same task.',
+    '"list" to see all tasks, "complete" to finalize.',
   category: ToolCategory.Configuration,
   needUserConfirm: false,
   parameters: paramsSchema,
@@ -219,7 +215,7 @@ async function* handleCreate(
 
   return {
     success: true,
-    llmContent: `Task plan created: taskId="${taskId}", ${taskSteps.length} steps.\n\nUse this taskId when calling delegate_to_agent to group related delegations.\nUse task_plan(update_step) to track progress.`,
+    llmContent: `Task plan created: taskId="${taskId}", ${taskSteps.length} steps.\n\nUse task_plan(update_step) to track progress.`,
     userContent: `已创建任务计划: **${title}** (${taskId}), ${taskSteps.length} 个步骤`
   };
 }

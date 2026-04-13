@@ -1,35 +1,27 @@
 /**
  * Thread 唤醒器
  *
- * 监听 EventBus 上的 'thread:wake' 事件，从 checkpoint 恢复挂起的 Thread。
+ * 监听 EventBus 上的 'thread:wake' 事件，恢复挂起的 Thread。
  *
- * 架构设计（职责分离）：
+ * 架构设计：
  *   - ThreadStore = 任务状态的真相源（runStatus）
- *   - Checkpoint = 执行快照（pendingOperation、activeAgent）
  *
  * 唤醒流程：
  *   1. 系统启动：扫描 ThreadStore 找未完成任务
  *   2. 检查 ThreadStore 确认任务状态
- *   3. 读取 Checkpoint 获取恢复细节
- *   4. 如果有 pendingOperation（审批完成后）：
- *      a. 执行被挂起的工具
- *      b. 将工具结果作为系统消息注入
- *      c. 重新启动 Agent run
- *   5. 更新 ThreadStore 状态
+ *   3. 根据 Thread 类型决定恢复策略
+ *   4. 更新 ThreadStore 状态
  *
  * 事件格式：
  *   eventBus.emit('thread:wake', {
  *     threadId: string,
  *     reason: 'tool-done' | 'restart-recovery',
- *     toolResult?: string,
- *     approvalDecision?: 'approve-once' | 'approve-always' | 'reject'
+ *     toolResult?: string
  *   })
  */
 
 import { createLogger } from '@main/common/logger';
 import { eventBus } from '@main/common/eventbus';
-import { CheckpointManager } from './CheckpointManager';
-import type { ThreadCheckpoint } from './types';
 
 const log = createLogger('thread-waker');
 
@@ -107,13 +99,7 @@ export class ThreadWaker {
         return;
       }
 
-      const checkpoint = await CheckpointManager.getInstance().load(threadId);
-      if (!checkpoint) {
-        log.warn(`[ThreadWaker] No checkpoint found for ${threadId}, cannot recover`);
-        return;
-      }
-
-      await this.resumeThread(threadId, checkpoint, event);
+      await this.resumeThread(threadId, event);
     } catch (error) {
       log.error(`[ThreadWaker] Failed to wake thread ${threadId}:`, error);
     }
@@ -122,9 +108,9 @@ export class ThreadWaker {
   /**
    * 恢复挂起的 Thread
    */
-  private async resumeThread(threadId: string, checkpoint: ThreadCheckpoint, event: ThreadWakeEvent): Promise<void> {
+  private async resumeThread(threadId: string, event: ThreadWakeEvent): Promise<void> {
     if (event.reason === 'restart-recovery') {
-      await this.handleRestartRecovery(threadId, checkpoint);
+      await this.handleRestartRecovery(threadId);
     } else {
       log.info(`[ThreadWaker] Unhandled wake reason: ${event.reason}`);
     }
@@ -142,7 +128,7 @@ export class ThreadWaker {
    *   1. 普通 Agent Thread：通知用户中断了什么
    *   2. Discussion Thread：自动恢复讨论协调
    */
-  private async handleRestartRecovery(threadId: string, checkpoint: ThreadCheckpoint): Promise<void> {
+  private async handleRestartRecovery(threadId: string): Promise<void> {
     const { ThreadStore } = await import('./ThreadStore');
     const threadStore = await ThreadStore.getInstance();
     const threadDef = await threadStore.get(threadId);

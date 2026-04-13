@@ -20,7 +20,6 @@ import { memoryTool } from './memory';
 import { searchTool } from './search';
 import { globTool } from './glob';
 import { skillListTool } from './skill_list';
-import { delegateToAgentTool } from './delegate-to-agent';
 import { taskPlanTool } from './task-plan';
 import { todoWriteTool } from './todo-write';
 import { emitEventTool } from './emit-event';
@@ -36,7 +35,6 @@ export { memoryTool } from './memory';
 export { searchTool } from './search';
 export { globTool } from './glob';
 export { skillListTool } from './skill_list';
-export { delegateToAgentTool } from './delegate-to-agent';
 export { taskPlanTool } from './task-plan';
 export { todoWriteTool } from './todo-write';
 export { emitEventTool } from './emit-event';
@@ -60,8 +58,7 @@ export { switchExecutionModeTool } from './switch-execution-mode';
  *   glob            — 文件名搜索，低风险
  *   --- 发现 ---
  *   skill_list      — Skill 发现，低风险
- *   --- Agent 管理 ---
- *   delegate_to_agent   — 委托子任务给专业 Agent，中风险
+ *   --- 任务管理 ---
  *   task_plan           — 任务计划管理，低风险
  *   todo_write          — 会话级 TODO 管理，低风险
  *   --- 事件 ---
@@ -83,7 +80,6 @@ export const builtinTools: ToolDefinition[] = [
   searchTool,
   globTool,
   skillListTool,
-  delegateToAgentTool,
   taskPlanTool,
   todoWriteTool,
   emitEventTool,
