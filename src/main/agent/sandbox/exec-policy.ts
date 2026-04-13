@@ -11,16 +11,14 @@
  * 集成架构（通过 tool-approval Extension 的 before_tool_call Hook 协同）：
  *
  *   所有 Runtime 统一路径：
- *     LLM 调用 exec → before_tool_call Hook（tool-approval Extension）
+ *     LLM 调用 exec → ToolExecutionPipeline
  *     → checkExecPolicy() 检查：
  *       - deny → 直接拒绝（block: true）
  *       - allow → 放行
- *       - ask → requestApproval() → hitlApprovalManager.waitForSingleDecision()
- *     → 用户通过前端审批（approve-once / approve-always / reject）
- *     → approve-always 时 learnExecCommand() 学习到动态 allowlist
+ *       - ask → 直接拒绝（未知命令，安全优先）
  *
  * 注意：策略不在 exec 工具内部，工具层是纯执行逻辑。
- *       策略也不在 Runtime 内部，由 Extension Hook 统一处理。
+ *       策略在 ToolExecutionPipeline 中统一处理。
  *
  * @module sandbox/exec-policy
  */

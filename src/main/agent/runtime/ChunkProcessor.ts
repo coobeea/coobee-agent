@@ -21,14 +21,6 @@ export interface ChunkProcessorTurnState {
   getTurnToolCallCount: () => number;
 }
 
-/** 解析后的 pendingOperation（用于 approval-pending） */
-export interface ParsedPendingOperation {
-  type: 'approval';
-  approvalId: string;
-  toolName: string;
-  toolCallId: string;
-  agentSessionId: string;
-}
 
 // ==================== 指标采集 ====================
 
@@ -126,35 +118,3 @@ export function fireHooks(
   });
 }
 
-// ==================== suspendReason 解析 ====================
-
-/**
- * 从 suspendReason 中解析出 pendingOperation
- *
- * suspendReason 格式（来自 ToolExecutionPipeline）: "approval-pending:{approvalId}:{toolName}"
- * 例如: "approval-pending:282850582706069504:0:write"
- */
-export function parseSuspendReason(suspendReason: string, sessionId: string): ParsedPendingOperation | undefined {
-  if (!suspendReason) return undefined;
-
-  // 去除可能的前缀（如果有的话）
-  const reason = suspendReason.replace(/^suspended:\s*/i, '').trim();
-
-  // 匹配格式: approval-pending:{approvalId}:{toolName}
-  const match = reason.match(/^approval-pending:([^:]+:[^:]+):(.+)$/);
-  if (!match) {
-    log.warn(`[ChunkProcessor] Failed to parse suspendReason: ${suspendReason}`);
-    return undefined;
-  }
-
-  const approvalId = match[1]; // "sessionId:index"
-  const toolName = match[2]; // "write"
-
-  return {
-    type: 'approval',
-    approvalId,
-    toolName,
-    toolCallId: '',
-    agentSessionId: sessionId
-  };
-}

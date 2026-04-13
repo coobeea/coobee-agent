@@ -123,9 +123,7 @@ export class ThreadWaker {
    * 恢复挂起的 Thread
    */
   private async resumeThread(threadId: string, checkpoint: ThreadCheckpoint, event: ThreadWakeEvent): Promise<void> {
-    if (event.reason === 'tool-done') {
-      await this.handleApprovalResume(threadId, checkpoint, event);
-    } else if (event.reason === 'restart-recovery') {
+    if (event.reason === 'restart-recovery') {
       await this.handleRestartRecovery(threadId, checkpoint);
     } else {
       log.info(`[ThreadWaker] Unhandled wake reason: ${event.reason}`);
@@ -136,46 +134,6 @@ export class ThreadWaker {
     await threadStore.update(threadId, { runStatus: 'running' });
   }
 
-  /**
-   * 审批完成后恢复执行
-   *
-   * 流程：
-   *   1. 接收工具执行结果（已由后台任务执行完成）
-   *   2. 将结果作为系统消息注入
-   *   3. 继续 Agent run
-   *
-   * 注意：工具已在 ToolExecutionPipeline 的后台任务中执行，
-   *      这里只是接收结果并继续执行流程。
-   */
-  private async handleApprovalResume(
-    threadId: string,
-    checkpoint: ThreadCheckpoint,
-    event: ThreadWakeEvent
-  ): Promise<void> {
-    const pending = checkpoint.pendingOperation;
-    if (!pending || pending.type !== 'approval') {
-      log.warn(`[ThreadWaker] No pending approval operation for ${threadId}`);
-      return;
-    }
-
-    // 工具结果应该在 event.toolResult 中（由后台任务执行后发送）
-    if (!event.toolResult) {
-      log.warn(`[ThreadWaker] No toolResult in wake event for ${threadId}`);
-      return;
-    }
-
-    // 清理 AgentExecutor 的 pendingApprovalSessions（审批已完成）
-    const { agentExecutor } = await import('../AgentExecutor');
-    agentExecutor.clearPendingApproval(threadId);
-
-    const resumeMessage = `[System] Tool "${pending.toolName}" execution result:\n${event.toolResult}`;
-
-    // 重新启动 Agent run（注入工具结果）
-    await this.submitResumeMessage(threadId, resumeMessage);
-  }
-
-  // executeApprovedTool 已移除
-  // 工具现在由 ToolExecutionPipeline 的后台任务执行
 
   /**
    * 系统重启后恢复
@@ -210,12 +168,7 @@ export class ThreadWaker {
     // 普通 Agent Thread 恢复（原有逻辑）
     let message: string;
 
-    if (threadDef.runStatus === 'approval-pending') {
-      const pending = checkpoint.pendingOperation;
-      message =
-        `[System] The application was restarted while waiting for approval of tool "${pending?.toolName || 'unknown'}". ` +
-        `The approval request has been reset. Please retry the operation if needed.`;
-    } else if (threadDef.runStatus === 'running' || threadDef.runStatus === 'tool-pending') {
+    if (threadDef.runStatus === 'running' || threadDef.runStatus === 'tool-pending') {
       message =
         `[System] The application was restarted while a task was in progress. ` +
         `The previous execution state has been preserved. ` +

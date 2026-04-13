@@ -62,7 +62,6 @@ describe('ToolExecutionPipeline Core', () => {
     const result = await executeToolPipeline(mockTool, { arg: 'test_arg' }, { sandboxContext: context, onUpdate });
 
     expect(result.blocked).toBe(false);
-    expect(result.suspended).toBe(false);
     expect(result.resultText).toBe('result: test_arg');
     expect(result.rawResult).toEqual({ success: true, llmContent: 'result: test_arg' });
 

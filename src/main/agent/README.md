@@ -38,8 +38,6 @@ src/main/ai/
 │   └── types.ts             # 沙箱类型定义
 ├── process/                 # 后台进程注册表
 │   └── ProcessRegistry.ts   # 单例进程管理（MAX=20）
-├── hitl/                    # Human-in-the-Loop 审批
-│   └── HitlApprovalManager.ts  # Promise 等待 + 超时机制
 ├── streaming/               # 流式输出
 │   ├── StreamEmitter.ts     # 流式消息生产者
 │   └── types.ts             # 流式类型定义
@@ -64,7 +62,7 @@ Gateway (chat.ts)
       1. injectEnv() — 注入环境 + 执行协议 + Skill 发现提示
       2. Extension hooks — before_agent_start
       3. builder.build() → AgentRuntime
-      4. runtime.stream() — HITL 循环编排
+      4. runtime.stream() — 流式执行
       5. Extension hooks — agent_end / session_end
       6. runtime.destroy()
 ```
@@ -80,7 +78,7 @@ Gateway (chat.ts)
 - `yield ToolStreamUpdate` — 增量输出（进度、中间结果）
 - `return ToolResult` — 最终结果
 
-审批/HITL 由上层 Runtime 统一处理，工具本身只包含纯执行逻辑。
+工具本身只包含纯执行逻辑，安全策略由 sandbox 层统一处理。
 
 ### 内置工具分类
 
@@ -119,8 +117,7 @@ Skill 来源按优先级：内置 → Extension 贡献 → 用户 → Agent 自�
 
 - **安全白名单**：`ls`, `git`, `node` 等只读/低风险命令直接放行
 - **危险黑名单**：`rm -rf`, `sudo`, `curl|sh` 等始终拒绝
-- **动态 allowlist**：从 approve-always 决策中学习命令模式
-- 未知命令触发 HITL 审批
+- **未知命令**：不在白名单的命令直接拒绝执行
 
 ### 工具策略（tool-policy）
 
@@ -138,7 +135,6 @@ Skill 来源按优先级：内置 → Extension 贡献 → 用户 → Agent 自�
 两个 Runtime 都实现 `AgentRuntime` 接口，支持：
 
 - 流式执行（AsyncGenerator）
-- HITL 审批
 - 会话持久化（JSONL）
 - 上下文压缩
 - 上下文快照

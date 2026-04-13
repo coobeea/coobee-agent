@@ -348,10 +348,6 @@ export function setupEventSubscription(
         // 统一为与 OpenAI SDK 一致的格式：纯 JSON 字符串
         const output = extractToolOutput(rawResult);
 
-        // 提取 details（包含 suspended 状态等元信息）
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const details = (rawResult as any)?.details || {};
-
         // 记录工具调用
         if (toolCalls) {
           toolCalls.push({
@@ -368,9 +364,7 @@ export function setupEventSubscription(
             toolName,
             callId: evt.toolCallId,
             output,
-            toolArgs: typeof evt.args === 'object' ? evt.args : undefined,
-            // 传递 details（包含 suspended 状态）
-            ...(details.status === 'suspended' ? { suspended: true, suspendReason: details.suspendReason } : {})
+            toolArgs: typeof evt.args === 'object' ? evt.args : undefined
           }
         });
         break;

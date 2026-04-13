@@ -35,7 +35,7 @@ import type { StreamSource } from './streaming/types';
 import { injectEnv } from './AgentEnvInjector';
 import { AgentEventWriter } from './AgentEventWriter';
 import { ProviderInjector, type ProviderSystem } from './provider/ProviderInjector';
-import { fireHooks, parseSuspendReason, recordMetrics } from './runtime/ChunkProcessor';
+import { fireHooks, recordMetrics } from './runtime/ChunkProcessor';
 import { SkillManager } from './skills/SkillManager';
 import { CheckpointManager } from './threads/CheckpointManager';
 import { WorkspaceManager } from './storage/WorkspaceManager';
@@ -79,15 +79,6 @@ export type { SessionStatus } from './runtime/SessionStatusManager';
 class AgentExecutor {
   /** 活跃会话状态管理 */
   private sessionStatus = new SessionStatusManager();
-
-  /** 有待审批的 session（hitl:required 已触发，checkpoint 保持 approval-pending） */
-  private pendingApprovalSessions = new Map<string, { addedAt: number }>();
-
-  /** 审批等待 TTL（2 小时） */
-  private static readonly APPROVAL_TTL_MS = 2 * 60 * 60 * 1000;
-
-  /** 上次清理时间 */
-  private lastApprovalCleanupTime = Date.now();
 
   /** Provider 配置注入器（初始化后通过 setProviderSystem 注入） */
   private providerInjector = new ProviderInjector();
@@ -180,38 +171,6 @@ class AgentExecutor {
     return { status: 'accepted', sessionId };
   }
 
-  /**
-   * 清理审批等待状态（ThreadWaker 恢复后调用）
-   */
-  clearPendingApproval(sessionId: string): void {
-    const deleted = this.pendingApprovalSessions.delete(sessionId);
-    if (deleted) {
-      log.info(`[AgentExecutor] Cleared pending approval for ${sessionId}`);
-    }
-  }
-
-  /**
-   * 清理过期的审批等待（TTL 机制）
-   * 每 5 分钟检查一次，清理超过 2 小时的条目
-   */
-  private cleanupExpiredApprovals(): void {
-    const now = Date.now();
-    // 每 5 分钟检查一次
-    if (now - this.lastApprovalCleanupTime < 5 * 60 * 1000) return;
-    this.lastApprovalCleanupTime = now;
-
-    let cleanedCount = 0;
-    for (const [sid, entry] of this.pendingApprovalSessions) {
-      if (now - entry.addedAt > AgentExecutor.APPROVAL_TTL_MS) {
-        this.pendingApprovalSessions.delete(sid);
-        cleanedCount++;
-      }
-    }
-
-    if (cleanedCount > 0) {
-      log.info(`[AgentExecutor] Cleaned up ${cleanedCount} expired pending approvals`);
-    }
-  }
 
   /**
    * 提交并等待执行完成（阻塞）
@@ -523,12 +482,8 @@ class AgentExecutor {
       }
     }
 
-    // 执行完成 - 但如果在等待审批，不覆盖 approval-pending 状态
-    if (!this.pendingApprovalSessions.has(sessionId)) {
-      this.updateSessionStatus(sessionId, 'completed', workspaceDir);
-    } else {
-      log.info(`[AgentExecutor] Execute loop done but approval-pending, keeping checkpoint for ${sessionId}`);
-    }
+    // 执行完成
+    this.updateSessionStatus(sessionId, 'completed', workspaceDir);
 
     return r.value;
   }
@@ -538,18 +493,8 @@ class AgentExecutor {
    *
    * fire-and-forget：不阻塞流式输出。
    * 同步更新 checkpoint.json 和 Thread 的 runStatus。
-   *
-   * 关键设计：approval-pending 是"粘性"状态。
-   * hitl:required 设置 approval-pending 后，后续的 tool:done / run:done 不能覆盖它，
-   * 因为异步审批模式下 Agent run 正常结束，但 checkpoint 必须保持 approval-pending
-   * 等待用户审批后由 ThreadWaker 唤醒恢复。
    */
-  private updateSessionStatus(
-    sessionId: string,
-    status: string,
-    workspaceDir?: string,
-    pendingOperation?: unknown
-  ): void {
+  private updateSessionStatus(sessionId: string, status: string, workspaceDir?: string): void {
     const isSubAgent = sessionId.includes(':');
 
     if (isSubAgent && workspaceDir) {
@@ -563,36 +508,12 @@ class AgentExecutor {
 
     if (!isSubAgent) {
       const checkpoint = CheckpointManager.getInstance();
-      if (pendingOperation) {
-        checkpoint
-          .save({
-            threadId: sessionId,
-            updatedAt: new Date().toISOString(),
-            runStatus: status as 'approval-pending' | 'running' | 'tool-pending' | 'error' | 'idle' | 'completed',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            pendingOperation: pendingOperation as any
-          })
-          .catch(() => {});
-      } else {
-        checkpoint
-          .updateStatus(
-            sessionId,
-            status as 'approval-pending' | 'running' | 'tool-pending' | 'error' | 'idle' | 'completed'
-          )
-          .catch(() => {});
-      }
+      checkpoint
+        .updateStatus(sessionId, status as 'running' | 'tool-pending' | 'error' | 'idle' | 'completed')
+        .catch(() => {});
 
-      if (
-        status === 'tool-pending' ||
-        status === 'approval-pending' ||
-        status === 'running' ||
-        status === 'error' ||
-        status === 'completed'
-      ) {
-        this.syncThreadRunStatus(
-          sessionId,
-          status as 'approval-pending' | 'running' | 'tool-pending' | 'error' | 'idle' | 'completed'
-        );
+      if (status === 'tool-pending' || status === 'running' || status === 'error' || status === 'completed') {
+        this.syncThreadRunStatus(sessionId, status as 'running' | 'tool-pending' | 'error' | 'idle' | 'completed');
       }
     }
   }
@@ -600,51 +521,16 @@ class AgentExecutor {
   private updateCheckpoint(sessionId: string, chunk: StreamChunk, workspaceDir?: string): void {
     switch (chunk.type) {
       case 'tool:start':
-        if (!this.pendingApprovalSessions.has(sessionId)) {
-          this.updateSessionStatus(sessionId, 'tool-pending', workspaceDir);
-        }
+        this.updateSessionStatus(sessionId, 'tool-pending', workspaceDir);
         break;
       case 'tool:done':
-        // 检测工具挂起（suspended 标志来自 ToolExecutionPipeline → PiMonoStreamAdapter）
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if ((chunk.data as any)?.suspended === true) {
-          this.pendingApprovalSessions.set(sessionId, { addedAt: Date.now() });
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const suspendReason = (chunk.data as any)?.suspendReason;
-          const pendingOp = parseSuspendReason(suspendReason, sessionId);
-          this.updateSessionStatus(sessionId, 'approval-pending', workspaceDir, pendingOp);
-          log.info(`[AgentExecutor] Tool suspended (approval-pending): ${sessionId}, tool=${pendingOp?.toolName}`);
-        } else if (!this.pendingApprovalSessions.has(sessionId)) {
-          this.updateSessionStatus(sessionId, 'running', workspaceDir);
-        }
-        break;
-      case 'hitl:required':
-        // 通过 Extension 的 api.services.events.emit 发出的 hitl:required
-        // 不经过 consumeAndForward，所以这个 case 是备用路径
-        this.pendingApprovalSessions.set(sessionId, { addedAt: Date.now() });
-        this.updateSessionStatus(sessionId, 'approval-pending', workspaceDir, {
-          type: 'approval',
-          approvalId: (chunk.data as Record<string, unknown>)?.approvalId as string,
-          toolName: ((chunk.data as Record<string, unknown>)?.toolName as string) || chunk.content,
-          toolCallId: ((chunk.data as Record<string, unknown>)?.toolCallId as string) || '',
-          agentSessionId: sessionId,
-          arguments: ((chunk.data as Record<string, unknown>)?.arguments as string) || '{}'
-        });
+        this.updateSessionStatus(sessionId, 'running', workspaceDir);
         break;
       case 'run:error':
-        this.pendingApprovalSessions.delete(sessionId);
         this.updateSessionStatus(sessionId, 'error', workspaceDir);
         break;
       case 'run:done':
-        if (this.pendingApprovalSessions.has(sessionId)) {
-          // 审批等待中：不删除 pending 状态，不更新 checkpoint
-          // checkpoint 保持 approval-pending，等待 ThreadWaker 恢复
-          log.info(`[AgentExecutor] Run done but approval-pending, keeping checkpoint for ${sessionId}`);
-        } else {
-          // 正常完成，设置为 completed（不是 idle）
-          // 这样系统重启后不会尝试恢复已完成的对话
-          this.updateSessionStatus(sessionId, 'completed', workspaceDir);
-        }
+        this.updateSessionStatus(sessionId, 'completed', workspaceDir);
         break;
     }
   }
@@ -665,21 +551,14 @@ class AgentExecutor {
   /**
    * 核心执行流程：创建 → 推理 → 销毁
    *
-   * HITL 审批：
-   *   不再在 Executor 层编排 HITL 循环。
-   *   所有审批逻辑由 tool-approval Extension 在 before_tool_call Hook 中处理：
-   *   - ExecPolicy 自动决策
-   *   - needUserConfirm 工具的用户审批等待
-   *   - 审批结果自学习（approve-always → 动态白名单）
-   *
-   *   这使得 HITL 成为 SDK 无关的能力，OpenAI / PiMono 等所有 Runtime 均可使用。
+   * 安全策略：
+   *   所有工具执行受 ExecPolicy 和 ToolPolicy 保护
+   *   - ExecPolicy: 基于命令白名单/黑名单的安全检查
+   *   - ToolPolicy: 基于工具名称的访问控制
    */
   private async execute(request: ExecuteRequest): Promise<ExecutionResult> {
     const { sessionId, message, builder, onChunk, signal } = request;
     let runtime: AgentRuntime | null = null;
-
-    // 定期清理过期的审批等待
-    this.cleanupExpiredApprovals();
 
     log.info(`[AgentExecutor] Execute: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
     const startTime = Date.now();

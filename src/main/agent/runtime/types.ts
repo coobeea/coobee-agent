@@ -359,17 +359,13 @@ export type StreamChunkType =
   | 'tool:delta' // 参数增量 / 执行进度
   | 'tool:pending' // 参数完成，等待执行
   | 'tool:done' // 执行完成
-  // ⑦ hitl: 人工审批
-  | 'hitl:required' // 需要审批
-  | 'hitl:approved' // 已批准
-  | 'hitl:rejected' // 已拒绝
-  // ⑧ handoff: Agent 切换
+  // ⑦ handoff: Agent 切换
   | 'handoff:start' // 请求切换
   | 'handoff:done' // 切换完成
-  // ⑨ compression: Session 压缩
+  // ⑧ compression: Session 压缩
   | 'compression:start' // 压缩开始
   | 'compression:done' // 压缩完成（含统计信息）
-  // ⑩ delegate: 子 Agent 委托
+  // ⑨ delegate: 子 Agent 委托
   | 'delegate:start' // 委托开始
   | 'delegate:done' // 委托完成
   // ⑪ quality: 质量循环
@@ -497,21 +493,7 @@ export interface ToolDoneData {
   output: unknown;
 }
 
-// ---- ⑦ hitl: ----
-
-/** hitl:required 数据 */
-export interface HitlRequiredData {
-  /** 审批项索引 */
-  index: number;
-  /** 工具名称 */
-  toolName: string;
-  /** 工具参数（JSON 字符串） */
-  arguments?: string;
-  /** SDK 原始审批项引用（用于 approve/reject，由具体实现定义类型） */
-  approvalItem: unknown;
-}
-
-// ---- ⑧ handoff: ----
+// ---- ⑦ handoff: ----
 
 /** handoff:start / handoff:done 数据 */
 export interface HandoffData {
@@ -521,7 +503,7 @@ export interface HandoffData {
   toAgent: string;
 }
 
-// ---- ⑨ compression: ----
+// ---- ⑧ compression: ----
 
 /** compression:start 数据 */
 export interface CompressionStartData {
