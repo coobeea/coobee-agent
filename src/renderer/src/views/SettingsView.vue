@@ -86,20 +86,20 @@ function selectMenu(menuId: string): void {
 <template>
   <div class="flex h-full bg-background text-foreground">
     <!-- 左侧：一级导航菜单 -->
-    <div class="flex w-56 flex-col border-r border-border bg-card">
-      <div class="p-4 border-b border-border">
-        <h1 class="text-base font-bold">系统设置</h1>
+    <div class="flex w-56 flex-col border-r border-border bg-card/50">
+      <div class="p-5 border-b border-border">
+        <h1 class="text-lg font-bold tracking-tight">系统设置</h1>
       </div>
 
       <div class="flex-1 overflow-y-auto p-3">
-        <div class="flex flex-col gap-1">
+        <div class="flex flex-col gap-1.5">
           <button
             v-for="item in menuItems"
             :key="item.id"
             :class="[
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left',
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all text-left',
               activeMenu === item.id
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             ]"
             @click="selectMenu(item.id)">
@@ -111,7 +111,7 @@ function selectMenu(menuId: string): void {
     </div>
 
     <!-- 右侧：动态内容区域 -->
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 overflow-hidden bg-background">
       <component :is="activeComponent" />
     </div>
   </div>

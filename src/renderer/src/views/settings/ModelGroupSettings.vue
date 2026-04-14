@@ -81,95 +81,110 @@ onMounted(() => {
 <template>
   <div class="flex h-full bg-background text-foreground">
     <!-- 左侧：分组列表 -->
-    <div class="flex w-64 flex-col border-r border-border bg-card">
-      <div class="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 class="text-sm font-semibold">模型分组</h2>
-        <button class="text-primary hover:text-primary/80">
+    <div class="flex w-64 flex-col border-r border-border bg-card/30">
+      <div class="flex items-center justify-between border-b border-border px-5 py-4">
+        <div>
+          <h2 class="text-base font-semibold tracking-tight">模型分组</h2>
+          <p class="mt-1 text-xs text-muted-foreground">{{ groups.length }} 个分组</p>
+        </div>
+        <button class="flex h-8 w-8 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors">
           <span class="i-carbon-add text-lg"></span>
         </button>
       </div>
 
       <div class="flex-1 overflow-y-auto p-3">
-        <div v-if="loading" class="flex justify-center py-8 text-muted-foreground">
-          <span class="i-carbon-circle-dash animate-spin text-xl"></span>
+        <div v-if="loading" class="flex flex-col items-center justify-center py-10 text-muted-foreground">
+          <span class="i-carbon-circle-dash animate-spin text-2xl mb-3 text-primary/70"></span>
+          <p class="text-sm font-medium">加载中...</p>
         </div>
         
-        <div v-else class="flex flex-col gap-1">
+        <div v-else class="flex flex-col gap-1.5">
           <button
             v-for="group in groups"
             :key="group.id"
             :class="[
-              'flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+              'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-all border border-transparent',
               selectedGroupId === group.id
-                ? 'bg-primary/10 text-primary'
-                : 'text-foreground hover:bg-muted'
+                ? 'bg-primary/10 border-primary/20 text-primary shadow-sm'
+                : 'text-foreground hover:bg-muted hover:border-border/50'
             ]"
             @click="selectGroup(group.id)">
             <div class="flex flex-col overflow-hidden">
               <span class="truncate font-medium">{{ group.name }}</span>
-              <span class="mt-0.5 text-[10px] text-muted-foreground truncate">
+              <span class="mt-1 text-[11px] font-medium text-muted-foreground truncate">
                 {{ group.models.length }} 个模型 · {{ getStrategyLabel(group.strategy) }}
               </span>
             </div>
-            <div :class="['h-2 w-2 flex-shrink-0 rounded-full', group.enabled ? 'bg-green-500' : 'bg-gray-400']"></div>
+            <div :class="['h-2.5 w-2.5 flex-shrink-0 rounded-full shadow-sm', group.enabled ? 'bg-green-500' : 'bg-gray-400/50']"></div>
           </button>
         </div>
       </div>
     </div>
 
     <!-- 右侧：分组详情 -->
-    <div class="flex-1 overflow-y-auto p-6">
-      <div v-if="selectedGroup" class="mx-auto max-w-2xl">
-        <div class="mb-6 flex items-start justify-between">
+    <div class="flex-1 overflow-y-auto bg-background p-8 lg:p-12">
+      <div v-if="selectedGroup" class="mx-auto max-w-3xl">
+        <div class="mb-8 flex items-start justify-between">
           <div>
-            <h1 class="text-2xl font-bold">{{ selectedGroup.name }}</h1>
-            <p class="mt-1 text-sm text-muted-foreground">{{ selectedGroup.description || '无描述' }}</p>
+            <h1 class="text-3xl font-bold tracking-tight">{{ selectedGroup.name }}</h1>
+            <p class="mt-2 text-sm text-muted-foreground">{{ selectedGroup.description || '无描述' }}</p>
           </div>
-          <button class="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
+          <button class="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm">
+            <span class="i-carbon-edit"></span>
             编辑分组
           </button>
         </div>
 
-        <div class="space-y-6">
-          <div class="rounded-lg border border-border bg-card p-5">
-            <h3 class="text-base font-medium border-b border-border pb-2 mb-4">基本信息</h3>
+        <div class="space-y-8">
+          <div class="rounded-xl border border-border bg-card p-8 shadow-sm">
+            <h3 class="text-lg font-semibold tracking-tight border-b border-border pb-4 mb-6">基本信息</h3>
             
-            <div class="grid grid-cols-2 gap-4 text-sm">
+            <div class="grid grid-cols-2 gap-6 text-sm">
               <div>
-                <span class="text-muted-foreground block mb-1">分组 ID</span>
-                <code class="bg-muted px-1.5 py-0.5 rounded font-mono">{{ selectedGroup.id }}</code>
+                <span class="text-muted-foreground font-medium block mb-2">分组 ID</span>
+                <code class="bg-muted/50 px-2.5 py-1 rounded-md font-mono text-xs border border-border/50">{{ selectedGroup.id }}</code>
               </div>
               <div>
-                <span class="text-muted-foreground block mb-1">状态</span>
-                <span :class="selectedGroup.enabled ? 'text-green-600' : 'text-gray-500'">
+                <span class="text-muted-foreground font-medium block mb-2">状态</span>
+                <span :class="['inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset', selectedGroup.enabled ? 'bg-green-500/10 text-green-700 dark:text-green-400 ring-green-500/20' : 'bg-gray-500/10 text-gray-700 dark:text-gray-400 ring-gray-500/20']">
                   {{ selectedGroup.enabled ? '已启用' : '已禁用' }}
                 </span>
               </div>
               <div class="col-span-2">
-                <span class="text-muted-foreground block mb-1">负载均衡策略</span>
-                <div class="flex items-center gap-2">
-                  <span class="font-medium">{{ getStrategyLabel(selectedGroup.strategy) }}</span>
-                  <span class="text-xs text-muted-foreground">
-                    ({{ STRATEGIES.find(s => s.value === selectedGroup?.strategy)?.desc }})
-                  </span>
+                <span class="text-muted-foreground font-medium block mb-2">负载均衡策略</span>
+                <div class="flex items-center gap-3 bg-background border border-border rounded-lg p-4">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <span class="i-carbon-flow-data text-xl"></span>
+                  </div>
+                  <div>
+                    <span class="font-semibold text-base block">{{ getStrategyLabel(selectedGroup.strategy) }}</span>
+                    <span class="text-sm text-muted-foreground mt-0.5 block">
+                      {{ STRATEGIES.find(s => s.value === selectedGroup?.strategy)?.desc }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="rounded-lg border border-border bg-card p-5">
-            <h3 class="text-base font-medium border-b border-border pb-2 mb-4">包含的模型 ({{ selectedGroup.models.length }})</h3>
+          <div class="rounded-xl border border-border bg-card p-8 shadow-sm">
+            <h3 class="text-lg font-semibold tracking-tight border-b border-border pb-4 mb-6 flex items-center justify-between">
+              <span>包含的模型</span>
+              <span class="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                {{ selectedGroup.models.length }}
+              </span>
+            </h3>
             
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-3">
               <div 
                 v-for="(modelId, index) in selectedGroup.models" 
                 :key="modelId"
-                class="flex items-center gap-3 p-3 rounded-md border border-border bg-background"
+                class="flex items-center gap-4 p-4 rounded-lg border border-border bg-background shadow-sm hover:border-primary/30 transition-colors"
               >
-                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground shrink-0">
+                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground shrink-0 shadow-inner">
                   {{ index + 1 }}
                 </div>
-                <div class="flex-1 font-mono text-sm">{{ modelId }}</div>
+                <div class="flex-1 font-mono text-sm font-medium">{{ modelId }}</div>
               </div>
             </div>
           </div>
@@ -178,8 +193,9 @@ onMounted(() => {
       
       <div v-else class="flex h-full items-center justify-center text-muted-foreground">
         <div class="text-center">
-          <span class="i-carbon-group-objects text-4xl mb-3 opacity-20 block mx-auto"></span>
-          <p>请在左侧选择一个模型分组</p>
+          <span class="i-carbon-group-objects text-5xl mb-4 opacity-20 block mx-auto"></span>
+          <p class="text-lg font-medium text-foreground">未选择分组</p>
+          <p class="mt-2 text-sm">请在左侧选择一个模型分组进行查看</p>
         </div>
       </div>
     </div>

@@ -231,76 +231,76 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full">
+  <div class="flex h-full bg-background">
     <!-- 左侧：供应商列表 -->
-    <div class="flex w-64 flex-col border-r border-border bg-card">
-      <div class="border-b border-border px-4 py-3">
-        <h2 class="text-sm font-semibold">模型供应商</h2>
-        <p class="mt-0.5 text-[10px] text-muted-foreground">{{ providers.length }} 个供应商</p>
+    <div class="flex w-64 flex-col border-r border-border bg-card/30">
+      <div class="border-b border-border px-5 py-4">
+        <h2 class="text-base font-semibold tracking-tight">模型供应商</h2>
+        <p class="mt-1 text-xs text-muted-foreground">{{ providers.length }} 个供应商</p>
       </div>
 
       <div class="flex-1 overflow-y-auto p-3">
         <!-- 加载中 -->
-        <div v-if="loading" class="flex flex-col items-center justify-center py-8 text-muted-foreground">
-          <span class="i-carbon-circle-dash mb-2 inline-block h-6 w-6 animate-spin"></span>
-          <p class="text-sm">加载中...</p>
+        <div v-if="loading" class="flex flex-col items-center justify-center py-10 text-muted-foreground">
+          <span class="i-carbon-circle-dash mb-3 inline-block h-8 w-8 animate-spin text-primary/70"></span>
+          <p class="text-sm font-medium">加载中...</p>
         </div>
         
         <!-- 错误提示 -->
-        <div v-else-if="error" class="p-4 text-sm text-red-500 text-center">
+        <div v-else-if="error" class="p-4 text-sm text-red-500 text-center bg-red-500/10 rounded-lg mx-2 mt-2">
           {{ error }}
-          <button @click="loadData" class="mt-2 text-blue-500 hover:underline">重试</button>
+          <button @click="loadData" class="mt-3 block w-full rounded-md bg-red-500/20 py-1.5 text-red-600 hover:bg-red-500/30 transition-colors font-medium">重试</button>
         </div>
 
         <!-- Provider 卡片列表 -->
-        <div v-else class="flex flex-col gap-1">
+        <div v-else class="flex flex-col gap-1.5">
           <!-- 已启用分组 -->
           <template v-if="enabledProviders.length > 0">
-            <p class="px-1 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground mt-2 first:mt-0">
+            <p class="px-2 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               已启用 · {{ enabledProviders.length }}
             </p>
             <button
               v-for="provider in enabledProviders"
               :key="provider.id"
               :class="[
-                'flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+                'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-all border border-transparent',
                 selectedProviderId === provider.id
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-foreground hover:bg-muted'
+                  ? 'bg-primary/10 border-primary/20 text-primary shadow-sm'
+                  : 'text-foreground hover:bg-muted hover:border-border/50'
               ]"
               @click="selectProvider(provider.id)">
               <div class="flex flex-col overflow-hidden">
                 <span class="truncate font-medium">{{ provider.name }}</span>
-                <span :class="['mt-0.5 text-[10px]', getStatusTextColor(provider)]">
+                <span :class="['mt-1 text-[11px] font-medium', getStatusTextColor(provider)]">
                   {{ getStatusText(provider) }}
                 </span>
               </div>
-              <div :class="['h-2 w-2 flex-shrink-0 rounded-full', getStatusColor(provider)]"></div>
+              <div :class="['h-2.5 w-2.5 flex-shrink-0 rounded-full shadow-sm', getStatusColor(provider)]"></div>
             </button>
           </template>
 
           <!-- 未启用分组 -->
           <template v-if="disabledProviders.length > 0">
-            <p class="px-1 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground mt-4">
+            <p class="px-2 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               未启用 · {{ disabledProviders.length }}
             </p>
             <button
               v-for="provider in disabledProviders"
               :key="provider.id"
               :class="[
-                'flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-colors',
+                'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-all border border-transparent',
                 selectedProviderId === provider.id
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-foreground hover:bg-muted'
+                  ? 'bg-primary/10 border-primary/20 text-primary shadow-sm'
+                  : 'text-foreground hover:bg-muted hover:border-border/50'
               ]"
               @click="selectProvider(provider.id)">
               <div class="flex flex-col overflow-hidden opacity-70">
                 <span class="truncate font-medium">{{ provider.name }}</span>
-                <span :class="['mt-0.5 text-[10px]', getStatusTextColor(provider)]">
+                <span :class="['mt-1 text-[11px] font-medium', getStatusTextColor(provider)]">
                   {{ getStatusText(provider) }}
                 </span>
               </div>
-              <div :class="['h-2 w-2 flex-shrink-0 rounded-full', getStatusColor(provider)]"></div>
+              <div :class="['h-2.5 w-2.5 flex-shrink-0 rounded-full shadow-sm', getStatusColor(provider)]"></div>
             </button>
           </template>
         </div>
@@ -308,48 +308,51 @@ onMounted(() => {
     </div>
 
     <!-- 右侧：配置详情 -->
-    <div class="flex-1 overflow-y-auto bg-background p-6">
-      <div v-if="selectedProviderInfo" class="mx-auto max-w-2xl">
+    <div class="flex-1 overflow-y-auto bg-background p-8 lg:p-12">
+      <div v-if="selectedProviderInfo" class="mx-auto max-w-3xl">
         <!-- 头部：标题和启用开关 -->
-        <div class="mb-6 flex items-start justify-between">
+        <div class="mb-8 flex items-start justify-between">
           <div>
-            <h1 class="text-2xl font-bold text-foreground">{{ selectedProviderInfo.name }}</h1>
-            <p class="mt-1 text-sm text-muted-foreground">{{ selectedProviderInfo.description || '无描述' }}</p>
+            <h1 class="text-3xl font-bold tracking-tight text-foreground">{{ selectedProviderInfo.name }}</h1>
+            <p class="mt-2 text-sm text-muted-foreground">{{ selectedProviderInfo.description || '无描述' }}</p>
             
             <!-- 网站链接 -->
-            <div v-if="selectedProviderInfo.websites" class="mt-3 flex flex-wrap gap-3 text-xs">
-              <a v-if="selectedProviderInfo.websites.official" :href="selectedProviderInfo.websites.official" target="_blank" class="flex items-center text-blue-500 hover:underline">
-                <span class="i-carbon-home mr-1"></span> 官网
+            <div v-if="selectedProviderInfo.websites" class="mt-4 flex flex-wrap gap-4 text-xs font-medium">
+              <a v-if="selectedProviderInfo.websites.official" :href="selectedProviderInfo.websites.official" target="_blank" class="flex items-center text-primary hover:text-primary/80 transition-colors">
+                <span class="i-carbon-home mr-1.5 h-4 w-4"></span> 官网
               </a>
-              <a v-if="selectedProviderInfo.websites.apiKey" :href="selectedProviderInfo.websites.apiKey" target="_blank" class="flex items-center text-blue-500 hover:underline">
-                <span class="i-carbon-key mr-1"></span> 获取 API Key
+              <a v-if="selectedProviderInfo.websites.apiKey" :href="selectedProviderInfo.websites.apiKey" target="_blank" class="flex items-center text-primary hover:text-primary/80 transition-colors">
+                <span class="i-carbon-key mr-1.5 h-4 w-4"></span> 获取 API Key
               </a>
-              <a v-if="selectedProviderInfo.websites.docs" :href="selectedProviderInfo.websites.docs" target="_blank" class="flex items-center text-blue-500 hover:underline">
-                <span class="i-carbon-document mr-1"></span> 文档
+              <a v-if="selectedProviderInfo.websites.docs" :href="selectedProviderInfo.websites.docs" target="_blank" class="flex items-center text-primary hover:text-primary/80 transition-colors">
+                <span class="i-carbon-document mr-1.5 h-4 w-4"></span> 文档
               </a>
             </div>
           </div>
           
-          <button
-            @click="handleToggleEnabled"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
-              config.enabled ? 'bg-green-500' : 'bg-gray-300'
-            ]"
-            role="switch"
-            :aria-checked="config.enabled">
-            <span
-              aria-hidden="true"
+          <div class="flex items-center gap-3 bg-card px-4 py-2.5 rounded-xl border border-border shadow-sm">
+            <span class="text-sm font-medium text-foreground">启用服务</span>
+            <button
+              @click="handleToggleEnabled"
               :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                config.enabled ? 'translate-x-5' : 'translate-x-0'
-              ]"></span>
-          </button>
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background',
+                config.enabled ? 'bg-primary' : 'bg-muted'
+              ]"
+              role="switch"
+              :aria-checked="config.enabled">
+              <span
+                aria-hidden="true"
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  config.enabled ? 'translate-x-5' : 'translate-x-0'
+                ]"></span>
+            </button>
+          </div>
         </div>
 
         <!-- 配置表单 -->
-        <div class="space-y-6 rounded-lg border border-border bg-card p-5">
-          <h3 class="text-base font-medium text-foreground border-b border-border pb-2">连接配置</h3>
+        <div class="space-y-8 rounded-xl border border-border bg-card p-8 shadow-sm">
+          <h3 class="text-lg font-semibold tracking-tight text-foreground border-b border-border pb-4">连接配置</h3>
           
           <!-- API 类型标识 -->
           <div class="flex items-center gap-2">
@@ -360,21 +363,21 @@ onMounted(() => {
           </div>
 
           <!-- Base URL -->
-          <div class="flex flex-col gap-1.5">
+          <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-foreground">API Base URL</label>
             <input
               v-model="config.baseUrl"
               type="text"
-              class="rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              class="rounded-lg border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               placeholder="https://api.example.com/v1" />
             <p class="text-xs text-muted-foreground">通常不需要修改，除非使用代理或私有部署。</p>
           </div>
 
           <!-- API Key -->
-          <div class="flex flex-col gap-1.5">
+          <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-foreground flex justify-between">
               <span>API Key</span>
-              <span v-if="selectedProviderInfo._hasApiKey" class="text-green-600 text-xs flex items-center">
+              <span v-if="selectedProviderInfo._hasApiKey" class="text-green-600 text-xs flex items-center bg-green-500/10 px-2 py-0.5 rounded-md">
                 <span class="i-carbon-checkmark-outline mr-1"></span> 已配置
               </span>
             </label>
@@ -382,46 +385,46 @@ onMounted(() => {
               <input
                 v-model="config.apiKey"
                 type="password"
-                class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                class="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 :placeholder="selectedProviderInfo._hasApiKey ? '•••••••••••••••• (输入新值以覆盖)' : 'sk-...'" />
             </div>
             <p class="text-xs text-muted-foreground">API Key 保存在本地安全的 secrets.json5 文件中，不会随配置导出。</p>
           </div>
 
           <!-- 底部操作区 -->
-          <div class="flex items-center justify-between pt-4 border-t border-border mt-6">
+          <div class="flex items-center justify-between pt-6 border-t border-border mt-8">
             <!-- 测试连接 -->
             <div class="flex items-center gap-3">
               <button
                 @click="handleTestConnection"
                 :disabled="testing || (!config.apiKey && !selectedProviderInfo._hasApiKey)"
-                class="flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors">
-                <span v-if="testing" class="i-carbon-circle-dash animate-spin"></span>
+                class="flex items-center gap-2 rounded-lg border border-input bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors">
+                <span v-if="testing" class="i-carbon-circle-dash animate-spin text-primary"></span>
                 <span v-else class="i-carbon-connection-signal"></span>
                 {{ testing ? '测试中...' : '测试连接' }}
               </button>
               
-              <span v-if="testStatus === 'success'" class="text-sm text-green-600 flex items-center">
-                <span class="i-carbon-checkmark-filled mr-1"></span> 连接成功
+              <span v-if="testStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center bg-green-500/10 px-3 py-1.5 rounded-md border border-green-500/20">
+                <span class="i-carbon-checkmark-filled mr-1.5"></span> 连接成功
               </span>
-              <span v-else-if="testStatus === 'error'" class="text-sm text-red-500 flex items-center">
-                <span class="i-carbon-warning-filled mr-1"></span> {{ testErrorMsg }}
+              <span v-else-if="testStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center bg-red-500/10 px-3 py-1.5 rounded-md border border-red-500/20">
+                <span class="i-carbon-warning-filled mr-1.5"></span> {{ testErrorMsg }}
               </span>
             </div>
 
             <!-- 保存配置 -->
-            <div class="flex items-center gap-3">
-              <span v-if="saveStatus === 'success'" class="text-sm text-green-600 flex items-center">
-                <span class="i-carbon-checkmark mr-1"></span> 已保存
+            <div class="flex items-center gap-4">
+              <span v-if="saveStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center">
+                <span class="i-carbon-checkmark mr-1.5"></span> 已保存
               </span>
-              <span v-else-if="saveStatus === 'error'" class="text-sm text-red-500 flex items-center">
-                <span class="i-carbon-warning mr-1"></span> 保存失败
+              <span v-else-if="saveStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center">
+                <span class="i-carbon-warning mr-1.5"></span> 保存失败
               </span>
               
               <button
                 @click="handleSave"
                 :disabled="saving"
-                class="flex items-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm">
+                class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm">
                 <span v-if="saving" class="i-carbon-circle-dash animate-spin"></span>
                 <span v-else class="i-carbon-save"></span>
                 {{ saving ? '保存中...' : '保存配置' }}
@@ -431,24 +434,24 @@ onMounted(() => {
         </div>
         
         <!-- 模型列表预览 -->
-        <div class="mt-8">
-          <h3 class="text-sm font-medium text-foreground mb-3 flex items-center justify-between">
+        <div class="mt-10">
+          <h3 class="text-base font-semibold tracking-tight text-foreground mb-4 flex items-center justify-between">
             <span>支持的模型 ({{ selectedProviderInfo.models.length }})</span>
           </h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div 
               v-for="model in selectedProviderInfo.models" 
               :key="model.id"
-              class="border border-border rounded-md p-3 bg-card text-sm flex flex-col"
+              class="border border-border rounded-xl p-4 bg-card text-sm flex flex-col shadow-sm hover:shadow-md transition-shadow hover:border-primary/30"
             >
-              <div class="font-medium text-foreground mb-1">{{ model.name }}</div>
-              <div class="text-xs text-muted-foreground font-mono">{{ model.id }}</div>
+              <div class="font-semibold text-foreground mb-1.5">{{ model.name }}</div>
+              <div class="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded-md w-fit">{{ model.id }}</div>
               
-              <div class="mt-2 flex flex-wrap gap-1">
-                <span v-if="model.reasoning" class="inline-flex items-center rounded-sm bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10">推理</span>
-                <span v-if="model.vision" class="inline-flex items-center rounded-sm bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">视觉</span>
-                <span v-if="model.functionCalling" class="inline-flex items-center rounded-sm bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700 ring-1 ring-inset ring-green-700/10">函数调用</span>
-                <span v-if="model.contextWindow" class="inline-flex items-center rounded-sm bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">{{ Math.round(model.contextWindow / 1000) }}K ctx</span>
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                <span v-if="model.reasoning" class="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[10px] font-medium text-purple-700 dark:text-purple-400 ring-1 ring-inset ring-purple-500/20">推理</span>
+                <span v-if="model.vision" class="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20">视觉</span>
+                <span v-if="model.functionCalling" class="inline-flex items-center rounded-md bg-green-500/10 px-2 py-1 text-[10px] font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-500/20">函数调用</span>
+                <span v-if="model.contextWindow" class="inline-flex items-center rounded-md bg-gray-500/10 px-2 py-1 text-[10px] font-medium text-gray-700 dark:text-gray-400 ring-1 ring-inset ring-gray-500/20">{{ Math.round(model.contextWindow / 1000) }}K ctx</span>
               </div>
             </div>
           </div>

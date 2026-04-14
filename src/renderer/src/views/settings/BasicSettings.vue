@@ -40,34 +40,34 @@ async function saveApprovalMode(): Promise<void> {
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto p-6 lg:p-10 bg-background text-foreground">
+  <div class="h-full overflow-y-auto p-8 lg:p-12 bg-background text-foreground">
     <div class="mx-auto max-w-3xl">
-      <h2 class="text-xl font-bold mb-6">基本配置</h2>
+      <h2 class="text-2xl font-bold tracking-tight mb-8">基本配置</h2>
 
       <section>
-        <h3 class="text-sm font-semibold mb-4">常规设置</h3>
-        <div class="rounded-lg border border-border bg-card p-6">
+        <h3 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">常规设置</h3>
+        <div class="rounded-xl border border-border bg-card shadow-sm">
           <div class="flex flex-col divide-y divide-border text-sm">
             <!-- 开机启动 -->
-            <div class="flex items-center justify-between py-4">
+            <div class="flex items-center justify-between p-6">
               <div>
-                <p class="font-medium text-foreground">开机自启动</p>
-                <p class="text-xs text-muted-foreground mt-1">登录系统时自动启动应用服务</p>
+                <p class="font-medium text-foreground text-base">开机自启动</p>
+                <p class="text-sm text-muted-foreground mt-1">登录系统时自动启动应用服务</p>
               </div>
-              <div class="h-5 w-9 rounded-full bg-muted cursor-not-allowed flex items-center p-0.5 border border-border opacity-50">
-                <div class="h-4 w-4 rounded-full bg-background shadow-sm"></div>
+              <div class="h-6 w-11 rounded-full bg-muted cursor-not-allowed flex items-center p-0.5 border border-border opacity-50">
+                <div class="h-5 w-5 rounded-full bg-background shadow-sm"></div>
               </div>
             </div>
 
             <!-- 默认模型 -->
-            <div class="py-4">
-              <div class="mb-3 flex items-center justify-between">
+            <div class="p-6">
+              <div class="mb-4 flex items-center justify-between">
                 <div>
-                  <p class="font-medium text-foreground">默认模型</p>
-                  <p class="text-xs text-muted-foreground mt-1">对话时默认使用的 AI 模型</p>
+                  <p class="font-medium text-foreground text-base">默认模型</p>
+                  <p class="text-sm text-muted-foreground mt-1">对话时默认使用的 AI 模型</p>
                 </div>
-                <span v-if="saving" class="text-xs text-muted-foreground flex items-center gap-1">
-                  <span class="i-carbon-in-progress inline-block h-3 w-3 animate-spin"></span>
+                <span v-if="saving" class="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <span class="i-carbon-in-progress inline-block h-4 w-4 animate-spin text-primary"></span>
                   保存中...
                 </span>
               </div>
@@ -75,7 +75,7 @@ async function saveApprovalMode(): Promise<void> {
               <div class="flex items-center gap-2">
                 <select 
                   v-model="defaultModel" 
-                  class="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   @change="saveDefaultModel"
                 >
                   <option value="" disabled>请选择默认模型</option>
@@ -87,14 +87,14 @@ async function saveApprovalMode(): Promise<void> {
             </div>
 
             <!-- 命令审批策略 -->
-            <div class="py-4">
-              <div class="mb-3 flex items-center justify-between">
+            <div class="p-6">
+              <div class="mb-4 flex items-center justify-between">
                 <div>
-                  <p class="font-medium text-foreground">命令执行审批</p>
-                  <p class="text-xs text-muted-foreground mt-1">Agent 执行 Shell 命令时的安全审批策略</p>
+                  <p class="font-medium text-foreground text-base">命令执行审批</p>
+                  <p class="text-sm text-muted-foreground mt-1">Agent 执行 Shell 命令时的安全审批策略</p>
                 </div>
-                <span v-if="savingApproval" class="text-xs text-muted-foreground flex items-center gap-1">
-                  <span class="i-carbon-in-progress inline-block h-3 w-3 animate-spin"></span>
+                <span v-if="savingApproval" class="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <span class="i-carbon-in-progress inline-block h-4 w-4 animate-spin text-primary"></span>
                   保存中...
                 </span>
               </div>
@@ -102,7 +102,7 @@ async function saveApprovalMode(): Promise<void> {
               <div class="flex items-center gap-2">
                 <select 
                   v-model="execApprovalMode" 
-                  class="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   @change="saveApprovalMode"
                 >
                   <option value="auto">智能模式 (仅高危命令需审批)</option>

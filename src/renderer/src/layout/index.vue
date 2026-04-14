@@ -24,7 +24,7 @@ const route = useRoute();
     <Sidebar v-if="!route.meta.fullscreen" />
 
     <!-- 主内容区域 -->
-    <main class="min-h-0 min-w-0 flex-1 overflow-hidden">
+    <main class="min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />

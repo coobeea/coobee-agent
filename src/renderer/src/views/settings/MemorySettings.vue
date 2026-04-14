@@ -103,60 +103,63 @@ onMounted(() => {
 <template>
   <div class="flex h-full bg-background text-foreground">
     <!-- 左侧：记忆文件列表 -->
-    <div class="flex w-72 flex-col border-r border-border bg-card">
-      <div class="flex items-center justify-between border-b border-border px-4 py-3">
+    <div class="flex w-72 flex-col border-r border-border bg-card/30">
+      <div class="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
-          <h2 class="text-sm font-semibold">记忆文件</h2>
-          <p class="text-[10px] text-muted-foreground">{{ files.length }} 个文件</p>
+          <h2 class="text-base font-semibold tracking-tight">记忆文件</h2>
+          <p class="mt-1 text-xs text-muted-foreground">{{ files.length }} 个文件</p>
         </div>
         <button
-          class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
-          @click="loadFiles">
-          <span class="i-carbon-renew inline-block h-3 w-3"></span>
+          class="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          @click="loadFiles"
+          :disabled="loading">
+          <span :class="['i-carbon-renew text-lg', loading ? 'animate-spin text-primary' : '']"></span>
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-3">
         <!-- 加载中 -->
         <div v-if="loading" class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <span class="i-carbon-circle-dash mb-2 inline-block h-5 w-5 animate-spin"></span>
-          <p class="text-xs">加载中...</p>
+          <span class="i-carbon-circle-dash mb-3 inline-block h-8 w-8 animate-spin text-primary/70"></span>
+          <p class="text-sm font-medium">加载中...</p>
         </div>
 
         <!-- 错误 -->
-        <div v-else-if="error" class="p-4 text-xs text-red-500">
+        <div v-else-if="error" class="p-4 text-sm text-red-500 bg-red-500/10 rounded-lg mx-2 mt-2 text-center">
           {{ error }}
         </div>
 
         <!-- 空状态 -->
         <div
           v-else-if="files.length === 0"
-          class="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <span class="i-carbon-document-blank mb-2 inline-block h-8 w-8 opacity-40"></span>
-          <p class="text-xs">暂无记忆文件</p>
-          <p class="mt-1 text-[10px] text-muted-foreground/60">Agent 运行时会自动生成记忆</p>
+          class="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <span class="i-carbon-document-blank mb-4 inline-block h-10 w-10 opacity-30"></span>
+          <p class="text-sm font-medium">暂无记忆文件</p>
+          <p class="mt-1.5 text-xs text-muted-foreground/70">Agent 运行时会自动生成记忆</p>
         </div>
 
         <!-- 文件列表 -->
-        <div v-else class="p-2">
-          <div
+        <div v-else class="flex flex-col gap-1.5">
+          <button
             v-for="file in files"
             :key="file.path"
             :class="[
-              'cursor-pointer rounded-lg border px-3 py-2 mb-1 transition-colors',
-              selectedFile?.path === file.path ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-muted'
+              'flex flex-col w-full text-left rounded-lg px-3 py-3 transition-all border border-transparent',
+              selectedFile?.path === file.path 
+                ? 'bg-primary/10 border-primary/20 shadow-sm' 
+                : 'hover:bg-muted hover:border-border/50'
             ]"
             @click="selectFile(file)">
-            <div class="flex items-center gap-2">
-              <span class="i-carbon-document inline-block h-3.5 w-3.5 shrink-0 text-muted-foreground"></span>
-              <span class="truncate text-xs font-medium">{{ file.name }}</span>
+            <div class="flex items-center gap-2.5 w-full">
+              <span :class="['i-carbon-document inline-block h-4 w-4 shrink-0', selectedFile?.path === file.path ? 'text-primary' : 'text-muted-foreground']"></span>
+              <span :class="['truncate text-sm font-medium', selectedFile?.path === file.path ? 'text-primary' : 'text-foreground']">{{ file.name }}</span>
             </div>
-            <div class="mt-1 flex items-center gap-2 pl-5.5 text-[10px] text-muted-foreground">
-              <span class="rounded bg-muted px-1 py-px">{{ scopeLabel(file.scope) }}</span>
-              <span>{{ formatSize(file.size) }}</span>
-              <span>{{ formatDate(file.mtime) }}</span>
+            <div class="mt-2 flex items-center gap-2.5 pl-6.5 text-[11px] text-muted-foreground">
+              <span class="rounded-md bg-background border border-border/50 px-1.5 py-0.5 font-medium">{{ scopeLabel(file.scope) }}</span>
+              <span class="flex items-center gap-1"><span class="i-carbon-data-base h-3 w-3 opacity-70"></span>{{ formatSize(file.size) }}</span>
+              <span class="flex items-center gap-1"><span class="i-carbon-time h-3 w-3 opacity-70"></span>{{ formatDate(file.mtime) }}</span>
             </div>
-          </div>
+          </button>
         </div>
       </div>
     </div>
@@ -164,26 +167,41 @@ onMounted(() => {
     <!-- 右侧：文件内容 -->
     <div class="flex-1 overflow-hidden bg-background flex flex-col">
       <div v-if="selectedFile" class="flex h-full flex-col">
-        <div class="flex items-center justify-between border-b border-border px-6 py-3 bg-card">
+        <div class="flex items-center justify-between border-b border-border px-8 py-5 bg-card/50">
           <div>
-            <h3 class="text-sm font-medium">{{ selectedFile.name }}</h3>
-            <p class="text-xs text-muted-foreground">{{ selectedFile.path }}</p>
+            <h3 class="text-xl font-bold tracking-tight text-foreground">{{ selectedFile.name }}</h3>
+            <p class="mt-1.5 text-sm text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded-md w-fit border border-border/50">{{ selectedFile.path }}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors shadow-sm">
+              <span class="i-carbon-edit"></span>
+              编辑
+            </button>
           </div>
         </div>
         
-        <div class="flex-1 overflow-y-auto p-6">
-          <div v-if="contentLoading" class="flex items-center justify-center h-full text-muted-foreground">
-            <span class="i-carbon-circle-dash animate-spin text-2xl mr-2"></span>
-            读取中...
+        <div class="flex-1 overflow-y-auto p-8">
+          <div v-if="contentLoading" class="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <span class="i-carbon-circle-dash animate-spin text-4xl mb-4 text-primary/70"></span>
+            <span class="text-sm font-medium">读取内容中...</span>
           </div>
-          <pre v-else class="whitespace-pre-wrap text-sm font-mono bg-muted p-4 rounded-lg border border-border">{{ fileContent }}</pre>
+          <div v-else class="h-full rounded-xl border border-border bg-card shadow-sm overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
+              <span class="text-xs font-medium text-muted-foreground uppercase tracking-wider">文件内容</span>
+              <button class="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted">
+                <span class="i-carbon-copy text-sm"></span>
+              </button>
+            </div>
+            <pre class="flex-1 overflow-auto whitespace-pre-wrap text-sm font-mono p-5 text-foreground/90">{{ fileContent }}</pre>
+          </div>
         </div>
       </div>
       
       <div v-else class="flex h-full items-center justify-center text-muted-foreground">
         <div class="text-center">
-          <span class="i-carbon-document text-4xl mb-3 opacity-20 block mx-auto"></span>
-          <p>请在左侧选择一个记忆文件</p>
+          <span class="i-carbon-document text-5xl mb-4 opacity-20 block mx-auto"></span>
+          <p class="text-lg font-medium text-foreground">未选择文件</p>
+          <p class="mt-2 text-sm">请在左侧选择一个记忆文件进行查看</p>
         </div>
       </div>
     </div>
