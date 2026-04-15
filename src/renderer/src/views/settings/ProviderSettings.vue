@@ -40,6 +40,19 @@ const testing = ref(false);
 const testStatus = ref<'idle' | 'success' | 'error'>('idle');
 const testErrorMsg = ref('');
 
+// ==================== 计算属性 ====================
+
+const sortedProviders = computed(() => {
+  return [...providers.value].sort((a, b) => {
+    // 启用的在前
+    if (a.enabled !== b.enabled) {
+      return a.enabled ? -1 : 1;
+    }
+    // 名称排序
+    return a.name.localeCompare(b.name, 'zh-CN');
+  });
+});
+
 // ==================== 数据加载 ====================
 
 async function loadData(): Promise<void> {
@@ -70,14 +83,6 @@ async function loadData(): Promise<void> {
     loading.value = false;
   }
 }
-
-// ==================== 计算属性 ====================
-
-const enabledProviders = computed(() => providers.value.filter((p) => p.enabled));
-const disabledProviders = computed(() => providers.value.filter((p) => !p.enabled));
-
-// 排序：已启用的在前面
-const sortedProviders = computed(() => [...enabledProviders.value, ...disabledProviders.value]);
 
 const selectedProviderInfo = computed(() => {
   return providers.value.find((p) => p.id === selectedProviderId.value);
@@ -228,8 +233,8 @@ onMounted(() => {
 <template>
   <div class="flex h-full bg-background">
     <!-- 左侧：供应商列表 -->
-    <div class="flex w-64 flex-col border-r border-border bg-surface">
-      <div class="flex-1 overflow-y-auto p-4">
+    <div class="flex w-64 flex-col border-r border-border/60 bg-surface">
+      <div class="flex-1 overflow-y-auto px-3 py-4">
         <!-- 加载中 -->
         <div v-if="loading" class="flex flex-col items-center justify-center py-10 text-muted-foreground">
           <span class="i-carbon-circle-dash mb-3 inline-block h-8 w-8 animate-spin text-primary/70"></span>
@@ -242,48 +247,45 @@ onMounted(() => {
           <button @click="loadData" class="mt-3 block w-full rounded-lg bg-red-500/20 py-2 text-red-600 hover:bg-red-500/30 transition-colors font-medium">重试</button>
         </div>
 
-        <!-- Provider 卡片列表 -->
-        <div v-else class="flex flex-col gap-2">
+        <!-- Provider 列表 -->
+        <div v-else class="space-y-2">
           <button
-            v-for="provider in [...enabledProviders, ...disabledProviders]"
+            v-for="provider in sortedProviders"
             :key="provider.id"
             :class="[
-              'group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all duration-200 border',
-                selectedProviderId === provider.id
-                  ? 'bg-secondary border-border text-secondary-foreground shadow-sm'
-                  : 'bg-card border-border/50 text-foreground hover:border-border hover:shadow-sm hover:-translate-y-px'
+              'group relative flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition-all',
+              selectedProviderId === provider.id
+                ? 'border-primary bg-primary/5 shadow-sm'
+                : 'border-border/40 bg-card hover:border-border hover:bg-card/80 hover:shadow-sm'
             ]"
             @click="selectProvider(provider.id)">
-            
-            <div class="flex items-center gap-3.5 overflow-hidden">
-              <!-- 首字母图标 -->
-              <div :class="[
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-sm transition-colors shadow-sm',
-                selectedProviderId === provider.id 
-                  ? 'bg-background text-foreground' 
-                  : (provider.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary')
+            <div
+              :class="[
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ring-1 ring-inset transition-all',
+                selectedProviderId === provider.id
+                  ? 'bg-primary text-primary-foreground ring-primary/20'
+                  : provider.enabled
+                    ? 'bg-primary/10 text-primary ring-primary/20'
+                    : 'bg-muted text-muted-foreground ring-border/50'
               ]">
-                {{ provider.name.charAt(0).toUpperCase() }}
+              {{ provider.name.charAt(0).toUpperCase() }}
+            </div>
+
+            <div class="flex min-w-0 flex-1 flex-col">
+              <div class="flex items-center gap-2">
+                <span class="truncate text-sm font-medium text-foreground">{{ provider.name }}</span>
               </div>
-              
-              <div class="flex flex-col overflow-hidden">
-                <span class="truncate font-semibold tracking-tight text-[14px]">{{ provider.name }}</span>
-                <span :class="[
-                  'mt-1 text-[11px] font-medium truncate',
-                  selectedProviderId === provider.id 
-                    ? 'text-muted-foreground' 
-                    : (provider.enabled ? (provider.requiresApiKey === false ? 'text-blue-600 dark:text-blue-500' : 'text-green-600 dark:text-green-500') : 'text-muted-foreground/60')
-                ]">
-                  {{ provider.enabled ? (provider.requiresApiKey === false ? '无需凭证' : (provider._hasApiKey ? '已配置凭证' : '未配置凭证')) : '未启用' }}
+              <div class="mt-1 flex items-center gap-2">
+                <span
+                  :class="[
+                    'h-1.5 w-1.5 shrink-0 rounded-full',
+                    provider.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'
+                  ]"></span>
+                <span class="truncate text-xs text-muted-foreground">
+                  {{ provider.enabled ? (provider._hasApiKey ? '已配置' : '待配置') : '未启用' }}
                 </span>
               </div>
             </div>
-            
-            <!-- 状态指示灯 -->
-            <div :class="[
-              'h-2.5 w-2.5 shrink-0 rounded-full shadow-sm transition-colors',
-              provider.enabled ? (selectedProviderId === provider.id ? 'bg-green-500' : 'bg-green-500') : (selectedProviderId === provider.id ? 'bg-muted-foreground/30' : 'bg-muted-foreground/20')
-            ]"></div>
           </button>
         </div>
       </div>

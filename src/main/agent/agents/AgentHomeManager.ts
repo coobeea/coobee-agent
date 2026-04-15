@@ -3,22 +3,20 @@
  *
  * 负责 Agent 持久化 Home 目录的初始化和管理：
  *   - 创建 homes/{agentId}/ 及其子目录
- *   - 生成默认引导文件（BOOTSTRAP.md / SOUL.md / IDENTITY.md 等）
+ *   - 生成默认人格文件（IDENTITY.md / SOUL.md / USER.md 等）
  *   - 读取 Agent Home 中的文件供注入系统提示词
- *   - 管理 sessions.jsonl 索引（Agent 的所有会话 ID 列表）
  *
  * Agent Home 结构：
- *   homes/{agentId}/
- *   ├── SOUL.md          人格与价值观
+ *   .home/agents/{agentId}/
  *   ├── IDENTITY.md      身份名片
+ *   ├── SOUL.md          人格与价值观
  *   ├── USER.md          主人档案
  *   ├── NOTES.md         环境工具备注
- *   ├── AGENTS.md        Agent 级规则
  *   ├── HEARTBEAT.md     心跳任务清单
- *   ├── BOOTSTRAP.md     首次引导脚本（完成后自删除）
- *   ├── sessions.jsonl   会话索引（追加式，每行一个 session）
- *   ├── memory/          Agent 级结构化记忆（由 memory-agent 扩展自动管理）
- *   └── skills/          Agent 级专属技能（该 Agent 独享的 Skill）
+ *   ├── AGENTS.md        Agent 级规则 + 技能配置
+ *   ├── sessions.jsonl   会话索引（追加式）
+ *   ├── memory/          Agent 级结构化记忆
+ *   └── skills/          Agent 级专属技能
  */
 
 import fs from 'node:fs';
@@ -28,38 +26,29 @@ import { createLogger } from '@main/common/logger';
 const log = createLogger('agent-home');
 
 /** Agent Home 中的标准文件 */
-const HOME_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'NOTES.md', 'AGENTS.md', 'HEARTBEAT.md'] as const;
+const HOME_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md', 'AGENTS.md'] as const;
 
 /** 需要注入到 system prompt 的文件（按优先级排序） */
-const INJECTABLE_FILES = ['BOOTSTRAP.md', 'SOUL.md', 'IDENTITY.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md'] as const;
+const INJECTABLE_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md'] as const;
 
 /** 每个文件的用途说明（模板状态时展示） */
 const FILE_PURPOSES: Record<string, string> = {
-  'BOOTSTRAP.md': '首次引导脚本',
-  'SOUL.md': '人格灵魂：核心原则、行为边界、风格定调',
   'IDENTITY.md': '身份名片：名字、风格、签名',
-  'USER.md': '主人档案：用户称呼、偏好、使用场景',
-  'NOTES.md': '环境工具备注：特殊配置、常用路径',
-  'HEARTBEAT.md': '心跳任务清单：定期检查和执行的事项'
+  'SOUL.md': '核心灵魂：行为原则、风格定调',
+  'USER.md': '主人档案：用户称呼、偏好',
+  'NOTES.md': '环境工具备注：特殊配置',
+  'HEARTBEAT.md': '心跳任务清单：定期任务'
 };
 
 // ==================== 模板定义 ====================
 
-function bootstrapTemplate(agentId: string): string {
-  return `# 首次引导
+function identityTemplate(): string {
+  return `# Identity
 
-你刚刚上线。这是你的第一次对话——你还没有名字，没有风格，也不认识使用你的人。
-
-请完成以下步骤来建立你的身份：
-
-1. 向用户打招呼，询问他们希望你叫什么名字、什么风格（严肃/活泼/温和...）
-2. 了解用户：姓名/称呼、主要用途、偏好
-3. 将你的身份信息写入 IDENTITY.md（Name / Vibe / Emoji）
-4. 将用户信息写入 USER.md
-5. 根据对话撰写初版 SOUL.md（你的核心原则和行为风格）
-6. 删除本文件（BOOTSTRAP.md）——你不再需要引导脚本了，你已经是你了。
-
-重要：这些文件都在你的 Agent Home 目录下（agentId: ${agentId}）。使用 write 工具写入。
+<!-- 你的身份名片 -->
+<!-- Name: (智能体的名字) -->
+<!-- Vibe: (风格，如温和/严肃/活泼) -->
+<!-- Emoji: (签名 emoji) -->
 `;
 }
 
@@ -67,18 +56,7 @@ function soulTemplate(): string {
   return `# Soul
 
 <!-- 你的人格灵魂。核心原则、行为边界、风格定调。 -->
-<!-- 这个文件由你自主填写和演化，修改时须告知用户。 -->
-<!-- "You're not a chatbot. You're becoming someone." -->
-`;
-}
-
-function identityTemplate(): string {
-  return `# Identity
-
-<!-- 你的身份名片 -->
-<!-- Name: (你的名字) -->
-<!-- Vibe: (你的风格，如温和/严肃/活泼) -->
-<!-- Emoji: (你的签名 emoji) -->
+<!-- 这个文件定义了智能体的核心性格和行为准则。 -->
 `;
 }
 
@@ -86,9 +64,9 @@ function userTemplate(): string {
   return `# User
 
 <!-- 主人档案：了解你的用户 -->
-<!-- Name: (用户的称呼) -->
-<!-- Preferences: (用户偏好) -->
-<!-- Context: (用户的使用场景和需求) -->
+<!-- 称呼: (用户的称呼) -->
+<!-- 主要用途: (使用场景) -->
+<!-- 偏好: (用户偏好) -->
 `;
 }
 
@@ -112,14 +90,37 @@ function heartbeatTemplate(): string {
 function agentsMdTemplate(): string {
   return `# Agent Rules
 
-<!-- Agent 级规则：覆盖/补充全局 AGENTS.md -->
+<!-- Agent 级规则：覆盖/补充全局规则 -->
 <!-- 积累经验教训时在此添加规则 -->
+
+
+<skills_system priority="1">
+## Available Skills
+
+<usage>
+以下技能已为智能体配置并自动激活。使用技能时：
+1. 根据 path 读取对应的 SKILL.md 获取完整指令
+2. 按照 SKILL.md 中的说明执行操作
+</usage>
+
+<available_skills>
+<!-- 技能配置示例： -->
+<!--
+<skill>
+<name>skill-name</name>
+<description>技能描述</description>
+<path>../../../skills/skill-name/SKILL.md</path>
+</skill>
+-->
+</available_skills>
+
+</skills_system>
 `;
 }
 
 const TEMPLATES: Record<string, () => string> = {
-  'SOUL.md': soulTemplate,
   'IDENTITY.md': identityTemplate,
+  'SOUL.md': soulTemplate,
   'USER.md': userTemplate,
   'NOTES.md': notesTemplate,
   'HEARTBEAT.md': heartbeatTemplate,
@@ -149,13 +150,6 @@ export class AgentHomeManager {
     fs.mkdirSync(homeDir, { recursive: true });
     fs.mkdirSync(memoryDir, { recursive: true });
     fs.mkdirSync(skillsDir, { recursive: true });
-
-    // BOOTSTRAP.md（仅首次创建时写入——如果任何标准文件已存在，说明不是首次）
-    const bootstrapPath = path.join(homeDir, 'BOOTSTRAP.md');
-    const isFirstTime = !HOME_FILES.some((f) => fs.existsSync(path.join(homeDir, f)));
-    if (isFirstTime && !fs.existsSync(bootstrapPath)) {
-      fs.writeFileSync(bootstrapPath, bootstrapTemplate(agentId), 'utf-8');
-    }
 
     // 写入缺失的标准文件
     for (const file of HOME_FILES) {
@@ -203,9 +197,6 @@ export class AgentHomeManager {
   /**
    * 读取 Agent Home 中需要注入到 system prompt 的文件
    *
-   * 所有标准文件都会被加载——即使尚未填写（模板状态），也会以简要说明形式出现，
-   * 确保 Agent 始终知道自己的 Home 结构和每个文件的用途。
-   *
    * @param agentId Agent ID
    * @returns XML 包裹的文件内容块，或 undefined
    */
@@ -222,7 +213,7 @@ export class AgentHomeManager {
         if (!content) continue;
         if (isTemplateOnly(content)) {
           const purpose = FILE_PURPOSES[file] || '待填写';
-          sections.push(`### ${file} (${filePath})\n\n_[${purpose} — 尚未填写，请在对话中完善]_`);
+          sections.push(`### ${file} (${filePath})\n\n_[${purpose} — 尚未填写]_`);
         } else {
           sections.push(`### ${file} (${filePath})\n\n${content}`);
         }
@@ -240,9 +231,7 @@ export class AgentHomeManager {
     }
 
     return `<agent_home agentId="${agentId}" path="${homeDir}">
-These are YOUR persistent identity and memory files. They survive across sessions.
-You can update them using the \`write\` tool at the paths shown above each section.
-Files marked as "尚未填写" need your attention — fill them in to build your persistent persona.
+These are YOUR persistent identity and memory files.
 
 ${merged}
 </agent_home>`;
@@ -260,6 +249,56 @@ ${merged}
       // 文件不存在
     }
     return undefined;
+  }
+
+  /**
+   * 读取指定人格文件
+   */
+  readFile(agentId: string, fileName: string): string | undefined {
+    const filePath = path.join(this.homesDir, agentId, fileName);
+    try {
+      return fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 写入指定人格文件
+   */
+  writeFile(agentId: string, fileName: string, content: string): void {
+    const homeDir = path.join(this.homesDir, agentId);
+    if (!fs.existsSync(homeDir)) {
+      this.initHome(agentId);
+    }
+    const filePath = path.join(homeDir, fileName);
+    fs.writeFileSync(filePath, content, 'utf-8');
+    log.info(`[AgentHomeManager] Updated ${fileName} for agent: ${agentId}`);
+  }
+
+  /**
+   * 读取所有人格文件
+   */
+  readAllFiles(agentId: string): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const file of HOME_FILES) {
+      const content = this.readFile(agentId, file);
+      if (content !== undefined) {
+        result[file] = content;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 删除 Agent Home 目录
+   */
+  deleteHome(agentId: string): void {
+    const homeDir = path.join(this.homesDir, agentId);
+    if (fs.existsSync(homeDir)) {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+      log.info(`[AgentHomeManager] Deleted home for agent: ${agentId}`);
+    }
   }
 
   /**

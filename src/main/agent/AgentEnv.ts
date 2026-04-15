@@ -53,8 +53,6 @@ export interface AgentEnv {
   threadsDir: string;
 
   // --- Agent 系统 ---
-  /** 内置 Agent 目录（只读） */
-  builtinAgentsDir: string;
   /** 用户 Agent 目录（可读写） */
   userAgentsDir: string;
 
@@ -193,7 +191,6 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
     threadsDir: Env.paths.threadsDir,
 
     // Agent 系统
-    builtinAgentsDir: Env.paths.builtinAgentsDir,
     userAgentsDir: Env.paths.userAgentsDir,
 
     // Skill 系统
@@ -281,7 +278,7 @@ ${agentHomeSection}
 Key System Directories:
 - Config: ${env.configDir}
 - Skills: builtin=${env.builtinSkillsDir}, user=${env.userSkillsDir}
-- Agents: builtin=${env.builtinAgentsDir}, user=${env.userAgentsDir}
+- Agents: ${env.userAgentsDir}
 
 File Output Guidelines:
 

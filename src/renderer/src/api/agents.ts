@@ -1,0 +1,150 @@
+/**
+ * Agents API 客户端
+ *
+ * 封装智能体相关的 HTTP API 调用
+ */
+
+import { apiClient } from './client';
+import type { ApiResponse } from '@shared/api';
+
+/** Agent 创建来源 */
+export type AgentCreatedBy = 'user' | 'agent' | 'system';
+
+/** Agent 索引条目（轻量版，用于列表展示） */
+export interface AgentEntry {
+  id: string;
+  name: string;
+  description: string;
+  createdBy: AgentCreatedBy;
+  version: number;
+  updatedAt: string;
+  skills?: string[];
+  model?: string;
+}
+
+/** Agent 完整定义 */
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  excludeTools?: string[];
+  skills?: string[];
+  model?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: AgentCreatedBy;
+  version: number;
+  metadata?: Record<string, unknown>;
+}
+
+/** 创建 Agent 参数 */
+export interface CreateAgentParams {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  excludeTools?: string[];
+  skills?: string[];
+  model?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** 更新 Agent 参数 */
+export interface UpdateAgentParams {
+  name?: string;
+  description?: string;
+  instructions?: string;
+  excludeTools?: string[];
+  skills?: string[];
+  model?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ==================== API 响应类型 ====================
+
+interface ListAgentsResponse {
+  agents: AgentEntry[];
+}
+
+interface GetAgentResponse {
+  agent: AgentDefinition;
+}
+
+interface CreateAgentResponse {
+  agent: AgentDefinition;
+}
+
+interface UpdateAgentResponse {
+  agent: AgentDefinition;
+}
+
+interface DeleteAgentResponse {
+  agentId: string;
+  deleted: boolean;
+}
+
+// ==================== API 方法 ====================
+
+/**
+ * 获取智能体列表
+ */
+export async function getAgents(): Promise<ApiResponse<ListAgentsResponse>> {
+  return apiClient.get<ListAgentsResponse>('/gateway/agents');
+}
+
+/**
+ * 获取智能体详情
+ */
+export async function getAgent(agentId: string): Promise<ApiResponse<GetAgentResponse>> {
+  return apiClient.get<GetAgentResponse>(`/gateway/agents/${agentId}`);
+}
+
+/**
+ * 创建智能体
+ */
+export async function createAgent(
+  params: CreateAgentParams
+): Promise<ApiResponse<CreateAgentResponse>> {
+  return apiClient.post<CreateAgentResponse>('/gateway/agents', params);
+}
+
+/**
+ * 更新智能体（部分更新）
+ */
+export async function updateAgent(
+  agentId: string,
+  params: UpdateAgentParams
+): Promise<ApiResponse<UpdateAgentResponse>> {
+  return apiClient.patch<UpdateAgentResponse>(`/gateway/agents/${agentId}`, params);
+}
+
+/**
+ * 删除智能体
+ */
+export async function deleteAgent(agentId: string): Promise<ApiResponse<DeleteAgentResponse>> {
+  return apiClient.delete<DeleteAgentResponse>(`/gateway/agents/${agentId}`);
+}
+
+// ==================== Personality Files ====================
+
+export interface GetPersonalityFilesResponse {
+  files: Record<string, string>;
+}
+
+export async function getPersonalityFiles(
+  agentId: string
+): Promise<ApiResponse<GetPersonalityFilesResponse>> {
+  return apiClient.get<GetPersonalityFilesResponse>(`/gateway/agents/${agentId}/personality`);
+}
+
+export async function updatePersonalityFile(
+  agentId: string,
+  fileName: string,
+  content: string
+): Promise<ApiResponse<{ success: boolean }>> {
+  return apiClient.put<{ success: boolean }>(
+    `/gateway/agents/${agentId}/personality/${fileName}`,
+    { content }
+  );
+}

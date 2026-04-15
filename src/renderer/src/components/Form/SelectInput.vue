@@ -5,7 +5,7 @@
       <span v-if="required" class="text-red-500 ml-1">*</span>
     </label>
 
-    <div class="relative">
+    <div class="relative" ref="selectContainer">
       <!-- 输入框 -->
       <div class="relative">
         <input
@@ -39,10 +39,12 @@
         </div>
       </div>
 
-      <!-- 下拉选项列表 -->
-      <div
-        v-if="isOpen"
-        class="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
+      <!-- 下拉选项列表（使用 Teleport 移到 body 下） -->
+      <Teleport to="body">
+        <div
+          v-if="isOpen"
+          :style="dropdownStyle"
+          class="fixed z-[9999] bg-background border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
         <!-- 无选项提示 -->
         <div v-if="filteredOptions.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
           {{ searchValue ? '无匹配选项' : '暂无选项' }}
@@ -134,7 +136,8 @@
               :class="{ 'mr-8': allowDelete }" />
           </div>
         </template>
-      </div>
+        </div>
+      </Teleport>
     </div>
 
     <!-- 错误信息 -->
@@ -146,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import type { SelectInputProps, SelectOption, SelectOptionGroup } from './types';
 
@@ -174,6 +177,48 @@ const inputId = ref(`select-${Math.random().toString(36).slice(2, 11)}`);
 const isOpen = ref(false);
 const searchValue = ref('');
 const highlightedIndex = ref(-1);
+const selectContainer = ref<HTMLElement | null>(null);
+
+// 计算下拉菜单的位置
+const dropdownStyle = ref({
+  top: '0px',
+  left: '0px',
+  width: '0px'
+});
+
+const updateDropdownPosition = () => {
+  if (!selectContainer.value || !isOpen.value) return;
+
+  const rect = selectContainer.value.getBoundingClientRect();
+  dropdownStyle.value = {
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`
+  };
+};
+
+// 监听滚动和窗口大小变化
+const handleScroll = () => {
+  if (isOpen.value) {
+    updateDropdownPosition();
+  }
+};
+
+const handleResize = () => {
+  if (isOpen.value) {
+    updateDropdownPosition();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll, true);
+  window.addEventListener('resize', handleResize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', handleScroll, true);
+  window.removeEventListener('resize', handleResize);
+});
 
 // 将选项展平，无论是否分组
 const flatOptions = computed(() => {
@@ -288,6 +333,7 @@ const handleFocus = (event: FocusEvent) => {
     if (props.searchable) {
       searchValue.value = '';
     }
+    updateDropdownPosition();
   }
   emit('focus', event);
 };
@@ -298,8 +344,11 @@ const handleArrowClick = () => {
 
   isOpen.value = !isOpen.value;
 
-  if (isOpen.value && props.searchable) {
-    searchValue.value = '';
+  if (isOpen.value) {
+    if (props.searchable) {
+      searchValue.value = '';
+    }
+    updateDropdownPosition();
   }
 };
 

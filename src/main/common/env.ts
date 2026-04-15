@@ -108,7 +108,6 @@ class EnvClass {
     agentsMdPath: string;
     workspacesDir: string;
     threadsDir: string;
-    builtinAgentsDir: string;
     userAgentsDir: string;
   } {
     // === 基础路径计算 ===
@@ -148,7 +147,6 @@ class EnvClass {
       agentsMdPath: path.join(_userHome, 'agents.md'),
       workspacesDir: path.join(_userHome, 'workspaces'),
       threadsDir: path.join(_userHome, 'threads'),
-      builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
       userAgentsDir: path.join(_userHome, 'agents'),
 
       // === 系统路径（System Paths）===

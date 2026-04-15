@@ -22,6 +22,7 @@ declare module 'vue' {
     ErrorDisplay: typeof import('./../components/common/ErrorDisplay.vue')['default']
     GhostButton: typeof import('./../components/Form/GhostButton.vue')['default']
     LoadingOverlay: typeof import('./../components/LoadingOverlay.vue')['default']
+    MarkdownEditor: typeof import('./../components/MarkdownEditor.vue')['default']
     MessageContainer: typeof import('./../components/Message/MessageContainer.vue')['default']
     ModelSelector: typeof import('./../components/ModelSelector.vue')['default']
     OutlineButton: typeof import('./../components/Form/OutlineButton.vue')['default']

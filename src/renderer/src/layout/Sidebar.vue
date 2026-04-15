@@ -32,6 +32,7 @@ const activeMenuId = ref('home');
 // 常用菜单（显示在侧边栏）
 const mainMenuItems: MenuItem[] = [
   { id: 'home', label: '主页', icon: 'i-carbon-home', route: '/home' },
+  { id: 'agents', label: '智能体', icon: 'i-carbon-bot', route: '/agents' },
   { id: 'settings', label: '系统设置', icon: 'i-carbon-settings', route: '/settings' }
 ];
 
@@ -90,9 +91,11 @@ function getRunStatusConfig(status?: string): { class: string; label: string } {
 }
 
 const updateActiveState = (): void => {
-  const name = route.name as string;
-  if (name) {
-    activeMenuId.value = name;
+  const path = route.path;
+  if (path.startsWith('/agents')) {
+    activeMenuId.value = 'agents';
+  } else if (route.name) {
+    activeMenuId.value = route.name as string;
   }
 };
 
