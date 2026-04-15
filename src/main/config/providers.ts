@@ -28,6 +28,7 @@ export interface ProviderConfigSource {
     api: 'openai-compatible' | 'anthropic' | 'google';
     baseUrl: string;
     apiKey?: string;
+    requiresApiKey?: boolean;
     enabled: boolean;
     billingMode?: 'pay-as-you-go' | 'subscription';
     websites?: {
@@ -197,16 +198,12 @@ class ProviderConfigLoader {
 
     try {
       const raw = fs.readFileSync(this.secretsPath, 'utf-8');
-      const secrets = JSON5.parse(raw) as { providers?: Record<string, { apiKey?: string }> };
-
-      if (!secrets.providers) {
-        return config;
-      }
+      const secrets = JSON5.parse(raw) as Record<string, string>;
 
       // 合并 API Keys
-      for (const [providerId, providerSecrets] of Object.entries(secrets.providers)) {
-        if (config[providerId] && providerSecrets.apiKey) {
-          config[providerId].apiKey = providerSecrets.apiKey;
+      for (const [providerId, apiKey] of Object.entries(secrets)) {
+        if (config[providerId] && apiKey) {
+          config[providerId].apiKey = apiKey;
         }
       }
 

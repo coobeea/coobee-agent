@@ -21,6 +21,7 @@ export interface ProviderConfig {
   api: 'openai-compatible' | 'anthropic' | 'google';
   baseUrl: string;
   apiKey?: string;
+  requiresApiKey?: boolean;
   enabled: boolean;
   billingMode?: 'pay-as-you-go' | 'subscription';
   websites?: {
@@ -157,4 +158,14 @@ export interface TestProviderRespVO {
   providerId: string;
   connected: boolean;
   latency: number;
+}
+
+// ==================== 默认模型相关类型 ====================
+
+export interface GetDefaultModelRespVO {
+  modelId: string;
+}
+
+export interface UpdateDefaultModelReqVO {
+  modelId: string;
 }

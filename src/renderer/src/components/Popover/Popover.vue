@@ -36,7 +36,7 @@
                 v-if="closable"
                 class="ml-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150 flex-shrink-0 dark:text-gray-300"
                 @click="handleClose">
-                <i class="i-mdi-close w-4 h-4"></i>
+                <i class="i-carbon-close w-4 h-4"></i>
               </button>
             </div>
 

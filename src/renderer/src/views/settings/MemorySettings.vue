@@ -103,21 +103,8 @@ onMounted(() => {
 <template>
   <div class="flex h-full bg-background text-foreground">
     <!-- 左侧：记忆文件列表 -->
-    <div class="flex w-72 flex-col border-r border-border bg-card/30">
-      <div class="flex items-center justify-between border-b border-border px-5 py-4">
-        <div>
-          <h2 class="text-base font-semibold tracking-tight">记忆文件</h2>
-          <p class="mt-1 text-xs text-muted-foreground">{{ files.length }} 个文件</p>
-        </div>
-        <button
-          class="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          @click="loadFiles"
-          :disabled="loading">
-          <span :class="['i-carbon-renew text-lg', loading ? 'animate-spin text-primary' : '']"></span>
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-3">
+    <div class="flex w-72 flex-col border-r border-border bg-surface">
+      <div class="flex-1 overflow-y-auto p-4">
         <!-- 加载中 -->
         <div v-if="loading" class="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <span class="i-carbon-circle-dash mb-3 inline-block h-8 w-8 animate-spin text-primary/70"></span>
@@ -125,7 +112,7 @@ onMounted(() => {
         </div>
 
         <!-- 错误 -->
-        <div v-else-if="error" class="p-4 text-sm text-red-500 bg-red-500/10 rounded-lg mx-2 mt-2 text-center">
+        <div v-else-if="error" class="p-4 text-sm text-red-500 bg-red-500/10 rounded-xl mx-2 mt-2 text-center">
           {{ error }}
         </div>
 
@@ -139,25 +126,34 @@ onMounted(() => {
         </div>
 
         <!-- 文件列表 -->
-        <div v-else class="flex flex-col gap-1.5">
+        <div v-else class="flex flex-col gap-2">
           <button
             v-for="file in files"
             :key="file.path"
             :class="[
-              'flex flex-col w-full text-left rounded-lg px-3 py-3 transition-all border border-transparent',
+              'group flex flex-col w-full text-left rounded-xl px-4 py-3.5 transition-all duration-200 border',
               selectedFile?.path === file.path 
-                ? 'bg-primary/10 border-primary/20 shadow-sm' 
-                : 'hover:bg-muted hover:border-border/50'
+                ? 'bg-primary border-primary text-primary-foreground shadow-md' 
+                : 'bg-card border-border/50 text-foreground hover:border-primary/30 hover:shadow-sm hover:-translate-y-px'
             ]"
             @click="selectFile(file)">
-            <div class="flex items-center gap-2.5 w-full">
-              <span :class="['i-carbon-document inline-block h-4 w-4 shrink-0', selectedFile?.path === file.path ? 'text-primary' : 'text-muted-foreground']"></span>
-              <span :class="['truncate text-sm font-medium', selectedFile?.path === file.path ? 'text-primary' : 'text-foreground']">{{ file.name }}</span>
+            <div class="flex items-center gap-3 w-full">
+              <div :class="[
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors shadow-sm',
+                selectedFile?.path === file.path 
+                  ? 'bg-white/20 text-white' 
+                  : 'bg-primary/10 text-primary group-hover:bg-primary/20'
+              ]">
+                <span class="i-carbon-document text-lg"></span>
+              </div>
+              <div class="flex flex-col overflow-hidden">
+                <span :class="['truncate text-[14px] font-semibold tracking-tight', selectedFile?.path === file.path ? 'text-white' : 'text-foreground']">{{ file.name }}</span>
+                <span :class="['mt-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium w-fit', selectedFile?.path === file.path ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground']">{{ scopeLabel(file.scope) }}</span>
+              </div>
             </div>
-            <div class="mt-2 flex items-center gap-2.5 pl-6.5 text-[11px] text-muted-foreground">
-              <span class="rounded-md bg-background border border-border/50 px-1.5 py-0.5 font-medium">{{ scopeLabel(file.scope) }}</span>
-              <span class="flex items-center gap-1"><span class="i-carbon-data-base h-3 w-3 opacity-70"></span>{{ formatSize(file.size) }}</span>
-              <span class="flex items-center gap-1"><span class="i-carbon-time h-3 w-3 opacity-70"></span>{{ formatDate(file.mtime) }}</span>
+            <div :class="['mt-3 flex items-center gap-3 text-[11px] font-medium', selectedFile?.path === file.path ? 'text-primary-foreground/80' : 'text-muted-foreground/70']">
+              <span class="flex items-center gap-1.5"><span class="i-carbon-data-base h-3.5 w-3.5 opacity-70"></span>{{ formatSize(file.size) }}</span>
+              <span class="flex items-center gap-1.5"><span class="i-carbon-time h-3.5 w-3.5 opacity-70"></span>{{ formatDate(file.mtime) }}</span>
             </div>
           </button>
         </div>

@@ -23,6 +23,7 @@ declare module 'vue' {
     GhostButton: typeof import('./../components/Form/GhostButton.vue')['default']
     LoadingOverlay: typeof import('./../components/LoadingOverlay.vue')['default']
     MessageContainer: typeof import('./../components/Message/MessageContainer.vue')['default']
+    ModelSelector: typeof import('./../components/ModelSelector.vue')['default']
     OutlineButton: typeof import('./../components/Form/OutlineButton.vue')['default']
     OverlayMask: typeof import('./../components/OverlayMask/index.vue')['default']
     Popover: typeof import('./../components/Popover/Popover.vue')['default']

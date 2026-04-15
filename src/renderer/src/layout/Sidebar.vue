@@ -165,8 +165,8 @@ onMounted(() => updateActiveState());
   width: 240px;
   flex-shrink: 0;
   height: 100%;
-  background: hsl(var(--card) / 0.5);
-  border-right: 1px solid hsl(var(--border) / 0.8);
+  background: hsl(var(--surface));
+  border-right: 1px solid hsl(var(--border));
 }
 
 /* ====== 顶部导航 ====== */

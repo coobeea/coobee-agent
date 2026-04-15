@@ -14,7 +14,7 @@
           :class="checkboxClasses"
           class="w-4 h-4 rounded border transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
           <i
-            class="i-mdi-check w-3 h-3 text-primary-foreground opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+            class="i-carbon-checkmark w-3 h-3 text-primary-foreground opacity-0 peer-checked:opacity-100 transition-opacity"></i>
         </div>
       </div>
     </div>

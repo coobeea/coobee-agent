@@ -1,7 +1,7 @@
 <template>
   <button :type="type" :disabled="disabled || loading" :class="buttonClasses" @click="handleClick">
     <!-- 加载图标 -->
-    <i v-if="loading" class="i-mdi-loading animate-spin" :class="iconSizeClass"></i>
+    <i v-if="loading" class="i-carbon-progress-bar animate-spin" :class="iconSizeClass"></i>
 
     <!-- 左侧图标 -->
     <i v-else-if="leftIcon" :class="[leftIcon, iconSizeClass]"></i>

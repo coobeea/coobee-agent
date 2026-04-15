@@ -48,7 +48,7 @@
               :disabled="confirm.loading"
               :class="`confirm-btn confirm-btn-${confirm.type}`"
               @click="handleConfirm(confirm)">
-              <i v-if="confirm.loading" class="i-mdi-loading animate-spin w-4 h-4" />
+              <i v-if="confirm.loading" class="i-carbon-progress-bar animate-spin w-4 h-4" />
               {{ confirm.confirmText }}
             </button>
           </div>
@@ -73,13 +73,13 @@ const visibleConfirms = computed(() => confirmStore.confirms.filter((confirm) =>
 const getIconName = (type?: string): string => {
   switch (type) {
     case 'warning':
-      return 'i-mdi-alert';
+      return 'i-carbon-warning-filled';
     case 'error':
-      return 'i-mdi-alert-circle';
+      return 'i-carbon-error-filled';
     case 'success':
-      return 'i-mdi-check-circle';
+      return 'i-carbon-checkmark-filled';
     default:
-      return 'i-mdi-help-circle';
+      return 'i-carbon-help-filled';
   }
 };
 

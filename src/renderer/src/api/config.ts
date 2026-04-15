@@ -12,7 +12,9 @@ import type {
   SecretStatus,
   GetProvidersRespVO,
   GetSecretsStatusRespVO,
-  TestProviderRespVO
+  TestProviderRespVO,
+  GetDefaultModelRespVO,
+  UpdateDefaultModelReqVO
 } from '@shared/api/config-types';
 
 const BASE_URL = 'http://localhost:8765/gateway';
@@ -104,6 +106,32 @@ export async function toggleProvider(providerId: string, enabled: boolean): Prom
 export async function testProvider(providerId: string): Promise<ApiResponse<TestProviderRespVO>> {
   const response = await fetch(`${BASE_URL}/config/providers/${providerId}/test`, {
     method: 'POST'
+  });
+  return response.json();
+}
+
+// ==================== 默认模型 API ====================
+
+/**
+ * 获取默认模型
+ */
+export async function getDefaultModel(): Promise<ApiResponse<GetDefaultModelRespVO>> {
+  const response = await fetch(`${BASE_URL}/config/default-model`);
+  return response.json();
+}
+
+/**
+ * 更新默认模型
+ * @param modelId 模型 ID
+ */
+export async function updateDefaultModel(modelId: string): Promise<ApiResponse<void>> {
+  const body: UpdateDefaultModelReqVO = { modelId };
+  const response = await fetch(`${BASE_URL}/config/default-model`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
   });
   return response.json();
 }

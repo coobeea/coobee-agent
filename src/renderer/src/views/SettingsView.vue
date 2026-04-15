@@ -86,8 +86,8 @@ function selectMenu(menuId: string): void {
 <template>
   <div class="flex h-full bg-background text-foreground">
     <!-- 左侧：一级导航菜单 -->
-    <div class="flex w-56 flex-col border-r border-border bg-card/50">
-      <div class="p-5 border-b border-border">
+    <div class="flex w-56 flex-col border-r border-border bg-surface">
+      <div class="p-5 border-b border-transparent">
         <h1 class="text-lg font-bold tracking-tight">系统设置</h1>
       </div>
 
@@ -110,7 +110,7 @@ function selectMenu(menuId: string): void {
       </div>
     </div>
 
-    <!-- 右侧：动态内容区域 -->
+    <!-- 右侧：动态内容区域 (真实展示内容的地方) -->
     <div class="flex-1 overflow-hidden bg-background">
       <component :is="activeComponent" />
     </div>

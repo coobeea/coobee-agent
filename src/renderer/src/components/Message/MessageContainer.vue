@@ -18,8 +18,8 @@
           </div>
 
           <!-- 关闭按钮 -->
-          <button class="message-close" @click="removeMessage(message.id)">
-            <i class="i-mdi-close w-4 h-4" />
+          <button class="message-close opacity-50 hover:opacity-100 transition-opacity" @click="removeMessage(message.id)">
+            <i class="i-carbon-close w-4 h-4" />
           </button>
         </div>
       </transition-group>
@@ -72,13 +72,13 @@ const getContainerClass = (position: MessagePosition): string => {
 const getIconName = (type?: string): string => {
   switch (type) {
     case 'success':
-      return 'i-mdi-check-circle';
+      return 'i-carbon-checkmark-filled';
     case 'warning':
-      return 'i-mdi-alert';
+      return 'i-carbon-warning-filled';
     case 'error':
-      return 'i-mdi-alert-circle';
+      return 'i-carbon-error-filled';
     default:
-      return 'i-mdi-information';
+      return 'i-carbon-information-filled';
   }
 };
 
@@ -142,38 +142,34 @@ const removeMessage = (id: string): void => {
 
 .message-item {
   pointer-events: auto;
-  background: hsl(var(--background));
+  background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow:
-    0 4px 12px hsl(var(--shadow) / 0.1),
-    0 2px 6px hsl(var(--shadow) / 0.08);
-  padding: 16px;
+    0 10px 15px -3px hsl(var(--shadow) / 0.1),
+    0 4px 6px -4px hsl(var(--shadow) / 0.05);
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 300px;
-  max-width: 500px;
+  min-width: 280px;
+  max-width: 420px;
 }
 
 .message-info {
   border-color: hsl(var(--primary) / 0.3);
-  background: hsl(var(--primary) / 0.05);
 }
 
 .message-success {
-  border-color: hsl(142 71% 45% / 0.3);
-  background: hsl(142 71% 45% / 0.05);
+  border-color: hsl(142 76% 36% / 0.3);
 }
 
 .message-warning {
-  border-color: hsl(45 93% 47% / 0.3);
-  background: hsl(45 93% 47% / 0.05);
+  border-color: hsl(38 92% 50% / 0.3);
 }
 
 .message-error {
   border-color: hsl(var(--error) / 0.3);
-  background: hsl(var(--error) / 0.05);
 }
 
 .message-icon {
@@ -188,11 +184,11 @@ const removeMessage = (id: string): void => {
 }
 
 .message-icon-success {
-  color: hsl(142 71% 45%);
+  color: hsl(142 76% 36%);
 }
 
 .message-icon-warning {
-  color: hsl(45 93% 47%);
+  color: hsl(38 92% 50%);
 }
 
 .message-icon-error {
@@ -202,6 +198,7 @@ const removeMessage = (id: string): void => {
 .message-content {
   flex: 1;
   font-size: 14px;
+  font-weight: 500;
   color: hsl(var(--foreground));
 }
 

@@ -8,6 +8,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue';
+import { useMessageStore } from '@/components/Message';
 import { 
   getProviders, 
   saveProviderKey, 
@@ -16,6 +17,8 @@ import {
   testProvider
 } from '@/api/config';
 import type { ProviderConfig } from '@shared/api/config-types';
+
+const message = useMessageStore();
 
 const providers = ref<ProviderConfig[]>([]);
 const selectedProviderId = ref<string>('');
@@ -126,6 +129,7 @@ async function handleSave(): Promise<void> {
     if (!toggleResult.success) throw new Error(toggleResult.error || '保存启用状态失败');
 
     saveStatus.value = 'success';
+    message.success('配置保存成功');
 
     // 重新加载数据以更新列表状态
     await loadData();
@@ -138,6 +142,7 @@ async function handleSave(): Promise<void> {
   } catch (err) {
     saveStatus.value = 'error';
     console.error('保存配置失败:', err);
+    message.error(err instanceof Error ? err.message : '保存配置失败');
   } finally {
     saving.value = false;
   }
@@ -158,15 +163,18 @@ async function handleToggleEnabled(): Promise<void> {
       if (provider) {
         provider.enabled = config.value.enabled;
       }
+      message.success(config.value.enabled ? '已启用服务' : '已禁用服务');
     } else {
       // 失败则回滚
       config.value.enabled = !config.value.enabled;
       console.error('切换启用状态失败:', result.error);
+      message.error(result.error || '切换启用状态失败');
     }
   } catch (err) {
     // 失败则回滚
     config.value.enabled = !config.value.enabled;
     console.error('切换启用状态失败:', err);
+    message.error('切换启用状态失败');
   }
 }
 
@@ -182,13 +190,16 @@ async function handleTestConnection(): Promise<void> {
     
     if (result.success) {
       testStatus.value = 'success';
+      message.success('连接测试成功');
     } else {
       testStatus.value = 'error';
       testErrorMsg.value = result.error || '连接测试失败';
+      message.error(testErrorMsg.value);
     }
   } catch (err) {
     testStatus.value = 'error';
     testErrorMsg.value = err instanceof Error ? err.message : String(err);
+    message.error(testErrorMsg.value);
   } finally {
     testing.value = false;
     
@@ -205,23 +216,7 @@ async function handleTestConnection(): Promise<void> {
 
 // ==================== 辅助方法 ====================
 
-function getStatusText(provider: ProviderConfig): string {
-  if (!provider.enabled) return '未启用';
-  if (provider._hasApiKey) return '已配置';
-  return '未配置';
-}
-
-function getStatusColor(provider: ProviderConfig): string {
-  if (!provider.enabled) return 'bg-gray-400';
-  if (provider._hasApiKey) return 'bg-green-500';
-  return 'bg-orange-400';
-}
-
-function getStatusTextColor(provider: ProviderConfig): string {
-  if (!provider.enabled) return 'text-muted-foreground';
-  if (provider._hasApiKey) return 'text-green-600';
-  return 'text-orange-600';
-}
+// 移除未使用的辅助函数
 
 // ==================== 生命周期 ====================
 
@@ -233,13 +228,8 @@ onMounted(() => {
 <template>
   <div class="flex h-full bg-background">
     <!-- 左侧：供应商列表 -->
-    <div class="flex w-64 flex-col border-r border-border bg-card/30">
-      <div class="border-b border-border px-5 py-4">
-        <h2 class="text-base font-semibold tracking-tight">模型供应商</h2>
-        <p class="mt-1 text-xs text-muted-foreground">{{ providers.length }} 个供应商</p>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-3">
+    <div class="flex w-64 flex-col border-r border-border bg-surface">
+      <div class="flex-1 overflow-y-auto p-4">
         <!-- 加载中 -->
         <div v-if="loading" class="flex flex-col items-center justify-center py-10 text-muted-foreground">
           <span class="i-carbon-circle-dash mb-3 inline-block h-8 w-8 animate-spin text-primary/70"></span>
@@ -247,62 +237,54 @@ onMounted(() => {
         </div>
         
         <!-- 错误提示 -->
-        <div v-else-if="error" class="p-4 text-sm text-red-500 text-center bg-red-500/10 rounded-lg mx-2 mt-2">
+        <div v-else-if="error" class="p-4 text-sm text-red-500 text-center bg-red-500/10 rounded-xl mx-1 mt-2">
           {{ error }}
-          <button @click="loadData" class="mt-3 block w-full rounded-md bg-red-500/20 py-1.5 text-red-600 hover:bg-red-500/30 transition-colors font-medium">重试</button>
+          <button @click="loadData" class="mt-3 block w-full rounded-lg bg-red-500/20 py-2 text-red-600 hover:bg-red-500/30 transition-colors font-medium">重试</button>
         </div>
 
         <!-- Provider 卡片列表 -->
-        <div v-else class="flex flex-col gap-1.5">
-          <!-- 已启用分组 -->
-          <template v-if="enabledProviders.length > 0">
-            <p class="px-2 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              已启用 · {{ enabledProviders.length }}
-            </p>
-            <button
-              v-for="provider in enabledProviders"
-              :key="provider.id"
-              :class="[
-                'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-all border border-transparent',
-                selectedProviderId === provider.id
-                  ? 'bg-primary/10 border-primary/20 text-primary shadow-sm'
-                  : 'text-foreground hover:bg-muted hover:border-border/50'
-              ]"
-              @click="selectProvider(provider.id)">
+        <div v-else class="flex flex-col gap-2">
+          <button
+            v-for="provider in [...enabledProviders, ...disabledProviders]"
+            :key="provider.id"
+            :class="[
+              'group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all duration-200 border',
+              selectedProviderId === provider.id
+                ? 'bg-primary border-primary text-primary-foreground shadow-md'
+                : 'bg-card border-border/50 text-foreground hover:border-primary/30 hover:shadow-sm hover:-translate-y-px'
+            ]"
+            @click="selectProvider(provider.id)">
+            
+            <div class="flex items-center gap-3.5 overflow-hidden">
+              <!-- 首字母图标 -->
+              <div :class="[
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-sm transition-colors shadow-sm',
+                selectedProviderId === provider.id 
+                  ? 'bg-white/20 text-white' 
+                  : (provider.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary')
+              ]">
+                {{ provider.name.charAt(0).toUpperCase() }}
+              </div>
+              
               <div class="flex flex-col overflow-hidden">
-                <span class="truncate font-medium">{{ provider.name }}</span>
-                <span :class="['mt-1 text-[11px] font-medium', getStatusTextColor(provider)]">
-                  {{ getStatusText(provider) }}
+                <span class="truncate font-semibold tracking-tight text-[14px]">{{ provider.name }}</span>
+                <span :class="[
+                  'mt-1 text-[11px] font-medium truncate',
+                  selectedProviderId === provider.id 
+                    ? 'text-primary-foreground/80' 
+                    : (provider.enabled ? (provider.requiresApiKey === false ? 'text-blue-600 dark:text-blue-500' : 'text-green-600 dark:text-green-500') : 'text-muted-foreground/60')
+                ]">
+                  {{ provider.enabled ? (provider.requiresApiKey === false ? '无需凭证' : (provider._hasApiKey ? '已配置凭证' : '未配置凭证')) : '未启用' }}
                 </span>
               </div>
-              <div :class="['h-2.5 w-2.5 flex-shrink-0 rounded-full shadow-sm', getStatusColor(provider)]"></div>
-            </button>
-          </template>
-
-          <!-- 未启用分组 -->
-          <template v-if="disabledProviders.length > 0">
-            <p class="px-2 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              未启用 · {{ disabledProviders.length }}
-            </p>
-            <button
-              v-for="provider in disabledProviders"
-              :key="provider.id"
-              :class="[
-                'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-all border border-transparent',
-                selectedProviderId === provider.id
-                  ? 'bg-primary/10 border-primary/20 text-primary shadow-sm'
-                  : 'text-foreground hover:bg-muted hover:border-border/50'
-              ]"
-              @click="selectProvider(provider.id)">
-              <div class="flex flex-col overflow-hidden opacity-70">
-                <span class="truncate font-medium">{{ provider.name }}</span>
-                <span :class="['mt-1 text-[11px] font-medium', getStatusTextColor(provider)]">
-                  {{ getStatusText(provider) }}
-                </span>
-              </div>
-              <div :class="['h-2.5 w-2.5 flex-shrink-0 rounded-full shadow-sm', getStatusColor(provider)]"></div>
-            </button>
-          </template>
+            </div>
+            
+            <!-- 状态指示灯 -->
+            <div :class="[
+              'h-2.5 w-2.5 shrink-0 rounded-full shadow-sm transition-colors',
+              provider.enabled ? (selectedProviderId === provider.id ? 'bg-green-300' : 'bg-green-500') : (selectedProviderId === provider.id ? 'bg-white/30' : 'bg-muted-foreground/20')
+            ]"></div>
+          </button>
         </div>
       </div>
     </div>
@@ -377,7 +359,10 @@ onMounted(() => {
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-foreground flex justify-between">
               <span>API Key</span>
-              <span v-if="selectedProviderInfo._hasApiKey" class="text-green-600 text-xs flex items-center bg-green-500/10 px-2 py-0.5 rounded-md">
+              <span v-if="selectedProviderInfo.requiresApiKey === false" class="text-blue-600 dark:text-blue-500 text-xs flex items-center bg-blue-500/10 px-2 py-0.5 rounded-md">
+                <span class="i-carbon-information mr-1"></span> 无需凭证
+              </span>
+              <span v-else-if="selectedProviderInfo._hasApiKey" class="text-green-600 text-xs flex items-center bg-green-500/10 px-2 py-0.5 rounded-md">
                 <span class="i-carbon-checkmark-outline mr-1"></span> 已配置
               </span>
             </label>
@@ -385,8 +370,9 @@ onMounted(() => {
               <input
                 v-model="config.apiKey"
                 type="password"
-                class="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                :placeholder="selectedProviderInfo._hasApiKey ? '•••••••••••••••• (输入新值以覆盖)' : 'sk-...'" />
+                class="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                :placeholder="selectedProviderInfo.requiresApiKey === false ? '本地服务无需配置 API Key' : (selectedProviderInfo._hasApiKey ? '•••••••••••••••• (输入新值以覆盖)' : 'sk-...')"
+                :disabled="selectedProviderInfo.requiresApiKey === false" />
             </div>
             <p class="text-xs text-muted-foreground">API Key 保存在本地安全的 secrets.json5 文件中，不会随配置导出。</p>
           </div>
@@ -397,36 +383,37 @@ onMounted(() => {
             <div class="flex items-center gap-3">
               <button
                 @click="handleTestConnection"
-                :disabled="testing || (!config.apiKey && !selectedProviderInfo._hasApiKey)"
-                class="flex items-center gap-2 rounded-lg border border-input bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors">
-                <span v-if="testing" class="i-carbon-circle-dash animate-spin text-primary"></span>
-                <span v-else class="i-carbon-connection-signal"></span>
+                :disabled="testing || (selectedProviderInfo.requiresApiKey !== false && !config.apiKey && !selectedProviderInfo._hasApiKey)"
+                class="flex items-center gap-2 rounded-lg border border-input bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors shrink-0 whitespace-nowrap">
+                <span v-if="testing" class="i-carbon-circle-dash animate-spin text-primary shrink-0"></span>
+                <span v-else class="i-carbon-connection-signal shrink-0"></span>
                 {{ testing ? '测试中...' : '测试连接' }}
               </button>
               
-              <span v-if="testStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center bg-green-500/10 px-3 py-1.5 rounded-md border border-green-500/20">
-                <span class="i-carbon-checkmark-filled mr-1.5"></span> 连接成功
+              <span v-if="testStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center bg-green-500/10 px-3 py-1.5 rounded-md border border-green-500/20 shrink-0 whitespace-nowrap">
+                <span class="i-carbon-checkmark-filled mr-1.5 shrink-0"></span> 连接成功
               </span>
-              <span v-else-if="testStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center bg-red-500/10 px-3 py-1.5 rounded-md border border-red-500/20">
-                <span class="i-carbon-warning-filled mr-1.5"></span> {{ testErrorMsg }}
+              <span v-else-if="testStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center bg-red-500/10 px-3 py-1.5 rounded-md border border-red-500/20 max-w-[220px] sm:max-w-[300px]" :title="testErrorMsg">
+                <span class="i-carbon-warning-filled mr-1.5 shrink-0"></span>
+                <span class="truncate">{{ testErrorMsg }}</span>
               </span>
             </div>
 
             <!-- 保存配置 -->
-            <div class="flex items-center gap-4">
-              <span v-if="saveStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center">
-                <span class="i-carbon-checkmark mr-1.5"></span> 已保存
+            <div class="flex items-center gap-4 shrink-0">
+              <span v-if="saveStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center shrink-0 whitespace-nowrap">
+                <span class="i-carbon-checkmark mr-1.5 shrink-0"></span> 已保存
               </span>
-              <span v-else-if="saveStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center">
-                <span class="i-carbon-warning mr-1.5"></span> 保存失败
+              <span v-else-if="saveStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center shrink-0 whitespace-nowrap">
+                <span class="i-carbon-warning mr-1.5 shrink-0"></span> 保存失败
               </span>
               
               <button
                 @click="handleSave"
                 :disabled="saving"
-                class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm">
-                <span v-if="saving" class="i-carbon-circle-dash animate-spin"></span>
-                <span v-else class="i-carbon-save"></span>
+                class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm shrink-0 whitespace-nowrap">
+                <span v-if="saving" class="i-carbon-circle-dash animate-spin shrink-0"></span>
+                <span v-else class="i-carbon-save shrink-0"></span>
                 {{ saving ? '保存中...' : '保存配置' }}
               </button>
             </div>

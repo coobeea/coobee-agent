@@ -21,18 +21,23 @@ function handleSettings(): void {
 </script>
 
 <template>
-  <div class="status-bar">
+  <div class="flex items-center justify-between h-9 shrink-0 px-3 bg-surface border-t border-border/40">
     <!-- 左侧状态区 -->
-    <div class="status-section">
-      <div class="status-item-disabled">
+    <div class="flex items-center gap-0.5">
+      <div class="flex items-center gap-1.5 h-7 px-2.5 text-xs text-muted-foreground/40 select-none">
         <span class="i-carbon-application inline-block h-3.5 w-3.5" />
         <span>无服务</span>
       </div>
     </div>
 
     <!-- 右侧快捷按钮 -->
-    <div class="actions-section">
-      <button class="action-btn" :class="{ active: activeMenuId === 'settings' }" title="设置" @click="handleSettings">
+    <div class="flex items-center gap-0.5">
+      <button 
+        class="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground/60 cursor-pointer transition-all duration-150 select-none hover:bg-foreground/5 hover:text-foreground/80" 
+        :class="{ 'bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary': activeMenuId === 'settings' }" 
+        title="设置" 
+        @click="handleSettings"
+      >
         <span class="i-carbon-settings inline-block h-3.5 w-3.5" />
         <span>设置</span>
       </button>
@@ -41,64 +46,5 @@ function handleSettings(): void {
 </template>
 
 <style scoped>
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 36px;
-  flex-shrink: 0;
-  padding: 0 12px;
-  background: hsl(var(--surface));
-  border-top: 1px solid hsl(var(--border) / 0.4);
-}
-
-/* 左侧状态区 */
-.status-section {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.status-item-disabled {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
-  color: hsl(var(--muted-foreground) / 0.4);
-  user-select: none;
-}
-
-/* 右侧操作按钮 */
-.actions-section {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: hsl(var(--muted-foreground) / 0.6);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.action-btn:hover {
-  background: hsl(var(--foreground) / 0.04);
-  color: hsl(var(--foreground) / 0.8);
-}
-
-.action-btn.active {
-  background: hsl(var(--primary) / 0.1);
-  color: hsl(var(--primary));
-  font-weight: 500;
-}
+/* Scoped styles removed in favor of Tailwind utility classes */
 </style>

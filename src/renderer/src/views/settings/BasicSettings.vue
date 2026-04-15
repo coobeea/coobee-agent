@@ -3,38 +3,56 @@
  * BasicSettings - 基本配置组件
  */
 
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import ModelSelector from '@/components/ModelSelector.vue';
+import { useMessageStore } from '@/components/Message';
+import { getDefaultModel, updateDefaultModel } from '@/api/config';
 
+const message = useMessageStore();
 const defaultModel = ref('');
-const execApprovalMode = ref<'auto' | 'always' | 'never'>('auto');
 const saving = ref(false);
-const savingApproval = ref(false);
+const loading = ref(false);
 
-// 模拟保存默认模型
-async function saveDefaultModel(): Promise<void> {
-  saving.value = true;
+// 加载默认模型
+async function loadDefaultModel(): Promise<void> {
+  loading.value = true;
   try {
-    // TODO: 实现实际的保存逻辑
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('[BasicSettings] Default model saved:', defaultModel.value);
+    const result = await getDefaultModel();
+    if (result.success && result.data) {
+      defaultModel.value = result.data.modelId;
+    } else {
+      message.error(result.error || '加载默认模型失败');
+    }
   } catch (err: unknown) {
-    console.error('[BasicSettings] Failed to save default model:', err);
+    console.error('[BasicSettings] Failed to load default model:', err);
+    message.error('加载默认模型失败');
   } finally {
-    saving.value = false;
+    loading.value = false;
   }
 }
 
-// 模拟保存审批策略
-async function saveApprovalMode(): Promise<void> {
-  savingApproval.value = true;
+onMounted(() => {
+  loadDefaultModel();
+});
+
+// 保存默认模型
+async function saveDefaultModel(): Promise<void> {
+  if (!defaultModel.value) return;
+  
+  saving.value = true;
   try {
-    // TODO: 实现实际的保存逻辑
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('[BasicSettings] Approval mode saved:', execApprovalMode.value);
+    const result = await updateDefaultModel(defaultModel.value);
+    if (result.success) {
+      console.log('[BasicSettings] Default model saved:', defaultModel.value);
+      message.success('默认模型保存成功');
+    } else {
+      message.error(result.error || '保存默认模型失败');
+    }
   } catch (err: unknown) {
-    console.error('[BasicSettings] Failed to save approval mode:', err);
+    console.error('[BasicSettings] Failed to save default model:', err);
+    message.error('保存默认模型失败');
   } finally {
-    savingApproval.value = false;
+    saving.value = false;
   }
 }
 </script>
@@ -73,42 +91,16 @@ async function saveApprovalMode(): Promise<void> {
               </div>
               
               <div class="flex items-center gap-2">
-                <select 
-                  v-model="defaultModel" 
-                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  @change="saveDefaultModel"
-                >
-                  <option value="" disabled>请选择默认模型</option>
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-                  <option value="qwen-max">Qwen Max</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- 命令审批策略 -->
-            <div class="p-6">
-              <div class="mb-4 flex items-center justify-between">
-                <div>
-                  <p class="font-medium text-foreground text-base">命令执行审批</p>
-                  <p class="text-sm text-muted-foreground mt-1">Agent 执行 Shell 命令时的安全审批策略</p>
+                <div class="w-full max-w-md">
+                  <ModelSelector
+                    v-model="defaultModel"
+                    placeholder="请选择默认模型"
+                    :show-details="true"
+                    :show-capabilities="true"
+                    :disabled="loading || saving"
+                    @change="saveDefaultModel"
+                  />
                 </div>
-                <span v-if="savingApproval" class="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <span class="i-carbon-in-progress inline-block h-4 w-4 animate-spin text-primary"></span>
-                  保存中...
-                </span>
-              </div>
-              
-              <div class="flex items-center gap-2">
-                <select 
-                  v-model="execApprovalMode" 
-                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  @change="saveApprovalMode"
-                >
-                  <option value="auto">智能模式 (仅高危命令需审批)</option>
-                  <option value="always">严格模式 (所有命令均需审批)</option>
-                  <option value="never">宽松模式 (无需审批，不推荐)</option>
-                </select>
               </div>
             </div>
           </div>

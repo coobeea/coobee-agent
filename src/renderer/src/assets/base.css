@@ -14,25 +14,25 @@
      ================================================================ */
   :root {
     /* 基础颜色 */
-    --background: 0 0% 92.9%;
-    --foreground: 240 10% 3.9%;
+    --background: 210 40% 98%; /* 浅灰偏蓝背景，作为内容区底色 */
+    --foreground: 222.2 84% 4.9%;
 
     /* 表面颜色 */
     --surface: 0 0% 100%;
-    --surface-variant: 240 4.8% 95.9%;
+    --surface-variant: 210 40% 96.1%;
 
     /* 文本颜色 */
-    --text-primary: 240 10% 3.9%;
-    --text-secondary: 217 19% 35%;
-    --text-muted: 217 19% 35%;
+    --text-primary: 222.2 84% 4.9%;
+    --text-secondary: 215.4 16.3% 46.9%;
+    --text-muted: 215.4 16.3% 46.9%;
 
     /* 边框和分割线 */
-    --border: 214 32% 91%;
-    --border-variant: 214 32% 91%;
-    --divider: 214 32% 91%;
+    --border: 214.3 31.8% 91.4%;
+    --border-variant: 214.3 31.8% 91.4%;
+    --divider: 214.3 31.8% 91.4%;
 
     /* 输入框 */
-    --input: 214 32% 91%;
+    --input: 214.3 31.8% 91.4%;
     --input-background: 0 0% 100%;
 
     /* 主色调 — 默认蓝色 */
@@ -41,14 +41,14 @@
     --primary-hover: 243 76% 54%;
 
     /* 次要色调 */
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 214 20% 28%;
-    --secondary-hover: 240 4.8% 90%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary-hover: 210 40% 90%;
 
     /* 强调色 */
-    --accent: 210 40% 96.08%;
-    --accent-foreground: 215.9 16.3% 34.9%;
-    --accent-hover: 210 40% 91%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent-hover: 210 40% 90%;
 
     /* 状态颜色 */
     --success: 142 76% 36%;
@@ -65,12 +65,12 @@
     --shadow: 0 0% 0%;
 
     /* 其他语义色 */
-    --muted: 210 40% 93%;
-    --muted-foreground: 217 19% 35%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222.2 84% 4.9%;
     --ring: 243 76% 59%;
     --radius: 0.5rem;
 
@@ -182,36 +182,36 @@
      ================================================================ */
   .dark {
     /* 基础颜色 */
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
     /* 表面颜色 */
-    --surface: 240 6% 10%;
-    --surface-variant: 240 4% 16%;
+    --surface: 222.2 84% 4.9%;
+    --surface-variant: 217.2 32.6% 17.5%;
 
     /* 文本颜色 */
-    --text-primary: 0 0% 98%;
-    --text-secondary: 218 11% 65%;
-    --text-muted: 218 11% 65%;
+    --text-primary: 210 40% 98%;
+    --text-secondary: 215 20.2% 65.1%;
+    --text-muted: 215 20.2% 65.1%;
 
     /* 边框和分割线 */
-    --border: 240 4% 16%;
-    --border-variant: 240 4% 20%;
-    --divider: 240 4% 16%;
+    --border: 217.2 32.6% 17.5%;
+    --border-variant: 217.2 32.6% 17.5%;
+    --divider: 217.2 32.6% 17.5%;
 
     /* 输入框 */
-    --input: 240 4% 16%;
-    --input-background: 240 6% 10%;
+    --input: 217.2 32.6% 17.5%;
+    --input-background: 222.2 84% 4.9%;
 
     /* 次要色调 */
-    --secondary: 215 14% 34%;
-    --secondary-foreground: 240 5% 84%;
-    --secondary-hover: 215 14% 39%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --secondary-hover: 217.2 32.6% 22%;
 
     /* 强调色 */
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 98%;
-    --accent-hover: 240 4% 21%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --accent-hover: 217.2 32.6% 22%;
 
     /* 状态颜色 */
     --success: 142 76% 36%;
@@ -228,12 +228,12 @@
     --shadow: 0 0% 0%;
 
     /* 其他语义色 */
-    --muted: 240 15% 20%;
-    --muted-foreground: 218 11% 65%;
-    --popover: 240 6% 10%;
-    --popover-foreground: 0 0% 98%;
-    --card: 240 6% 10%;
-    --card-foreground: 0 0% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
   }
 
   /* ================================================================

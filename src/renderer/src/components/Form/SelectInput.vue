@@ -31,7 +31,7 @@
             @click="handleArrowClick">
             <i
               :class="[
-                isOpen ? 'i-mdi-chevron-up' : 'i-mdi-chevron-down',
+                isOpen ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down',
                 error ? 'text-red-500' : 'text-muted-foreground'
               ]"
               class="w-4 h-4 transition-transform" />
@@ -83,13 +83,13 @@
                 class="opacity-0 group-hover:opacity-100 ml-2 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-500 transition-opacity"
                 @click.stop="deleteOption(option)"
                 @mousedown.prevent>
-                <i class="i-mdi-close w-4 h-4" />
+                <i class="i-carbon-close w-4 h-4" />
               </button>
 
               <!-- 选中图标 -->
               <i
                 v-if="isSelected(option.value)"
-                class="i-mdi-check w-4 h-4 text-primary ml-2"
+                class="i-carbon-checkmark w-4 h-4 text-primary ml-2"
                 :class="{ 'mr-8': allowDelete }" />
             </div>
           </div>
@@ -124,13 +124,13 @@
               class="opacity-0 group-hover:opacity-100 ml-2 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-500 transition-opacity"
               @click.stop="deleteOption(option)"
               @mousedown.prevent>
-              <i class="i-mdi-close w-4 h-4" />
+              <i class="i-carbon-close w-4 h-4" />
             </button>
 
             <!-- 选中图标 -->
             <i
               v-if="isSelected(option.value)"
-              class="i-mdi-check w-4 h-4 text-primary ml-2"
+              class="i-carbon-checkmark w-4 h-4 text-primary ml-2"
               :class="{ 'mr-8': allowDelete }" />
           </div>
         </template>

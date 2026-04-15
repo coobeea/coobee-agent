@@ -20,6 +20,7 @@
 
 import type Router from '@koa/router';
 import path from 'path';
+import axios from 'axios';
 import { log } from '@main/common/logger';
 import { Providers } from '@main/config/providers';
 import { loadSecrets, saveSecret } from '@main/common/config/ConfigSecrets';
@@ -33,8 +34,12 @@ import type {
   SaveProviderKeyReqVO,
   UpdateProviderReqVO,
   ToggleProviderReqVO,
-  TestProviderRespVO
+  TestProviderRespVO,
+  GetDefaultModelRespVO,
+  UpdateDefaultModelReqVO
 } from '@shared/api/config-types';
+
+import { configStoreInstance } from '@main/common/config/ConfigStore';
 
 // 配置路径
 const homeDir = path.join(process.cwd(), '.home');
@@ -315,44 +320,81 @@ export function registerConfigRoutes(router: Router): void {
     const providerId = ctx.params.id;
 
     try {
-      // TODO: 实现实际的测试逻辑
-      // 1. 加载 provider 配置
-      // 2. 使用 API Key 调用 provider 的测试端点
-      // 3. 返回测试结果
-
       log.info(`[ConfigRoutes] Testing connection for provider: ${providerId}`);
 
-      // 临时实现：简单检查配置是否存在
       const providers = Providers.load(configDir, secretsDir);
-      if (!providers[providerId]) {
+      const provider = providers[providerId];
+      
+      if (!provider) {
         ctx.status = 404;
-        
-        const response: ApiResponse = {
-          success: false,
-          error: `Provider "${providerId}" not found`
-        };
-        
-        ctx.body = response;
+        ctx.body = { success: false, error: `Provider "${providerId}" not found` };
         return;
       }
 
-      if (!providers[providerId].apiKey) {
+      if (provider.requiresApiKey !== false && !provider.apiKey) {
         ctx.status = 400;
-        
-        const response: ApiResponse = {
-          success: false,
-          error: 'API Key not configured'
-        };
-        
-        ctx.body = response;
+        ctx.body = { success: false, error: 'API Key not configured' };
         return;
       }
 
-      // 模拟测试成功（实际应该调用 API）
+      // 实际的测试逻辑
+      const startTime = Date.now();
+      let connected = false;
+      let errorMsg = '';
+
+      try {
+        // 大部分兼容 OpenAI 的 API 都支持 /models 端点
+        // 对于 Anthropic 或 Google，可能需要不同的测试端点，这里先统一使用 /models 尝试
+        // 也可以发送一个简单的对话请求来测试
+        const testUrl = provider.baseUrl.replace(/\/$/, '') + '/models';
+        
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        
+        if (provider.requiresApiKey !== false && provider.apiKey) {
+          headers['Authorization'] = `Bearer ${provider.apiKey}`;
+          // 兼容部分需要 api-key header 的平台
+          headers['api-key'] = provider.apiKey;
+        }
+
+        const res = await axios.get(testUrl, {
+          headers,
+          timeout: 10000 // 10秒超时
+        });
+
+        if (res.status === 200) {
+          connected = true;
+        } else {
+          errorMsg = `HTTP Error: ${res.status}`;
+        }
+      } catch (err: any) {
+        // 如果是 401/403，说明连通了但 Key 错误
+        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+          errorMsg = 'API Key 无效或无权限 (401/403)';
+        } else if (err.response && err.response.status === 404) {
+          // 有些服务可能不支持 /models，但 404 说明服务是通的
+          // 对于 Ollama/LMStudio，/v1/models 是支持的
+          connected = true; // 我们认为 404 也是连通了服务器
+        } else {
+          errorMsg = err.message || '网络连接失败';
+        }
+      }
+
+      if (!connected && errorMsg) {
+        ctx.body = {
+          success: false,
+          error: errorMsg
+        };
+        return;
+      }
+
+      const latency = Date.now() - startTime;
+
       const testResult: TestProviderRespVO = {
         providerId,
         connected: true,
-        latency: Math.random() * 100 + 50 // 模拟延迟
+        latency
       };
       
       const response: ApiResponse<TestProviderRespVO> = {
@@ -364,6 +406,87 @@ export function registerConfigRoutes(router: Router): void {
       ctx.body = response;
     } catch (error) {
       log.error(`[ConfigRoutes] Failed to test provider ${providerId}:`, error);
+      ctx.status = 500;
+      
+      const response: ApiResponse = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+      
+      ctx.body = response;
+    }
+  });
+
+  // ==================== MAIN CONFIG ====================
+
+  /**
+   * GET /gateway/config/default-model
+   * 获取默认模型
+   */
+  router.get('/config/default-model', async (ctx) => {
+    try {
+      if (!configStoreInstance) {
+        throw new Error('ConfigStore is not initialized');
+      }
+
+      const modelsConfig = configStoreInstance.get('models');
+      const modelId = modelsConfig?.defaults?.model?.primary || '';
+
+      const response: ApiResponse<GetDefaultModelRespVO> = {
+        success: true,
+        data: { modelId }
+      };
+      
+      ctx.body = response;
+    } catch (error) {
+      log.error('[ConfigRoutes] Failed to get default model:', error);
+      ctx.status = 500;
+      
+      const response: ApiResponse = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+      
+      ctx.body = response;
+    }
+  });
+
+  /**
+   * PUT /gateway/config/default-model
+   * 设置默认模型
+   */
+  router.put('/config/default-model', async (ctx) => {
+    try {
+      if (!configStoreInstance) {
+        throw new Error('ConfigStore is not initialized');
+      }
+
+      const body = ctx.request.body as UpdateDefaultModelReqVO;
+      if (!body || typeof body.modelId !== 'string') {
+        ctx.status = 400;
+        ctx.body = { success: false, error: 'Invalid request body' };
+        return;
+      }
+
+      configStoreInstance.patch({
+        models: {
+          defaults: {
+            model: {
+              primary: body.modelId
+            }
+          }
+        }
+      });
+      log.info(`[ConfigRoutes] Updated default model to: ${body.modelId}`);
+
+      const response: ApiResponse = {
+        success: true,
+        message: 'Default model updated successfully'
+      };
+      
+      ctx.body = response;
+    } catch (error) {
+      log.error('[ConfigRoutes] Failed to update default model:', error);
       ctx.status = 500;
       
       const response: ApiResponse = {

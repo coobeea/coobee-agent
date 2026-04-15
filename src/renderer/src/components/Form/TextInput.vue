@@ -43,7 +43,7 @@
 
       <!-- 错误图标 -->
       <div v-if="error" class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-        <i class="i-mdi-alert-circle w-5 h-5 text-red-500" />
+        <i class="i-carbon-warning-filled w-5 h-5 text-red-500" />
       </div>
     </div>
 
