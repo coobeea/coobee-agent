@@ -377,13 +377,13 @@ onMounted(() => updateActiveState());
 }
 
 .nav-btn.active {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  box-shadow: 0 2px 4px hsl(var(--primary) / 0.2);
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  box-shadow: 0 2px 4px hsl(var(--shadow) / 0.05);
 }
 
 .nav-btn.active .icon-sm {
-  color: hsl(var(--primary-foreground));
+  color: hsl(var(--secondary-foreground));
 }
 
 /* ====== 图标 ====== */

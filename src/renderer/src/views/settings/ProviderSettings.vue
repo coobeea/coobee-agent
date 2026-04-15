@@ -249,9 +249,9 @@ onMounted(() => {
             :key="provider.id"
             :class="[
               'group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all duration-200 border',
-              selectedProviderId === provider.id
-                ? 'bg-primary border-primary text-primary-foreground shadow-md'
-                : 'bg-card border-border/50 text-foreground hover:border-primary/30 hover:shadow-sm hover:-translate-y-px'
+                selectedProviderId === provider.id
+                  ? 'bg-secondary border-border text-secondary-foreground shadow-sm'
+                  : 'bg-card border-border/50 text-foreground hover:border-border hover:shadow-sm hover:-translate-y-px'
             ]"
             @click="selectProvider(provider.id)">
             
@@ -260,7 +260,7 @@ onMounted(() => {
               <div :class="[
                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-sm transition-colors shadow-sm',
                 selectedProviderId === provider.id 
-                  ? 'bg-white/20 text-white' 
+                  ? 'bg-background text-foreground' 
                   : (provider.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary')
               ]">
                 {{ provider.name.charAt(0).toUpperCase() }}
@@ -271,7 +271,7 @@ onMounted(() => {
                 <span :class="[
                   'mt-1 text-[11px] font-medium truncate',
                   selectedProviderId === provider.id 
-                    ? 'text-primary-foreground/80' 
+                    ? 'text-muted-foreground' 
                     : (provider.enabled ? (provider.requiresApiKey === false ? 'text-blue-600 dark:text-blue-500' : 'text-green-600 dark:text-green-500') : 'text-muted-foreground/60')
                 ]">
                   {{ provider.enabled ? (provider.requiresApiKey === false ? '无需凭证' : (provider._hasApiKey ? '已配置凭证' : '未配置凭证')) : '未启用' }}
@@ -282,7 +282,7 @@ onMounted(() => {
             <!-- 状态指示灯 -->
             <div :class="[
               'h-2.5 w-2.5 shrink-0 rounded-full shadow-sm transition-colors',
-              provider.enabled ? (selectedProviderId === provider.id ? 'bg-green-300' : 'bg-green-500') : (selectedProviderId === provider.id ? 'bg-white/30' : 'bg-muted-foreground/20')
+              provider.enabled ? (selectedProviderId === provider.id ? 'bg-green-500' : 'bg-green-500') : (selectedProviderId === provider.id ? 'bg-muted-foreground/30' : 'bg-muted-foreground/20')
             ]"></div>
           </button>
         </div>

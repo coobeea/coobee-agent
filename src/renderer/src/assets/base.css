@@ -14,25 +14,25 @@
      ================================================================ */
   :root {
     /* 基础颜色 */
-    --background: 210 40% 98%; /* 浅灰偏蓝背景，作为内容区底色 */
-    --foreground: 222.2 84% 4.9%;
+    --background: 0 0% 95%; /* 更明显的浅灰色背景，作为内容区底色 */
+    --foreground: 0 0% 0%;
 
     /* 表面颜色 */
     --surface: 0 0% 100%;
-    --surface-variant: 210 40% 96.1%;
+    --surface-variant: 0 0% 96%;
 
     /* 文本颜色 */
-    --text-primary: 222.2 84% 4.9%;
-    --text-secondary: 215.4 16.3% 46.9%;
-    --text-muted: 215.4 16.3% 46.9%;
+    --text-primary: 0 0% 0%;
+    --text-secondary: 0 0% 30%;
+    --text-muted: 0 0% 40%;
 
     /* 边框和分割线 */
-    --border: 214.3 31.8% 91.4%;
-    --border-variant: 214.3 31.8% 91.4%;
-    --divider: 214.3 31.8% 91.4%;
+    --border: 0 0% 88%;
+    --border-variant: 0 0% 88%;
+    --divider: 0 0% 88%;
 
     /* 输入框 */
-    --input: 214.3 31.8% 91.4%;
+    --input: 0 0% 88%;
     --input-background: 0 0% 100%;
 
     /* 主色调 — 默认蓝色 */
@@ -41,14 +41,14 @@
     --primary-hover: 243 76% 54%;
 
     /* 次要色调 */
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --secondary-hover: 210 40% 90%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+    --secondary-hover: 0 0% 90%;
 
     /* 强调色 */
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --accent-hover: 210 40% 90%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 10%;
+    --accent-hover: 0 0% 90%;
 
     /* 状态颜色 */
     --success: 142 76% 36%;
@@ -65,12 +65,12 @@
     --shadow: 0 0% 0%;
 
     /* 其他语义色 */
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 0%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 0%;
     --ring: 243 76% 59%;
     --radius: 0.5rem;
 
