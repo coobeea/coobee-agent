@@ -1,16 +1,19 @@
 /**
  * ProviderInjector — Provider 配置注入
  *
- * 负责将 Provider 系统（Registry + Selector）的配置注入到 PiMonoBuilder：
+ * 负责将 Provider 配置注入到 PiMonoBuilder：
  *   - API Key + model + baseURL
  *   - 默认思维链级别
  *
  * 从 AgentExecutor 提取，供 chat.ts、Orchestrator、Swarm 等所有创建 Agent 的地方使用。
+ *
+ * 使用按需引用模式，直接从 @main/config 导入配置服务。
  */
 
+import { Models, Providers } from '@main/config';
+import { resolveApiKey } from './ApiKeyResolver';
 import type { ProviderRegistry } from './ProviderRegistry';
 import type { ModelSelector } from './ModelSelector';
-import { resolveApiKey } from './ApiKeyResolver';
 
 export interface ProviderSystem {
   registry: ProviderRegistry;
@@ -20,10 +23,16 @@ export interface ProviderSystem {
 export class ProviderInjector {
   private providerSystem: ProviderSystem | null = null;
 
+  /**
+   * @deprecated 保留用于兼容，但新代码应直接使用 Providers 和 Models
+   */
   setProviderSystem(system: ProviderSystem): void {
     this.providerSystem = system;
   }
 
+  /**
+   * @deprecated 保留用于兼容，但新代码应直接使用 Providers 和 Models
+   */
   getProviderSystem(): ProviderSystem | null {
     return this.providerSystem;
   }
@@ -31,35 +40,45 @@ export class ProviderInjector {
   /**
    * 注入 Provider 配置到 Builder（API Key + 模型 + baseURL）
    *
-   * 支持 @group-name 和 auto 格式，通过 ModelGroupResolver 解析为具体模型。
-   * 如果 Provider 系统未就绪或无可用配置，静默回退。
+   * 支持 providerId/modelId 格式，通过 Models 服务解析。
+   * 如果配置未就绪或无可用配置，静默回退。
    */
   applyProviderConfig(
     builder: import('../AgentExecutor').AgentBuilder,
     opts?: { modelOverride?: string; sessionId?: string; agentId?: string }
   ): void {
     try {
-      if (!this.providerSystem) return;
-      const { selector, registry } = this.providerSystem;
-      const ref = selector.resolve({
-        modelOverride: opts?.modelOverride,
-        sessionId: opts?.sessionId,
-        agentId: opts?.agentId
-      });
-      const provider = registry.get(ref.provider);
-      if (!provider) return;
+      // 解析模型（优先使用 modelOverride，否则使用全局默认）
+      const modelSpec = opts?.modelOverride || Models.getDefaultModel();
+      const resolved = Models.resolveModel(modelSpec);
+      if (!resolved) {
+        console.warn(`[ProviderInjector] 无法解析模型: ${modelSpec}`);
+        return;
+      }
 
+      // 获取 Provider 配置
+      const provider = Providers.getProvider(resolved.provider.id);
+      if (!provider) {
+        console.warn(`[ProviderInjector] Provider 不存在: ${resolved.provider.id}`);
+        return;
+      }
+
+      // 解析 API Key
       const apiKey = resolveApiKey(provider.apiKey, provider.id);
-      if (!apiKey) return;
+      if (!apiKey) {
+        console.warn(`[ProviderInjector] API Key 未配置: ${provider.id}`);
+        return;
+      }
 
-      builder.fromProviderConfig(provider, ref.model);
+      // 注入到 Builder
+      builder.fromProviderConfig(provider, resolved.model.id);
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
       if (opts?.modelOverride) {
-        builder.model(ref.model);
+        builder.model(`${resolved.provider.id}/${resolved.model.id}`);
       }
-    } catch {
-      // Provider 系统未就绪，静默回退
+    } catch (err) {
+      console.error('[ProviderInjector] applyProviderConfig 失败:', err);
     }
   }
 
