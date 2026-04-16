@@ -92,7 +92,7 @@ const addNewTab = async (): Promise<void> => {
 
 <template>
   <header
-    class="window-drag-region flex h-9 shrink-0 items-center"
+    class="window-drag-region flex h-[36px] shrink-0 items-center"
     :class="[isMacOS ? 'rounded-t-[10px] bg-gray-300/95 backdrop-blur-sm' : 'bg-gray-300']">
     <!-- macOS: 左侧留空给红绿灯按钮 -->
     <div v-if="isMacOS" class="h-full w-20 shrink-0"></div>

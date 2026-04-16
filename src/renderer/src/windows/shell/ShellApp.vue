@@ -12,7 +12,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-screen w-screen flex-col overflow-hidden bg-gray-50">
+  <div class="flex h-full w-full flex-col overflow-hidden bg-gray-50">
     <!-- Title Bar with Tabs -->
     <AppBar />
 

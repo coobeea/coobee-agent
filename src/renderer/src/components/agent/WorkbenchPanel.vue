@@ -262,28 +262,28 @@ function getFileIcon(file: OpenFile): string {
 </script>
 
 <template>
-  <main class="flex h-full min-w-0 flex-1 flex-col bg-white">
+  <main class="flex h-full min-w-0 flex-1 flex-col bg-background">
     <!-- 无打开文件 — 空状态 -->
     <template v-if="openFiles.length === 0">
-      <div class="flex h-10 shrink-0 items-center border-b border-gray-200/60 px-4">
+      <div class="flex h-10 shrink-0 items-center border-b border-border/40 px-4 bg-surface/40">
         <div class="flex items-center gap-1.5">
-          <span class="i-carbon-workspace inline-block h-3.5 w-3.5 text-gray-500"></span>
-          <span class="text-xs font-semibold text-gray-600">工作台</span>
+          <span class="i-carbon-workspace inline-block h-3.5 w-3.5 text-muted-foreground/60"></span>
+          <span class="text-xs font-semibold text-muted-foreground/80">工作台</span>
         </div>
       </div>
       <div class="flex flex-1 flex-col items-center justify-center">
-        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-50">
-          <span class="i-carbon-document-view inline-block h-8 w-8 text-gray-300"></span>
+        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface">
+          <span class="i-carbon-document-view inline-block h-8 w-8 text-muted-foreground/30"></span>
         </div>
-        <p class="mb-1 text-sm font-medium text-gray-400">点击左侧文件查看内容</p>
-        <p class="text-xs text-gray-300">支持语法高亮、多标签页浏览</p>
+        <p class="mb-1 text-sm font-medium text-muted-foreground/70">点击左侧文件查看内容</p>
+        <p class="text-xs text-muted-foreground/40">支持语法高亮、多标签页浏览</p>
       </div>
     </template>
 
     <!-- 有打开文件 — 标签页 + 编辑器 -->
     <template v-else>
       <!-- 标签页栏 -->
-      <div class="flex h-9 shrink-0 items-end overflow-x-auto border-b border-gray-200/60 bg-gray-50/80">
+      <div class="flex h-9 shrink-0 items-end overflow-x-auto border-b border-border/40 bg-surface/60">
         <div
           v-for="file in openFiles"
           :key="file.path"
@@ -291,10 +291,10 @@ function getFileIcon(file: OpenFile): string {
           :class="{ active: file.path === activeFilePath }"
           :title="file.path"
           @click="activateFile(file.path)">
-          <span :class="getFileIcon(file)" class="inline-block h-3 w-3 shrink-0"></span>
-          <span class="max-w-[120px] truncate text-[11px]">{{ file.name }}</span>
+          <span :class="getFileIcon(file)" class="inline-block h-3.5 w-3.5 shrink-0"></span>
+          <span class="max-w-[160px] truncate text-[12px]">{{ file.name }}</span>
           <button class="tab-close" @click.stop="closeFile(file.path)">
-            <span class="i-carbon-close inline-block h-2.5 w-2.5"></span>
+            <span class="i-carbon-close inline-block h-3 w-3"></span>
           </button>
         </div>
       </div>
@@ -368,39 +368,50 @@ function getFileIcon(file: OpenFile): string {
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 10px;
-  height: 32px;
+  gap: 6px;
+  padding: 0 12px;
+  height: 36px;
   cursor: pointer;
-  color: hsl(var(--muted-foreground) / 0.6);
-  border-right: 1px solid hsl(var(--border) / 0.2);
+  color: hsl(var(--muted-foreground) / 0.7);
+  border-right: 1px solid hsl(var(--border) / 0.3);
   white-space: nowrap;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
   position: relative;
+  background: transparent;
 }
 
 .tab-item:hover {
-  color: hsl(var(--foreground) / 0.8);
-  background: hsl(var(--background));
+  color: hsl(var(--foreground) / 0.9);
+  background: hsl(var(--surface));
 }
 
 .tab-item.active {
-  color: hsl(var(--foreground) / 0.9);
-  background: white;
-  border-bottom: 2px solid hsl(var(--primary));
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
   font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: hsl(var(--primary));
 }
 
 .tab-close {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  margin-left: 4px;
   opacity: 0;
   color: hsl(var(--muted-foreground) / 0.5);
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .tab-item:hover .tab-close {
@@ -408,7 +419,7 @@ function getFileIcon(file: OpenFile): string {
 }
 
 .tab-close:hover {
-  background: hsl(var(--foreground) / 0.1);
-  color: hsl(var(--foreground) / 0.8);
+  background: hsl(var(--foreground) / 0.08);
+  color: hsl(var(--foreground));
 }
 </style>

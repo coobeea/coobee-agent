@@ -337,23 +337,24 @@ onMounted(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
-  border: 1px solid transparent;
+  border: 1px solid hsl(var(--border));
 }
 
 .nav-btn:hover {
   background: hsl(var(--foreground) / 0.05);
   color: hsl(var(--foreground));
-  border-color: hsl(var(--border) / 0.4);
+  border-color: hsl(var(--border));
 }
 
 .nav-btn.active {
-  background: hsl(var(--secondary));
-  color: hsl(var(--secondary-foreground));
-  box-shadow: 0 2px 4px hsl(var(--shadow) / 0.05);
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 3px hsl(var(--primary) / 0.1);
 }
 
 .nav-btn.active .icon-sm {
-  color: hsl(var(--secondary-foreground));
+  color: hsl(var(--primary));
 }
 
 /* ====== 图标 ====== */
