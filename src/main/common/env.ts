@@ -104,6 +104,7 @@ class EnvClass {
     userSkillsDir: string;
     builtinExtensionsDir: string;
     userExtensionsDir: string;
+    builtinAgentsDir: string;
     homesDir: string;
     agentsMdPath: string;
     workspacesDir: string;
@@ -143,6 +144,7 @@ class EnvClass {
       userSkillsDir: path.join(_userHome, 'skills'),
       builtinExtensionsDir: path.join(app.getAppPath(), 'resources', 'extensions'),
       userExtensionsDir: path.join(_userHome, 'extensions'),
+      builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
       homesDir: path.join(_userHome, 'homes'),
       agentsMdPath: path.join(_userHome, 'agents.md'),
       workspacesDir: path.join(_userHome, 'workspaces'),
