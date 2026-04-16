@@ -15,7 +15,7 @@ const route = useRoute();
 </script>
 
 <template>
-  <div class="bg-background text-foreground transition-theme flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div class="bg-background text-foreground transition-theme flex flex-1 min-h-0 w-full flex-col overflow-hidden">
     <div class="flex min-h-0 flex-1 flex-col">
       <router-view />
       <Container />

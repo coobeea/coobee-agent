@@ -7,13 +7,21 @@
 
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { toast } from 'vue-sonner';
 import { useAgentsStore } from '@/stores/agents';
+import { importAgent, exportAgent } from '@/api/agents';
 
 const agentsStore = useAgentsStore();
 const router = useRouter();
 
 /** 删除确认 */
 const confirmDeleteId = ref<string | null>(null);
+
+/** 导入中 */
+const importing = ref(false);
+
+/** 文件输入框引用 */
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 onMounted(() => {
   agentsStore.fetchAgents();
@@ -81,6 +89,79 @@ function formatTime(iso: string): string {
     return '';
   }
 }
+
+/** 打开文件选择器 */
+function openFileSelector(): void {
+  fileInputRef.value?.click();
+}
+
+/** 处理文件选择 */
+async function handleFileSelect(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  
+  if (!file) return;
+  
+  // 验证文件类型
+  if (!file.name.endsWith('.zip')) {
+    toast.error('请选择 ZIP 文件');
+    input.value = '';
+    return;
+  }
+  
+  importing.value = true;
+  
+  try {
+    const result = await importAgent(file);
+    
+    if (result.success && result.data) {
+      toast.success(`成功导入智能体: ${result.data.agentName || result.data.agentId}`);
+      
+      // 显示警告信息
+      if (result.data.warnings && result.data.warnings.length > 0) {
+        result.data.warnings.forEach((warning) => {
+          toast.warning(warning);
+        });
+      }
+      
+      // 刷新列表
+      await agentsStore.fetchAgents();
+    } else {
+      toast.error(result.error || '导入失败');
+    }
+  } catch (err) {
+    console.error('[AgentView] Import error:', err);
+    toast.error(err instanceof Error ? err.message : '导入失败');
+  } finally {
+    importing.value = false;
+    input.value = '';
+  }
+}
+
+/** 导出智能体 */
+async function handleExport(agentId: string, agentName: string, event: MouseEvent): Promise<void> {
+  event.stopPropagation();
+  
+  try {
+    toast.loading('正在导出...');
+    const blob = await exportAgent(agentId);
+    
+    // 创建下载链接
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${agentName}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success('导出成功');
+  } catch (err) {
+    console.error('[AgentView] Export error:', err);
+    toast.error(err instanceof Error ? err.message : '导出失败');
+  }
+}
 </script>
 
 <template>
@@ -102,10 +183,23 @@ function formatTime(iso: string): string {
             class="i-carbon-renew inline-block h-[15px] w-[15px]"
             :class="{ 'animate-spin': agentsStore.loading }" />
         </button>
+        <button class="icon-btn" title="导入智能体" :disabled="importing" @click="openFileSelector">
+          <span
+            class="i-carbon-upload inline-block h-[15px] w-[15px]"
+            :class="{ 'animate-pulse': importing }" />
+        </button>
         <button class="create-btn" @click="openCreatePage">
           <span class="i-carbon-add inline-block h-3.5 w-3.5" />
           <span>新建</span>
         </button>
+        <!-- 隐藏的文件输入框 -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".zip"
+          style="display: none"
+          @change="handleFileSelect"
+        />
       </div>
     </header>
 
@@ -179,6 +273,9 @@ function formatTime(iso: string): string {
           <div class="card-footer">
             <div class="card-actions-right">
               <template v-if="confirmDeleteId !== agent.id">
+                <button class="action-icon" title="导出" @click="handleExport(agent.id, agent.name, $event)">
+                  <span class="i-carbon-download inline-block h-3.5 w-3.5" />
+                </button>
                 <button class="action-icon" title="编辑" @click="openEditPage(agent.id)">
                   <span class="i-carbon-edit inline-block h-3.5 w-3.5" />
                 </button>
@@ -202,7 +299,8 @@ function formatTime(iso: string): string {
 .agent-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   background: hsl(var(--background));
 }

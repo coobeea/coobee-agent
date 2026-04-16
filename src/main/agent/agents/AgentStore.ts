@@ -27,7 +27,10 @@ import type {
 const log = createLogger('agent-store');
 
 /** 将完整定义转为索引条目 */
-function toIndexEntry(def: AgentDefinition): AgentIndexEntry {
+function toIndexEntry(def: AgentDefinition, homeManager: AgentHomeManager): AgentIndexEntry {
+  const agentHomePath = homeManager.getHomePath(def.id);
+  const workspacePath = path.join(agentHomePath, 'workspace');
+  
   return {
     id: def.id,
     name: def.name,
@@ -36,7 +39,9 @@ function toIndexEntry(def: AgentDefinition): AgentIndexEntry {
     version: def.version,
     updatedAt: def.updatedAt,
     skills: def.skills,
-    model: def.model
+    model: def.model,
+    agentHomePath,
+    workspacePath
   };
 }
 
@@ -102,7 +107,7 @@ export class AgentStore {
           const filePath = path.join(this.userDir, file);
           const raw = fs.readFileSync(filePath, 'utf-8');
           const def = JSON.parse(raw) as AgentDefinition;
-          this.index.set(def.id, toIndexEntry(def));
+          this.index.set(def.id, toIndexEntry(def, this.homeManager));
         } catch (err) {
           log.warn(`[AgentStore] Failed to load ${file}:`, err);
         }
@@ -166,7 +171,7 @@ export class AgentStore {
     this.writeDefinition(definition);
 
     // 4. 更新索引
-    this.index.set(definition.id, toIndexEntry(definition));
+    this.index.set(definition.id, toIndexEntry(definition, this.homeManager));
 
     log.info(`[AgentStore] Created agent: ${definition.id} (v${definition.version})`);
     return definition;
@@ -221,7 +226,7 @@ export class AgentStore {
     this.writeDefinition(updated);
 
     // 更新索引
-    this.index.set(updated.id, toIndexEntry(updated));
+    this.index.set(updated.id, toIndexEntry(updated, this.homeManager));
 
     log.info(`[AgentStore] Updated agent: ${agentId} (v${updated.version})`);
     return updated;
@@ -292,7 +297,7 @@ export class AgentStore {
         existing.updatedAt = new Date().toISOString();
         existing.version += 1;
         this.writeDefinition(existing);
-        this.index.set(existing.id, toIndexEntry(existing));
+        this.index.set(existing.id, toIndexEntry(existing, this.homeManager));
       }
     }
   }

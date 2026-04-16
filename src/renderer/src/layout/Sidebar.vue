@@ -4,18 +4,20 @@
  *
  * 布局：
  *   ┌──────────────────────┐
- *   │  🤖 智能体            │  导航菜单
+ *   │  🏠 主页              │  导航菜单
+ *   │  🤖 智能体            │
  *   │  ⚙ 设置              │
  *   ├──────────────────────┤
- *   │  最近任务             │  标题
- *   │  · 任务 A            │  Thread 列表（持久化，可滚动）
- *   │  · 任务 B            │
+ *   │  我的智能体           │  标题
+ *   │  · 智能体 A          │  智能体快捷列表（可滚动）
+ *   │  · 智能体 B          │
  *   │  ...                 │
  *   └──────────────────────┘
  */
 
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useAgentsStore } from '@/stores/agents';
 
 interface MenuItem {
   id: string;
@@ -26,81 +28,61 @@ interface MenuItem {
 
 const router = useRouter();
 const route = useRoute();
+const agentsStore = useAgentsStore();
 
 const activeMenuId = ref('home');
+const activeAgentId = ref<string | null>(null);
 
 // 常用菜单（显示在侧边栏）
 const mainMenuItems: MenuItem[] = [
   { id: 'home', label: '主页', icon: 'i-carbon-home', route: '/home' },
-  { id: 'agents', label: '智能体', icon: 'i-carbon-bot', route: '/agents' },
+  { id: 'agents', label: '智能体管理', icon: 'i-carbon-bot', route: '/agents' },
   { id: 'settings', label: '系统设置', icon: 'i-carbon-settings', route: '/settings' }
 ];
 
-// 模拟的最近任务列表
-const mockThreads = ref([
-  { id: '1', title: '分析项目代码结构', runStatus: 'completed', updatedAt: new Date(Date.now() - 1000 * 60 * 5).toISOString() },
-  { id: '2', title: '编写 API 接口文档', runStatus: 'running', updatedAt: new Date().toISOString() },
-  { id: '3', title: '修复登录页面的 Bug', runStatus: 'idle', updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() }
-]);
-
-const activeThreadId = ref<string | null>(null);
+// 我的智能体列表（最多显示5个）
+const myAgents = computed(() => {
+  return agentsStore.agents.slice(0, 5);
+});
 
 const handleMenuClick = (item: MenuItem): void => {
-  activeThreadId.value = null;
+  activeAgentId.value = null;
   router.push(item.route);
 };
 
-const handleThreadClick = (threadId: string): void => {
-  activeThreadId.value = threadId;
-  // TODO: 实际项目中这里会跳转到对应的 thread 页面
-  console.log('Navigate to thread:', threadId);
+const handleAgentClick = (agentId: string): void => {
+  activeAgentId.value = agentId;
+  router.push(`/agent-workspace/${agentId}`);
 };
 
-/** 格式化相对时间 */
-function formatRelativeTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const now = new Date();
-    const diff = now.getTime() - d.getTime();
-    if (diff < 60_000) return '刚刚';
-    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}分钟前`;
-    if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}小时前`;
-    if (diff < 2592000_000) return `${Math.floor(diff / 86400_000)}天前`;
-    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-  } catch {
-    return '';
-  }
-}
-
-/** runStatus 状态配置：每种状态对应颜色 class 和标签 */
-function getRunStatusConfig(status?: string): { class: string; label: string } {
-  switch (status) {
-    case 'running':
-      return { class: 'status-running', label: '运行中' };
-    case 'tool-pending':
-      return { class: 'status-tool', label: '工具执行中' };
-    case 'approval-pending':
-      return { class: 'status-approval', label: '等待审批' };
-    case 'error':
-      return { class: 'status-error', label: '出错' };
-    case 'completed':
-      return { class: 'status-completed', label: '已完成' };
-    default:
-      return { class: 'status-idle', label: '空闲' };
-  }
-}
+const viewAllAgents = (): void => {
+  activeAgentId.value = null;
+  router.push('/agents');
+};
 
 const updateActiveState = (): void => {
   const path = route.path;
-  if (path.startsWith('/agents')) {
+  if (path.startsWith('/agent-workspace/')) {
+    // 在智能体工作区时，提取 agentId
+    const match = path.match(/^\/agent-workspace\/([^/]+)/);
+    if (match) {
+      activeAgentId.value = match[1];
+      activeMenuId.value = '';
+    }
+  } else if (path.startsWith('/agents')) {
     activeMenuId.value = 'agents';
+    activeAgentId.value = null;
   } else if (route.name) {
     activeMenuId.value = route.name as string;
+    activeAgentId.value = null;
   }
 };
 
-watch(() => route.name, updateActiveState);
-onMounted(() => updateActiveState());
+watch(() => route.path, updateActiveState);
+onMounted(() => {
+  agentsStore.fetchAgents();
+  updateActiveState();
+});
 </script>
 
 <template>
@@ -111,50 +93,58 @@ onMounted(() => updateActiveState());
         v-for="item in mainMenuItems"
         :key="item.id"
         class="nav-btn"
-        :class="{ active: item.id === activeMenuId && !activeThreadId }"
+        :class="{ active: item.id === activeMenuId }"
         @click="handleMenuClick(item)">
         <span :class="item.icon" class="icon-sm" />
         <span>{{ item.label }}</span>
       </button>
     </nav>
 
-    <!-- 会话列表 -->
+    <!-- 智能体列表 -->
     <div class="session-section">
       <div class="section-header">
-        <span>最近任务</span>
+        <span>我的智能体</span>
         <button
           class="refresh-btn"
-          title="刷新">
-          <span class="i-carbon-renew inline-block h-3 w-3" />
+          title="刷新"
+          @click="agentsStore.fetchAgents()">
+          <span class="i-carbon-renew inline-block h-3 w-3" :class="{ 'animate-spin': agentsStore.loading }" />
         </button>
       </div>
 
       <div class="session-list">
-        <!-- Thread 列表 -->
+        <!-- 智能体列表 -->
         <div
-          v-for="thread in mockThreads"
-          :key="thread.id"
+          v-for="agent in myAgents"
+          :key="agent.id"
           class="session-item"
-          :class="{ active: activeThreadId === thread.id }"
-          @click="handleThreadClick(thread.id)">
-          <span
-            class="status-dot"
-            :class="getRunStatusConfig(thread.runStatus).class"
-            :title="getRunStatusConfig(thread.runStatus).label" />
+          :class="{ active: activeAgentId === agent.id }"
+          @click="handleAgentClick(agent.id)">
           <div class="session-info">
             <div class="session-title-row">
-              <span class="session-title">{{ thread.title }}</span>
+              <span class="session-title">{{ agent.name }}</span>
             </div>
             <span class="session-meta">
-              {{ formatRelativeTime(thread.updatedAt) }}
+              {{ agent.description }}
             </span>
           </div>
         </div>
 
+        <!-- 查看全部 -->
+        <button v-if="agentsStore.agentCount > 5" class="view-all-btn" @click="viewAllAgents">
+          <span class="i-carbon-grid inline-block h-3 w-3" />
+          <span>查看全部 ({{ agentsStore.agentCount }})</span>
+        </button>
+
         <!-- 空态 -->
-        <div v-if="mockThreads.length === 0" class="empty-state">
-          <span class="i-carbon-task inline-block h-6 w-6 opacity-[0.08]" />
-          <p>选择智能体并开启任务后<br />任务将出现在这里</p>
+        <div v-if="myAgents.length === 0 && !agentsStore.loading" class="empty-state">
+          <span class="i-carbon-bot inline-block h-6 w-6 opacity-[0.08]" />
+          <p>还没有智能体<br />点击上方创建</p>
+        </div>
+
+        <!-- 加载中 -->
+        <div v-if="agentsStore.loading && myAgents.length === 0" class="empty-state">
+          <span class="i-carbon-renew inline-block h-4 w-4 animate-spin opacity-20" />
         </div>
       </div>
     </div>
@@ -167,7 +157,6 @@ onMounted(() => updateActiveState());
   flex-direction: column;
   width: 240px;
   flex-shrink: 0;
-  height: 100%;
   background: hsl(var(--surface));
   border-right: 1px solid hsl(var(--border));
 }
@@ -228,81 +217,55 @@ onMounted(() => updateActiveState());
   padding: 6px 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .session-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 10px;
   color: hsl(var(--foreground) / 0.75);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s ease;
-  border: 1px solid transparent;
+  border: 1px solid hsl(var(--border));
 }
 
 .session-item:hover {
   background: hsl(var(--foreground) / 0.04);
-  border-color: hsl(var(--border) / 0.5);
+  border-color: hsl(var(--border));
 }
 
 .session-item.active {
-  background: hsl(var(--primary) / 0.1);
+  background: hsl(var(--primary) / 0.15);
   color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 0.2);
-  box-shadow: 0 1px 2px hsl(var(--shadow) / 0.05);
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 3px hsl(var(--primary) / 0.1);
 }
 
-/* status dot */
+/* view all button */
 
-.status-dot {
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 6px;
+.view-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 4px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground) / 0.6);
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
 }
 
-.status-dot.status-running {
-  background: hsl(142 71% 45%);
-  box-shadow: 0 0 0 2px hsl(142 71% 45% / 0.2);
-  animation: pulse-dot 1.5s ease-in-out infinite;
-}
-
-.status-dot.status-tool {
-  background: hsl(217 91% 60%);
-  box-shadow: 0 0 0 2px hsl(217 91% 60% / 0.2);
-}
-
-.status-dot.status-approval {
-  background: hsl(38 92% 50%);
-  box-shadow: 0 0 0 2px hsl(38 92% 50% / 0.2);
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-.status-dot.status-error {
-  background: hsl(0 84% 60%);
-}
-
-.status-dot.status-completed {
-  background: hsl(var(--muted-foreground) / 0.3);
-}
-
-.status-dot.status-idle {
-  background: hsl(var(--muted-foreground) / 0.2);
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+.view-all-btn:hover {
+  background: hsl(var(--foreground) / 0.04);
+  color: hsl(var(--foreground) / 0.8);
+  border-color: hsl(var(--border) / 0.4);
 }
 
 .session-info {
@@ -332,12 +295,16 @@ onMounted(() => updateActiveState());
 
 .session-meta {
   font-size: 11px;
-  color: hsl(var(--muted-foreground) / 0.7);
-  line-height: 1;
+  color: hsl(var(--muted-foreground) / 0.5);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .session-item.active .session-meta {
-  color: hsl(var(--primary) / 0.6);
+  color: hsl(var(--primary) / 0.5);
 }
 
 /* 空态 */

@@ -21,7 +21,7 @@ function handleSettings(): void {
 </script>
 
 <template>
-  <div class="flex items-center justify-between h-9 shrink-0 px-3 bg-surface border-t border-border/40">
+  <div class="flex items-center justify-between h-9 shrink-0 px-3 bg-surface border-t border-border">
     <!-- 左侧状态区 -->
     <div class="flex items-center gap-0.5">
       <div class="flex items-center gap-1.5 h-7 px-2.5 text-xs text-muted-foreground/40 select-none">

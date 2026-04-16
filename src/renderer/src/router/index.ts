@@ -29,6 +29,11 @@ const router = createRouter({
           component: () => import('@/views/AgentEditorView.vue')
         },
         {
+          path: 'agent-workspace/:id',
+          name: 'agent-workspace',
+          component: () => import('@/views/AgentWorkspaceView.vue')
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/SettingsView.vue')

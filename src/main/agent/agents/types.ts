@@ -17,6 +17,10 @@ export interface AgentIndexEntry {
   skills?: string[];
   /** 使用的模型 ID 或模型组引用（@group:xxx） */
   model?: string;
+  /** Agent 家目录路径（包含人格文件、技能等） */
+  agentHomePath?: string;
+  /** Agent 工作空间路径（任务运行时产生的文件） */
+  workspacePath?: string;
 }
 
 /** Agent 完整定义（保存到文件） */

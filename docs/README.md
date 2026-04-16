@@ -38,6 +38,11 @@ docs/
   - 状态：✅ **当前推荐方案**
   - 内容：自动扫描机制，业务层通过文件约定自动注册，通用层无需修改
 
+- **04-agent-import-export-format.md** - 智能体导入导出 ZIP 包格式设计
+  - 创建时间：2026-04-15
+  - 状态：📝 **设计方案**
+  - 内容：定义智能体导入导出的标准 ZIP 包结构，包含导入导出流程设计和 UI 建议
+
 ### 02-guides/ - 开发指南
 
 开发指南和使用说明，帮助开发者快速上手。
@@ -153,15 +158,21 @@ docs/
 - [03-gateway-auto-scan-design.md](01-designs/03-gateway-auto-scan-design.md) - ✅ 最新推荐
 
 **配置管理相关**：
-- （待添加）
+- [01-provider-config-migration.md](02-guides/01-provider-config-migration.md) - ✅ 迁移指南
+- [02-provider-quickstart.md](02-guides/02-provider-quickstart.md) - ✅ 快速开始
 
-**多进程架构相关**：
-- （待添加）
+**智能体相关**：
+- [04-agent-import-export-format.md](01-designs/04-agent-import-export-format.md) - 📝 导入导出格式
 
 ### 按状态查找
 
 **✅ 当前使用中**：
 - [03-gateway-auto-scan-design.md](01-designs/03-gateway-auto-scan-design.md)
+- [01-provider-config-migration.md](02-guides/01-provider-config-migration.md)
+- [02-provider-quickstart.md](02-guides/02-provider-quickstart.md)
+
+**📝 设计中**：
+- [04-agent-import-export-format.md](01-designs/04-agent-import-export-format.md)
 
 **⚠️ 已废弃（保留参考）**：
 - [01-websocket-push-architecture.md](01-designs/01-websocket-push-architecture.md)
@@ -171,9 +182,10 @@ docs/
 
 ## 📊 文档统计
 
-- **总文档数**：3
-- **设计文档**：3
-- **当前有效**：1
+- **总文档数**：6
+- **设计文档**：4
+- **开发指南**：2
+- **当前有效**：4
 - **历史参考**：2
 
 ---
@@ -200,4 +212,4 @@ git commit -m "docs: add 01-designs/04-config-management-design"
 
 ---
 
-最后更新：2026-04-11
+最后更新：2026-04-15

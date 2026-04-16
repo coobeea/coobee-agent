@@ -10,6 +10,71 @@
 
 @layer base {
   /* ================================================================
+     全局字体渲染优化
+     ================================================================ */
+  *,
+  *::before,
+  *::after {
+    /* 字体抗锯齿（macOS/iOS 优化）- 让字体更清晰 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    /* 字体渲染优化 - 提升可读性 */
+    text-rendering: optimizeLegibility;
+    
+    /* 字体特性 - 启用字距调整和连字 */
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  html {
+    /* 基础字体设置 */
+    font-family: var(--font-family-system);
+    font-size: 14px;
+    line-height: 1.6;
+    
+    /* 文本缩放优化 */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    /* 继承 html 的字体设置 */
+    font-weight: 400;
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--background));
+    
+    /* 字体平滑 */
+    font-smooth: always;
+  }
+
+  /* 强制优化所有文本元素 */
+  h1, h2, h3, h4, h5, h6,
+  p, span, div, a, button,
+  input, textarea, select,
+  label, th, td {
+    /* 确保字体渲染优化应用到所有文本元素 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 标题字重优化 */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  /* 普通文本字重 */
+  p, span, div, label {
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  /* 小字号文本优化 - 增加字重防止模糊 */
+  .text-xs, .text-sm {
+    font-weight: 500;
+  }
+
+  /* ================================================================
      亮色模式 — 默认值
      ================================================================ */
   :root {
@@ -26,19 +91,19 @@
     --text-secondary: 0 0% 30%;
     --text-muted: 0 0% 40%;
 
-    /* 边框和分割线 */
-    --border: 0 0% 88%;
-    --border-variant: 0 0% 88%;
-    --divider: 0 0% 88%;
+    /* 边框和分割线 - 更清晰明显 */
+    --border: 0 0% 80%;
+    --border-variant: 0 0% 82%;
+    --divider: 0 0% 85%;
 
     /* 输入框 */
     --input: 0 0% 88%;
     --input-background: 0 0% 100%;
 
-    /* 主色调 — 默认蓝色 */
-    --primary: 243 76% 59%;
+    /* 主色调 — 暗夜蓝（Midnight Slate / 高级灰蓝质感）*/
+    --primary: 215 25% 27%;
     --primary-foreground: 0 0% 98%;
-    --primary-hover: 243 76% 54%;
+    --primary-hover: 215 25% 17%;
 
     /* 次要色调 */
     --secondary: 0 0% 96%;
@@ -66,24 +131,24 @@
 
     /* 其他语义色 */
     --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 40%;
+    --muted-foreground: 0 0% 35%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 0%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 0%;
-    --ring: 243 76% 59%;
+    --ring: 215 25% 27%;
     --radius: 0.5rem;
 
     /* 字体设置
        使用 --font-family- 前缀避免与 Tailwind 4 的 --font-* 主题变量冲突 */
-    --font-family-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    --font-size-base: 16px;
+    --font-family-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    --font-size-base: 14px;
 
-    /* 字体族预设 */
-    --font-family-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    --font-family-sans: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    --font-family-serif: Georgia, 'Times New Roman', 'Songti SC', serif;
-    --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    /* 字体族预设 - 优化中文显示 */
+    --font-family-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+    --font-family-sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+    --font-family-serif: Georgia, 'Times New Roman', 'Songti SC', 'STSong', serif;
+    --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Roboto Mono', Menlo, Consolas, 'Courier New', monospace;
 
     /* 缩放 */
     --zoom-scale: 1;
@@ -96,13 +161,13 @@
      主题色预设 — 亮色模式
      ================================================================ */
 
-  /* 蓝色 — 默认 */
+  /* 暗夜蓝 — 默认（高级灰蓝质感）*/
   :root,
-  .theme-blue {
-    --primary: 210 100% 63%;
+  .theme-midnight {
+    --primary: 215 25% 27%;
     --primary-foreground: 0 0% 98%;
-    --primary-hover: 210 100% 58%;
-    --ring: 210 100% 63%;
+    --primary-hover: 215 25% 17%;
+    --ring: 215 25% 27%;
   }
 
   /* 紫色 */
@@ -194,10 +259,10 @@
     --text-secondary: 215 20.2% 65.1%;
     --text-muted: 215 20.2% 65.1%;
 
-    /* 边框和分割线 */
-    --border: 217.2 32.6% 17.5%;
-    --border-variant: 217.2 32.6% 17.5%;
-    --divider: 217.2 32.6% 17.5%;
+    /* 边框和分割线 - 更清晰明显 */
+    --border: 217.2 32.6% 25%;
+    --border-variant: 217.2 32.6% 22%;
+    --divider: 217.2 32.6% 20%;
 
     /* 输入框 */
     --input: 217.2 32.6% 17.5%;
@@ -229,7 +294,7 @@
 
     /* 其他语义色 */
     --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted-foreground: 215 20.2% 70%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
     --card: 222.2 84% 4.9%;
@@ -241,13 +306,13 @@
      暗色模式下适当提高亮度以保证可读性
      ================================================================ */
 
-  /* 蓝色 — 暗色默认 */
-  .dark.theme-blue,
+  /* 暗夜蓝 — 暗色默认（高级灰蓝质感）*/
+  .dark.theme-midnight,
   .dark {
-    --primary: 210 100% 68%;
-    --primary-foreground: 0 0% 98%;
-    --primary-hover: 210 100% 73%;
-    --ring: 210 100% 68%;
+    --primary: 213 27% 84%;
+    --primary-foreground: 215 25% 27%;
+    --primary-hover: 213 27% 94%;
+    --ring: 213 27% 84%;
   }
 
   .dark.theme-purple {

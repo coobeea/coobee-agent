@@ -148,3 +148,44 @@ export async function updatePersonalityFile(
     { content }
   );
 }
+
+// ==================== Import / Export ====================
+
+/** 导入结果 */
+export interface ImportResult {
+  success: boolean;
+  agentId?: string;
+  agentName?: string;
+  error?: string;
+  warnings?: string[];
+}
+
+/**
+ * 导入智能体 ZIP 文件
+ * @param file ZIP 文件对象
+ */
+export async function importAgent(file: File): Promise<ApiResponse<ImportResult>> {
+  // 读取文件为 Base64
+  const buffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(buffer);
+  const base64 = btoa(String.fromCharCode(...uint8Array));
+
+  return apiClient.post<ImportResult>('/gateway/agents/import', {
+    zipData: base64
+  });
+}
+
+/**
+ * 导出智能体为 ZIP 文件
+ * @param agentId 智能体 ID
+ * @returns Blob 对象（ZIP 文件）
+ */
+export async function exportAgent(agentId: string): Promise<Blob> {
+  const response = await fetch(`http://localhost:8765/gateway/agents/${agentId}/export`);
+  
+  if (!response.ok) {
+    throw new Error(`导出失败: ${response.statusText}`);
+  }
+  
+  return response.blob();
+}

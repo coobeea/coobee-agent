@@ -19,7 +19,7 @@
         :min="min"
         :max="max"
         :class="inputClasses"
-        class="input w-full px-3 py-2 border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        class="input w-full px-3 py-2 border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
         @input="handleInput"
         @blur="handleBlur"
         @focus="handleFocus" />
@@ -36,7 +36,7 @@
         :rows="rows || 3"
         :style="textareaStyle"
         :class="[inputClasses, isMaxHeight ? 'overflow-y-auto' : 'overflow-hidden']"
-        class="input w-full px-3 py-2 border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed resize-none"
+        class="input w-full px-3 py-2 border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed resize-none"
         @input="handleInput"
         @blur="handleBlur"
         @focus="handleFocus" />

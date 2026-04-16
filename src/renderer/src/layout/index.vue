@@ -19,12 +19,12 @@ const route = useRoute();
 </script>
 
 <template>
-  <div class="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+  <div class="flex flex-1 min-h-0 w-full overflow-hidden bg-background text-foreground">
     <!-- 左侧导航 (fullscreen 模式下隐藏) -->
     <Sidebar v-if="!route.meta.fullscreen" />
 
     <!-- 主内容区域 -->
-    <main class="min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+    <main class="flex flex-col min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />

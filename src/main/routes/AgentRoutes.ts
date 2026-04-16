@@ -9,11 +9,17 @@
  *   POST   /gateway/agents           — 创建智能体
  *   PATCH  /gateway/agents/:id       — 更新智能体
  *   DELETE /gateway/agents/:id       — 删除智能体
+ *   POST   /gateway/agents/import    — 导入智能体 ZIP
+ *   GET    /gateway/agents/:id/export — 导出智能体为 ZIP
  */
 
 import type Router from '@koa/router';
+import fs from 'node:fs';
+import path from 'node:path';
+import { app } from 'electron';
 import { createLogger } from '@main/common/logger';
 import { AgentStore } from '@main/agent/agents/AgentStore';
+import { AgentImportExport } from '@main/agent/agents/AgentImportExport';
 import type {
   AgentDefinition,
   AgentIndexEntry,
@@ -356,6 +362,143 @@ export function registerAgentRoutes(router: Router): void {
         error: err instanceof Error ? err.message : String(err)
       };
       ctx.body = response;
+    }
+  });
+
+  // ==================== EXPORT ====================
+
+  router.get('/agents/:id/export', async (ctx) => {
+    const agentId = ctx.params.id;
+    if (!agentId) {
+      ctx.status = 400;
+      const response: ApiResponse = {
+        success: false,
+        error: 'agentId is required'
+      };
+      ctx.body = response;
+      return;
+    }
+
+    try {
+      const store = AgentStore.getInstance();
+      const agent = await store.get(agentId);
+      if (!agent) {
+        ctx.status = 404;
+        const response: ApiResponse = {
+          success: false,
+          error: `Agent "${agentId}" not found`
+        };
+        ctx.body = response;
+        return;
+      }
+
+      const importExport = new AgentImportExport(
+        store,
+        store.getHomeManager(),
+        app.getVersion()
+      );
+
+      const zipPath = await importExport.exportAgent(agentId, {
+        includeSkills: true
+      });
+
+      // 设置响应头，让浏览器下载文件
+      const fileName = path.basename(zipPath);
+      ctx.set('Content-Type', 'application/zip');
+      ctx.set('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+      
+      // 读取文件并返回
+      ctx.body = fs.createReadStream(zipPath);
+
+      // 文件传输完成后删除临时文件
+      ctx.res.on('finish', () => {
+        try {
+          if (fs.existsSync(zipPath)) {
+            fs.unlinkSync(zipPath);
+          }
+        } catch (err) {
+          log.warn(`[agents.export] Failed to cleanup temp file: ${zipPath}`, err);
+        }
+      });
+
+      log.info(`[agents.export] Exporting agent: ${agentId}`);
+    } catch (err) {
+      log.error(`[agents.export] Error (${agentId}):`, err);
+      ctx.status = 500;
+      const response: ApiResponse = {
+        success: false,
+        error: err instanceof Error ? err.message : String(err)
+      };
+      ctx.body = response;
+    }
+  });
+
+  // ==================== IMPORT ====================
+
+  router.post('/agents/import', async (ctx) => {
+    const body = ctx.request.body as Record<string, unknown> | undefined;
+    const zipData = body?.zipData as string | undefined; // Base64 编码的 ZIP 文件
+
+    if (!zipData) {
+      ctx.status = 400;
+      const response: ApiResponse = {
+        success: false,
+        error: 'zipData is required (base64 encoded ZIP file)'
+      };
+      ctx.body = response;
+      return;
+    }
+
+    let tempZipPath: string | null = null;
+
+    try {
+      // 将 Base64 数据解码为 Buffer 并保存到临时文件
+      const buffer = Buffer.from(zipData, 'base64');
+      tempZipPath = path.join(app.getPath('temp'), `agent-import-${Date.now()}.zip`);
+      fs.writeFileSync(tempZipPath, buffer);
+
+      const store = AgentStore.getInstance();
+      const importExport = new AgentImportExport(
+        store,
+        store.getHomeManager(),
+        app.getVersion()
+      );
+
+      const result = await importExport.importAgent(tempZipPath);
+
+      if (result.success) {
+        ctx.status = 201;
+        const response: ApiResponse<typeof result> = {
+          success: true,
+          data: result
+        };
+        ctx.body = response;
+        log.info(`[agents.import] Successfully imported agent: ${result.agentId}`);
+      } else {
+        ctx.status = 400;
+        const response: ApiResponse = {
+          success: false,
+          error: result.error || 'Import failed'
+        };
+        ctx.body = response;
+      }
+    } catch (err) {
+      log.error('[agents.import] Error:', err);
+      ctx.status = 500;
+      const response: ApiResponse = {
+        success: false,
+        error: err instanceof Error ? err.message : String(err)
+      };
+      ctx.body = response;
+    } finally {
+      // 清理临时 ZIP 文件
+      if (tempZipPath && fs.existsSync(tempZipPath)) {
+        try {
+          fs.unlinkSync(tempZipPath);
+        } catch (err) {
+          log.warn(`[agents.import] Failed to cleanup temp file: ${tempZipPath}`, err);
+        }
+      }
     }
   });
 
