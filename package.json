@@ -22,7 +22,8 @@
     "build:linux": "pnpm run build && electron-builder --linux",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.101",
