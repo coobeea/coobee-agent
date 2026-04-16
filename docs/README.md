@@ -43,6 +43,11 @@ docs/
   - 状态：📝 **设计方案**
   - 内容：定义智能体导入导出的标准 ZIP 包结构，包含导入导出流程设计和 UI 建议
 
+- **05-chat-api-data-flow.md** - Chat API 数据流设计
+  - 创建时间：2026-04-13
+  - 状态：✅ **已实施**
+  - 内容：统一的对话 API 数据流架构，包含 SSE 流式返回、WebSocket 广播和文件持久化三条并行路径
+
 ### 02-guides/ - 开发指南
 
 开发指南和使用说明，帮助开发者快速上手。
@@ -163,11 +168,13 @@ docs/
 
 **智能体相关**：
 - [04-agent-import-export-format.md](01-designs/04-agent-import-export-format.md) - 📝 导入导出格式
+- [05-chat-api-data-flow.md](01-designs/05-chat-api-data-flow.md) - ✅ 对话 API 数据流
 
 ### 按状态查找
 
 **✅ 当前使用中**：
 - [03-gateway-auto-scan-design.md](01-designs/03-gateway-auto-scan-design.md)
+- [05-chat-api-data-flow.md](01-designs/05-chat-api-data-flow.md)
 - [01-provider-config-migration.md](02-guides/01-provider-config-migration.md)
 - [02-provider-quickstart.md](02-guides/02-provider-quickstart.md)
 
@@ -182,10 +189,10 @@ docs/
 
 ## 📊 文档统计
 
-- **总文档数**：6
-- **设计文档**：4
+- **总文档数**：7
+- **设计文档**：5
 - **开发指南**：2
-- **当前有效**：4
+- **当前有效**：5
 - **历史参考**：2
 
 ---
@@ -212,4 +219,4 @@ git commit -m "docs: add 01-designs/04-config-management-design"
 
 ---
 
-最后更新：2026-04-15
+最后更新：2026-04-13

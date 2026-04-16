@@ -125,6 +125,7 @@ export class ThreadStore {
       agentHomePath, // ✅ 填充 Agent Home 路径
       createdAt: now,
       updatedAt: now,
+      overrideModel: params.overrideModel,
       metadata: params.metadata
     };
 

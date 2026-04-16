@@ -111,6 +111,8 @@ export interface CreateThreadParams {
   agentMode?: AgentMode;
   /** Agent 分类类型（默认 'agent'） */
   agentType?: AgentType;
+  /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
+  overrideModel?: string;
   /** 扩展元数据（可选） */
   metadata?: Record<string, unknown>;
 }
