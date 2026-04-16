@@ -70,6 +70,7 @@ export const ModelSelectionSchema = z.object({
   fallbacks: z.array(z.string()).optional()
 });
 
+
 // ─── 模型组和负载均衡 ───────────────────────────────────────
 
 export const LoadBalanceStrategySchema = z.enum(['round-robin', 'random', 'weighted', 'quota-aware', 'fallback']);
@@ -119,6 +120,7 @@ export const CoobeeConfigSchema = z.object({
       defaults: z
         .object({
           model: ModelSelectionSchema.optional(),
+          embedding: ModelSelectionSchema.optional(),
           thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high', 'xhigh']).optional()
         })
         .optional()

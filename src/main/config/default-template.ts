@@ -15,7 +15,7 @@ import path from 'path';
 export function generateDefaultConfig(): string {
   // 在 Vite 打包后，__dirname 指向 out/main，而文件被复制到了 out/main/config
   const templatePath = path.join(__dirname, 'config', 'default-config.json5');
-  
+
   // 兼容开发环境或未打包的场景
   if (fs.existsSync(templatePath)) {
     return fs.readFileSync(templatePath, 'utf-8');
@@ -30,7 +30,7 @@ export function generateDefaultConfig(): string {
  */
 export function generateDefaultProviders(): string {
   const templatePath = path.join(__dirname, 'config', 'default-providers.json5');
-  
+
   if (fs.existsSync(templatePath)) {
     return fs.readFileSync(templatePath, 'utf-8');
   }
@@ -44,7 +44,7 @@ export function generateDefaultProviders(): string {
  */
 export function generateDefaultSecrets(): string {
   const templatePath = path.join(__dirname, 'config', 'default-secrets.json5');
-  
+
   if (fs.existsSync(templatePath)) {
     return fs.readFileSync(templatePath, 'utf-8');
   }

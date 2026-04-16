@@ -16,12 +16,20 @@
  *   const workspace = await Threads.getWorkspaceDir(threadId);
  */
 
+// 业务配置模块
 export { Agents } from './agents';
 export { Skills } from './skills';
 export { Extensions } from './extensions';
 export { Workers } from './workers';
 export { Threads } from './threads';
 export { Providers } from './providers';
+export { Models } from './models';
+
+// 配置模块类型（用于实现自动扫描的配置模块）
+export type { ConfigModule } from './types';
+
+// 导出类型定义
+export type { ResolvedModel } from './models';
 
 // 向后兼容：保留 BusinessPaths 别名（逐步迁移后可移除）
 import { Workers } from './workers';

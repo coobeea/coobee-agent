@@ -52,14 +52,35 @@ curl http://127.0.0.1:11434/api/tags
 ollama pull qwen3.5:9b
 ```
 
-### 3. 环境变量配置
+### 3. Provider 配置
 
-确保 `.env` 文件中配置了 Ollama：
+确保 `.home/providers.json5` 文件中已启用 Ollama：
 
-```env
-VITE_LLM_API_KEY=ollama
-VITE_LLM_BASE_URL=http://127.0.0.1:11434/v1
+```json5
+{
+  ollama: {
+    id: 'ollama',
+    name: 'Ollama',
+    api: 'openai-compatible',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    apiKey: 'ollama',
+    requiresApiKey: false,
+    enabled: true,  // ✅ 必须设置为 true
+    models: [
+      {
+        id: 'qwen3.5:9b',
+        name: 'Qwen3.5 9B',
+        contextWindow: 32768,
+      }
+    ]
+  }
+}
 ```
+
+**注意**：
+- 不要使用 `.env` 文件配置 Provider（`VITE_LLM_*` 变量无效）
+- 应用从 `.home/providers.json5` 加载 Provider 配置
+- 如果文件不存在，应用会报错"API Key 未配置"
 
 ## 运行测试
 

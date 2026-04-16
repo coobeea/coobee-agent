@@ -159,11 +159,21 @@ export function registerChatRoutes(router: Router): void {
       //   2. EventBus 广播: 通过 WebSocket 推送到前端（实时监听）
       //   3. SSE 流式返回: 通过 HTTP Response 返回给 API 客户端
       // 注意：不使用 lightweight(true)，确保所有路径都走完整流程
-      const builder = agentExecutor
-        .piMono()
-        .sessionMode('file')
-        .name(agent.id)
-        .model(thread.overrideModel || agent.model || 'qwen3.5:9b');
+
+      // 模型选择优先级：thread.overrideModel > agent.model > 全局默认
+      // 如果都没有，AgentExecutor 会使用全局默认模型（来自 coobee.json5）
+      //
+      // 统一配置访问示例：
+      //   import { Models } from '@main/config';
+      //   const { provider, model } = Models.resolveModel(thread.overrideModel || agent.model);
+      //   // provider.baseUrl, model.maxOutputTokens 等完整信息
+      const builder = agentExecutor.piMono().sessionMode('file').name(agent.id);
+
+      // 如果指定了模型，使用指定的模型；否则使用全局默认
+      const modelSpec = thread.overrideModel || agent.model;
+      if (modelSpec) {
+        builder.model(modelSpec);
+      }
 
       if (agent.instructions) {
         builder.instructions(agent.instructions);

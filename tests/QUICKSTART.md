@@ -76,6 +76,35 @@ ollama serve
 ollama pull qwen3.5:9b
 ```
 
+### 配置 Provider
+
+创建 `.home/providers.json5` 文件并启用 Ollama：
+
+```json5
+{
+  ollama: {
+    id: 'ollama',
+    name: 'Ollama',
+    api: 'openai-compatible',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    apiKey: 'ollama',
+    requiresApiKey: false,
+    enabled: true,  // ✅ 启用
+    models: [
+      {
+        id: 'qwen3.5:9b',
+        name: 'Qwen3.5 9B',
+        contextWindow: 32768,
+        maxInputTokens: 32768,
+        maxOutputTokens: 8192,
+      }
+    ]
+  }
+}
+```
+
+**注意**：应用会优先从 `.home/providers.json5` 加载配置，而不是环境变量。
+
 ## 🎯 测试场景
 
 ### 场景 1: 创建会话并发送消息
