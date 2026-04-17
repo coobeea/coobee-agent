@@ -19,6 +19,7 @@ import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
 import { useThreadsStore } from '@/stores/threads';
+import { useChatStore } from '@/stores/chat';
 
 interface MenuItem {
   id: string;
@@ -31,6 +32,7 @@ const router = useRouter();
 const route = useRoute();
 const agentsStore = useAgentsStore();
 const threadsStore = useThreadsStore();
+const chatStore = useChatStore();
 
 const activeMenuId = ref('home');
 const activeThreadId = ref<string | null>(null);
@@ -46,6 +48,11 @@ const mainMenuItems: MenuItem[] = [
 const recentThreads = computed(() => {
   return threadsStore.threads.slice(0, 10);
 });
+
+// 检查任务是否正在执行
+function isThreadStreaming(threadId: string): boolean {
+  return chatStore.getState(threadId).isStreaming;
+}
 
 // 格式化相对时间
 function formatRelativeTime(timestamp: string): string {
@@ -142,6 +149,11 @@ onMounted(() => {
           <div class="session-info">
             <div class="session-title-row">
               <span class="session-title">{{ thread.title }}</span>
+              <span
+                v-if="isThreadStreaming(thread.id)"
+                class="i-carbon-circle-dash inline-block h-3.5 w-3.5 flex-shrink-0 animate-spin"
+                :class="{ 'text-primary': activeThreadId === thread.id }"
+                title="正在执行" />
             </div>
             <span class="session-meta">
               {{ formatRelativeTime(thread.updatedAt) }}
