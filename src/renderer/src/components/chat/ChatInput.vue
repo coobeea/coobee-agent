@@ -10,6 +10,7 @@ import { ref } from 'vue';
 defineProps<{
   disabled?: boolean;
   placeholder?: string;
+  showStopButton?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -77,7 +78,18 @@ defineExpose({
         :disabled="disabled"
         @keydown="handleKeydown" />
       
+      <!-- 停止按钮（流式响应时显示） -->
       <button
+        v-if="showStopButton"
+        class="stop-btn"
+        title="中断"
+        @click="emit('stop')">
+        <span class="i-carbon-stop-filled inline-block h-4 w-4" />
+      </button>
+
+      <!-- 发送按钮（正常状态） -->
+      <button
+        v-else
         class="send-btn"
         :disabled="!inputText.trim() || disabled"
         @click="handleSend">
@@ -191,5 +203,23 @@ defineExpose({
 .send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.stop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.stop-btn:hover {
+  opacity: 0.85;
+  box-shadow: 0 2px 8px hsl(var(--destructive) / 0.3);
 }
 </style>

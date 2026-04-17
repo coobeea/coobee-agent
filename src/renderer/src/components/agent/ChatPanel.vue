@@ -246,7 +246,8 @@ defineExpose({
     <ChatInput
       ref="chatInputRef"
       :disabled="isStreaming"
-      :placeholder="isStreaming ? '智能体正在处理中...' : '输入消息...'"
+      :placeholder="isStreaming ? '智能体正在处理中...' : '输入消息，Enter 发送，Shift+Enter 换行'"
+      :show-stop-button="isStreaming"
       @send="handleSend"
       @stop="handleStop" />
   </aside>
