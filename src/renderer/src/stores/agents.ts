@@ -17,6 +17,9 @@ import {
   type CreateAgentParams
 } from '@/api/agents';
 
+// Re-export types for consumers
+export type { AgentEntry, CreateAgentParams };
+
 export const useAgentsStore = defineStore('agents', () => {
   // ==================== State ====================
 
