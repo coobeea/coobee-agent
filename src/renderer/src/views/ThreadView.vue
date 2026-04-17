@@ -24,7 +24,6 @@ const threadsStore = useThreadsStore();
 const { closeAllFiles } = useOpenFiles();
 
 const leftCollapsed = ref(false);
-const rightCollapsed = ref(false);
 const terminalCollapsed = ref(true);
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
 

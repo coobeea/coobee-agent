@@ -125,6 +125,47 @@ export function registerThreadRoutes(router: Router): void {
     }
   });
 
+  /**
+   * PATCH /gateway/threads/:id - 更新 Thread 属性
+   */
+  router.patch('/threads/:id', async (ctx) => {
+    try {
+      const { id } = ctx.params;
+      const updates = ctx.request.body as Record<string, unknown>;
+
+      log.info(`[PATCH /threads/${id}] 更新 Thread:`, updates);
+
+      const store = await ThreadStore.getInstance();
+      const thread = await store.get(id);
+
+      if (!thread) {
+        ctx.status = 404;
+        ctx.body = { error: 'Thread not found' };
+        return;
+      }
+
+      // 只允许更新特定字段
+      const allowedFields = ['title', 'status', 'projectDir', 'overrideModel'];
+      const filteredUpdates: Record<string, unknown> = {};
+
+      for (const key of allowedFields) {
+        if (key in updates) {
+          filteredUpdates[key] = updates[key];
+        }
+      }
+
+      // 更新 Thread
+      const updatedThread = await store.update(id, filteredUpdates);
+
+      ctx.body = { thread: updatedThread };
+      log.debug(`[PATCH /threads/${id}] 更新成功`);
+    } catch (error) {
+      log.error(`[PATCH /threads/:id] 更新失败:`, error);
+      ctx.status = 500;
+      ctx.body = { error: error instanceof Error ? error.message : 'Internal server error' };
+    }
+  });
+
   log.info('[ThreadRoutes] 路由已注册');
 }
 

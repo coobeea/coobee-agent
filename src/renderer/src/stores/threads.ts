@@ -10,6 +10,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
+/** Agent 分类类型 */
+export type AgentType = 'agent' | 'orchestrator' | 'swarm' | 'quality-loop' | 'discussion';
+
 /** Thread 索引条目（轻量版） */
 export interface ThreadEntry {
   id: string;
@@ -18,10 +21,18 @@ export interface ThreadEntry {
   status: 'active' | 'archived' | 'deleted';
   runStatus: 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
   agentMode: string;
-  agentType: string;
+  agentType: AgentType;
   messageCount: number;
   createdAt: string;
   updatedAt: string;
+  /** 工程目录（用户指定的输出目标路径） */
+  projectDir?: string;
+  /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
+  overrideModel?: string;
+  /** Agent Home 路径 */
+  agentHomePath?: string;
+  /** Workspace 路径 */
+  workspacePath?: string;
 }
 
 export const useThreadsStore = defineStore('threads', () => {
@@ -76,6 +87,49 @@ export const useThreadsStore = defineStore('threads', () => {
     activeThreadId.value = null;
   }
 
+  /**
+   * 更新 Thread 属性
+   */
+  async function updateThread(
+    threadId: string,
+    updates: {
+      title?: string;
+      messageCount?: number;
+      status?: string;
+      projectDir?: string | null;
+      overrideModel?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
+      const url = `${baseUrl}/threads/${threadId}`;
+
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to update thread: ${res.statusText}`);
+      }
+
+      // 更新本地状态
+      const thread = threads.value.find((t) => t.id === threadId);
+      if (thread) {
+        Object.assign(thread, updates);
+      }
+
+      console.log(`[ThreadsStore] Thread ${threadId} 更新成功`);
+      return true;
+    } catch (err) {
+      console.error('[ThreadsStore] 更新失败:', err);
+      return false;
+    }
+  }
+
   return {
     threads,
     loading,
@@ -84,6 +138,7 @@ export const useThreadsStore = defineStore('threads', () => {
     threadCount,
     fetchThreads,
     selectThread,
-    clearSelection
+    clearSelection,
+    updateThread
   };
 });
