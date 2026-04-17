@@ -59,10 +59,11 @@ watch(
     const msgs = messages.value;
     if (msgs.length === 0) return 0;
     const last = msgs[msgs.length - 1];
+    if (!last) return 0;
     const blockCount = last.blocks?.length ?? 0;
-    const lastBlock = blockCount > 0 ? last.blocks[blockCount - 1] : null;
-    const lastLen = lastBlock ? ('text' in lastBlock ? lastBlock.text.length : 0) : 0;
-    return last.content.length + blockCount * 1000 + lastLen;
+    const lastBlock = blockCount > 0 && last.blocks ? last.blocks[blockCount - 1] : null;
+    const lastLen = lastBlock && 'text' in lastBlock ? lastBlock.text?.length ?? 0 : 0;
+    return (last.content?.length ?? 0) + blockCount * 1000 + lastLen;
   },
   () => scrollToBottom()
 );
