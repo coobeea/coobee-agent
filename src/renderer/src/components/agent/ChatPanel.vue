@@ -79,7 +79,7 @@ async function handleSend(data: { text: string; files?: { path: string; name: st
   // 发送到后端（后端会推送流式事件）
   try {
     await request('chat.sendMessage', {
-      sessionId: props.threadId,
+      threadId: props.threadId,
       message: data.text
     });
   } catch (error) {
@@ -91,7 +91,7 @@ async function handleStop(): Promise<void> {
   console.log('[ChatPanel] handleStop called for thread:', props.threadId);
   try {
     await request('chat.abortMessage', {
-      sessionId: props.threadId
+      threadId: props.threadId
     });
   } catch (error) {
     console.error('[ChatPanel] abortMessage error:', error);

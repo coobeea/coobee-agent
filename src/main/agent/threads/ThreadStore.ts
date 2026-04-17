@@ -376,6 +376,12 @@ export interface ThreadStatusEvent {
 
 /** 从完整定义提取索引条目 */
 function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndexEntry {
+  // 修正旧的 homes 路径到新的 agents 路径
+  let agentHomePath = def.agentHomePath;
+  if (agentHomePath && agentHomePath.includes('/homes/')) {
+    agentHomePath = agentHomePath.replace('/homes/', '/agents/');
+  }
+
   return {
     id: def.id,
     title: def.title,
@@ -387,7 +393,7 @@ function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndex
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
     workspacePath: path.join(workspacesDir, def.id),
-    agentHomePath: def.agentHomePath,
+    agentHomePath,
     projectDir: def.projectDir,
     overrideModel: def.overrideModel
   };
