@@ -58,6 +58,16 @@ docs/
   - 状态：✅ **迁移指南**
   - 内容：从 coobee-ai 项目迁移已实现的 WebSocket RPC 系统到 coobee-agent，包含完整的代码对比、迁移步骤和测试计划
 
+- **08-chat-message-system-architecture.md** - 聊天消息展示系统架构设计
+  - 创建时间：2026-04-17
+  - 状态：✅ **已实施**
+  - 内容：完整的组件化聊天消息展示系统，支持流式渲染、多种内容块类型（文本、思考、工具调用）、状态管理和 WebSocket 实时订阅
+
+- **09-chat-frontend-backend-integration.md** - 聊天系统前后端对接文档
+  - 创建时间：2026-04-17
+  - 状态：✅ **已实施**
+  - 内容：完成聊天消息展示系统的前后端对接，实现实时流式消息推送、历史消息加载、用户消息发送和完整的消息渲染
+
 ### 02-guides/ - 开发指南
 
 开发指南和使用说明，帮助开发者快速上手。
@@ -183,6 +193,8 @@ docs/
 - [05-chat-api-data-flow.md](01-designs/05-chat-api-data-flow.md) - ✅ 对话 API 数据流
 - [06-websocket-agent-communication.md](01-designs/06-websocket-agent-communication.md) - 📝 WebSocket RPC 通讯
 - [07-websocket-rpc-migration.md](01-designs/07-websocket-rpc-migration.md) - ✅ 从 coobee-ai 迁移
+- [08-chat-message-system-architecture.md](01-designs/08-chat-message-system-architecture.md) - ✅ 消息展示系统架构
+- [09-chat-frontend-backend-integration.md](01-designs/09-chat-frontend-backend-integration.md) - ✅ 聊天系统前后端对接
 
 ### 按状态查找
 
@@ -190,6 +202,8 @@ docs/
 - [03-gateway-auto-scan-design.md](01-designs/03-gateway-auto-scan-design.md)
 - [05-chat-api-data-flow.md](01-designs/05-chat-api-data-flow.md)
 - [07-websocket-rpc-migration.md](01-designs/07-websocket-rpc-migration.md)
+- [08-chat-message-system-architecture.md](01-designs/08-chat-message-system-architecture.md)
+- [09-chat-frontend-backend-integration.md](01-designs/09-chat-frontend-backend-integration.md)
 - [01-provider-config-migration.md](02-guides/01-provider-config-migration.md)
 - [02-config-usage.md](02-guides/02-config-usage.md)
 
@@ -205,10 +219,10 @@ docs/
 
 ## 📊 文档统计
 
-- **总文档数**：10
-- **设计文档**：7
+- **总文档数**：12
+- **设计文档**：9
 - **开发指南**：3
-- **当前有效**：8
+- **当前有效**：10
 - **历史参考**：2
 
 ---
@@ -235,4 +249,4 @@ git commit -m "docs: add 01-designs/04-config-management-design"
 
 ---
 
-最后更新：2026-04-17
+最后更新：2026-04-17 (新增：聊天消息展示系统架构、前后端对接)

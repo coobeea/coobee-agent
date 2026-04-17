@@ -1,14 +1,23 @@
 <script setup lang="ts">
 /**
- * AgentChatPanel — 智能体对话测试面板（右侧）
+ * AgentChatPanel — 智能体对话面板（集成完整消息系统）
  *
- * 包含：
- *   - 智能体信息（上）
- *   - 对话测试区（下）
+ * 功能：
+ *   1. 集成 useStreamHandler 处理消息渲染
+ *   2. 集成 useStreamWs 订阅流式消息
+ *   3. 使用 ChatMessages 组件展示消息
+ *   4. 支持发送消息到 Gateway RPC
  */
 
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAgentsStore } from '@/stores/agents';
+import { useChatStore } from '@/stores/chat';
+import { useStreamHandler } from '@/composables/useStreamHandler';
+import { streamSubscribe, streamUnsubscribe } from '@/composables/useStreamWs';
+import { useGateway } from '@/composables/useGateway';
+import type { StreamMessage } from '@shared/stream-protocol';
+import ChatMessages from '@/components/chat/ChatMessages.vue';
+import { nanoid } from 'nanoid';
 
 const props = defineProps<{
   agentId: string;
@@ -17,55 +26,193 @@ const props = defineProps<{
 const isCollapsed = defineModel<boolean>('collapsed', { default: false });
 
 const agentsStore = useAgentsStore();
+const chatStore = useChatStore();
+const { request } = useGateway();
 
-// 获取当前智能体
+/** 当前智能体 */
 const currentAgent = computed(() => {
-  return agentsStore.agents.find(a => a.id === props.agentId);
+  return agentsStore.agents.find((a) => a.id === props.agentId);
 });
 
-// 对话输入
-const chatInput = ref('');
-const messages = ref<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
-const isSending = ref(false);
+/** Thread ID（暂时使用 agentId，后续可改为独立 thread 管理） */
+const threadId = computed(() => props.agentId);
 
-// 发送消息
+/** 输入框内容 */
+const chatInput = ref('');
+
+/** 流状态 */
+const streamState = computed(() => chatStore.getState(threadId.value));
+
+/** 使用 useStreamHandler 管理消息 */
+const { messages, isStreaming, handleStreamMessage, addUserMessage, resetAll } = useStreamHandler({
+  idPrefix: 'chat',
+  maxMessages: 500
+});
+
+/** 当前订阅的 sessionId */
+let subscribedSessionId: string | null = null;
+
+/**
+ * 处理流式消息并同步 Store 状态
+ */
+function handleStreamMessageWithSync(msg: StreamMessage): void {
+  // 更新本地消息
+  handleStreamMessage(msg);
+
+  // 同步 Store 的 isStreaming 状态
+  if (msg.type === 'run:start') {
+    chatStore.setState(threadId.value, true, msg.sequence);
+  } else if (msg.type === 'run:done' || msg.type === 'run:error') {
+    chatStore.setState(threadId.value, false, msg.sequence);
+  }
+}
+
+/**
+ * 加载历史消息
+ */
+async function loadHistory(): Promise<void> {
+  try {
+    const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
+    const res = await fetch(`${baseUrl}/threads/${threadId.value}/history`);
+
+    if (!res.ok) {
+      console.warn('[AgentChatPanel] 历史消息加载失败:', res.statusText);
+      return;
+    }
+
+    const data = (await res.json()) as {
+      events: { ts: string; seq: number; type: string; content: string; data?: Record<string, unknown> }[];
+      userMessages: { content: string; timestamp: number }[];
+    };
+
+    // 按序号处理历史事件
+    let userIdx = 0;
+
+    for (const evt of data.events) {
+      // 转换为 StreamMessage 格式
+      const streamMsg: StreamMessage = {
+        id: `hist-${evt.seq}`,
+        sessionId: threadId.value,
+        sequence: evt.seq,
+        timestamp: new Date(evt.ts).getTime(),
+        type: evt.type as string,
+        content: evt.content,
+        data: evt.data,
+        source: { type: 'agent', id: currentAgent.value?.id || '', name: currentAgent.value?.name || '' }
+      };
+
+      // 在 run:start 之前插入对应的用户消息
+      if (evt.type === 'run:start' && userIdx < data.userMessages.length) {
+        addUserMessage(data.userMessages[userIdx].content);
+        userIdx++;
+      }
+
+      // 处理历史事件
+      handleStreamMessage(streamMsg);
+    }
+
+    console.log(`[AgentChatPanel] 已加载 ${data.events.length} 条历史事件, ${data.userMessages.length} 条用户消息`);
+  } catch (error) {
+    console.error('[AgentChatPanel] 历史消息加载错误:', error);
+  }
+}
+
+/**
+ * 订阅流式消息
+ */
+function ensureSubscription(): void {
+  if (subscribedSessionId !== threadId.value) {
+    if (subscribedSessionId) {
+      streamUnsubscribe(subscribedSessionId, handleStreamMessageWithSync);
+    }
+    streamSubscribe(threadId.value, handleStreamMessageWithSync);
+    subscribedSessionId = threadId.value;
+  }
+}
+
+/**
+ * 取消订阅
+ */
+function unsubscribe(): void {
+  if (subscribedSessionId) {
+    streamUnsubscribe(subscribedSessionId, handleStreamMessageWithSync);
+    subscribedSessionId = null;
+  }
+}
+
+/**
+ * 发送消息
+ */
 async function sendMessage(): Promise<void> {
-  if (!chatInput.value.trim() || isSending.value) return;
-  
+  if (!chatInput.value.trim() || streamState.value.isStreaming) return;
+
   const userMessage = chatInput.value.trim();
   chatInput.value = '';
-  
-  // 添加用户消息
-  messages.value.push({
-    role: 'user',
-    content: userMessage
-  });
-  
-  isSending.value = true;
-  
-  // TODO: 这里需要调用实际的对话 API
-  // 暂时模拟一个简单的响应
-  setTimeout(() => {
-    messages.value.push({
-      role: 'assistant',
-      content: '这是一个测试响应。实际的对话功能需要接入后端 API。'
+
+  try {
+    // 添加用户消息到 UI
+    addUserMessage(userMessage);
+
+    // 调用 Gateway RPC 发送消息
+    // 后端参数：threadId (必需), message (必需)
+    await request('chat.sendMessage', {
+      threadId: threadId.value,
+      message: userMessage
     });
-    isSending.value = false;
-  }, 1000);
+  } catch (error) {
+    console.error('[AgentChatPanel] sendMessage error:', error);
+    
+    // 显示错误提示
+    handleStreamMessage({
+      id: `error-${nanoid(8)}`,
+      sessionId: threadId.value,
+      sequence: 0,
+      type: 'run:error',
+      content: error instanceof Error ? error.message : '发送失败',
+      timestamp: Date.now(),
+      source: { type: 'agent', id: props.agentId, name: '' }
+    });
+  }
 }
 
-// 清空对话
+/**
+ * 清空对话
+ */
 function clearMessages(): void {
-  messages.value = [];
+  resetAll();
+  chatStore.resetState(threadId.value);
 }
 
-// 处理回车发送
+/**
+ * 处理回车发送
+ */
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
     event.preventDefault();
     sendMessage();
   }
 }
+
+// 监听 agentId 变化，重新订阅
+watch(
+  () => props.agentId,
+  async () => {
+    resetAll();
+    await loadHistory();
+    ensureSubscription();
+  }
+);
+
+// 组件挂载时加载历史并订阅
+onMounted(async () => {
+  await loadHistory();
+  ensureSubscription();
+});
+
+// 组件卸载时取消订阅
+onUnmounted(() => {
+  unsubscribe();
+});
 </script>
 
 <template>
@@ -80,7 +227,9 @@ function handleKeydown(event: KeyboardEvent): void {
         </div>
         <div class="agent-details">
           <h3 class="agent-name">{{ currentAgent?.name }}</h3>
-          <p class="agent-model" v-if="currentAgent?.model">
+          <p
+            v-if="currentAgent?.model"
+            class="agent-model">
             <span class="i-carbon-machine-learning-model inline-block h-3 w-3" />
             <span>{{ currentAgent.model }}</span>
           </p>
@@ -94,10 +243,10 @@ function handleKeydown(event: KeyboardEvent): void {
       </div>
     </div>
 
-    <!-- 对话测试区 -->
+    <!-- 对话容器 -->
     <div class="chat-container">
       <div class="chat-header">
-        <span class="chat-title">对话测试</span>
+        <span class="chat-title">对话</span>
         <button
           v-if="messages.length > 0"
           class="clear-btn"
@@ -107,55 +256,22 @@ function handleKeydown(event: KeyboardEvent): void {
         </button>
       </div>
 
-      <!-- 消息列表 -->
-      <div class="messages-container">
-        <div v-if="messages.length === 0" class="messages-empty">
-          <span class="i-carbon-chat inline-block h-8 w-8 opacity-10" />
-          <p>开始与智能体对话测试</p>
-        </div>
-        
-        <div
-          v-for="(message, index) in messages"
-          :key="index"
-          class="message"
-          :class="message.role">
-          <div class="message-avatar">
-            <span
-              v-if="message.role === 'user'"
-              class="i-carbon-user inline-block h-3.5 w-3.5" />
-            <span
-              v-else
-              class="i-carbon-bot inline-block h-3.5 w-3.5" />
-          </div>
-          <div class="message-content">
-            {{ message.content }}
-          </div>
-        </div>
-
-        <!-- 加载中 -->
-        <div v-if="isSending" class="message assistant loading">
-          <div class="message-avatar">
-            <span class="i-carbon-bot inline-block h-3.5 w-3.5" />
-          </div>
-          <div class="message-content">
-            <span class="i-carbon-renew inline-block h-3 w-3 animate-spin" />
-            <span>思考中...</span>
-          </div>
-        </div>
-      </div>
+      <!-- 消息列表（使用 ChatMessages 组件） -->
+      <ChatMessages
+        :messages="messages"
+        :is-streaming="isStreaming" />
 
       <!-- 输入区 -->
       <div class="chat-input-container">
         <textarea
           v-model="chatInput"
           class="chat-input"
-          placeholder="输入消息测试智能体..."
-          :disabled="isSending"
-          @keydown="handleKeydown"
-        />
+          placeholder="输入消息..."
+          :disabled="streamState.isStreaming"
+          @keydown="handleKeydown" />
         <button
           class="send-btn"
-          :disabled="!chatInput.trim() || isSending"
+          :disabled="!chatInput.trim() || streamState.isStreaming"
           @click="sendMessage">
           <span class="i-carbon-send-alt inline-block h-4 w-4" />
         </button>
@@ -280,92 +396,6 @@ function handleKeydown(event: KeyboardEvent): void {
   color: hsl(var(--error));
 }
 
-/* 消息列表 */
-.messages-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.messages-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex: 1;
-  color: hsl(var(--muted-foreground) / 0.4);
-  font-size: 12px;
-  text-align: center;
-}
-
-.message {
-  display: flex;
-  gap: 10px;
-  animation: messageIn 0.2s ease;
-}
-
-@keyframes messageIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.message-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  flex-shrink: 0;
-}
-
-.message.user .message-avatar {
-  background: hsl(var(--muted) / 0.4);
-  color: hsl(var(--foreground) / 0.6);
-}
-
-.message.assistant .message-avatar {
-  background: hsl(var(--primary) / 0.12);
-  color: hsl(var(--primary) / 0.7);
-}
-
-.message-content {
-  flex: 1;
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.6;
-  word-break: break-word;
-}
-
-.message.user .message-content {
-  background: hsl(var(--primary) / 0.08);
-  color: hsl(var(--foreground) / 0.95);
-}
-
-.message.assistant .message-content {
-  background: hsl(var(--muted) / 0.3);
-  color: hsl(var(--foreground) / 0.92);
-}
-
-.message.loading .message-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: hsl(var(--muted-foreground) / 0.5);
-  font-size: 12px;
-}
-
 /* 输入区 */
 .chat-input-container {
   display: flex;
@@ -423,19 +453,5 @@ function handleKeydown(event: KeyboardEvent): void {
 .send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-/* 滚动条 */
-.messages-container::-webkit-scrollbar {
-  width: 4px;
-}
-
-.messages-container::-webkit-scrollbar-thumb {
-  background: hsl(var(--foreground) / 0.1);
-  border-radius: 4px;
-}
-
-.messages-container::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--foreground) / 0.2);
 }
 </style>
