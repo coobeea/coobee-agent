@@ -28,14 +28,13 @@ const terminalCollapsed = ref(true);
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
 
 const projectPath = ref<string | null>(null);
-const workspaceReady = computed(() => projectPath.value !== null);
 
 // 任务会话ID
 const threadId = computed(() => route.params.id as string);
 
 // 当前 Thread
 const currentThread = computed(() => {
-  return threadsStore.threads.find(t => t.id === threadId.value);
+  return threadsStore.threads.find((t) => t.id === threadId.value);
 });
 
 // 目录切换：智能体目录 / 任务工作目录
@@ -112,19 +111,23 @@ watch(threadId, (newId) => {
 </script>
 
 <template>
-  <div class="thread-view">
+  <div class="flex h-full w-full flex-col bg-background">
     <!-- Thread 不存在 -->
-    <div v-if="!currentThread && threadsStore.threads.length > 0" class="not-found">
-      <div class="not-found-card">
-        <div class="not-found-icon">
+    <div
+      v-if="!currentThread && threadsStore.threads.length > 0"
+      class="flex flex-1 items-center justify-center bg-background">
+      <div class="flex max-w-[360px] flex-col items-center px-10 text-center">
+        <div class="mb-6 flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-error/10 text-error/50">
           <span class="i-carbon-warning-alt inline-block h-8 w-8" />
         </div>
-        <h2 class="not-found-title">任务不存在</h2>
-        <p class="not-found-desc">
+        <h2 class="mb-2 text-[17px] font-semibold text-foreground">任务不存在</h2>
+        <p class="mb-7 text-[13px] leading-7 text-muted-foreground/75">
           未找到任务 ID: {{ threadId }}<br />
           可能已被删除或不存在
         </p>
-        <button class="not-found-btn" @click="goBackToAgents">
+        <button
+          class="inline-flex h-9 items-center gap-2 rounded-[9px] bg-primary px-5 text-[13px] font-medium text-primary-foreground transition-all hover:bg-primary-hover hover:shadow-[0_2px_12px_hsl(var(--primary)/0.2)]"
+          @click="goBackToAgents">
           <span class="i-carbon-arrow-left inline-block h-4 w-4" />
           <span>返回列表</span>
         </button>
@@ -136,22 +139,26 @@ watch(threadId, (newId) => {
       <!-- 左侧折叠时的展开条 -->
       <div
         v-if="leftCollapsed"
-        class="expand-bar left"
+        class="flex w-6 flex-shrink-0 cursor-pointer items-center justify-center border-r border-border/40 bg-surface/50 text-muted-foreground/30 transition-all hover:bg-surface hover:text-muted-foreground/60"
         title="展开文件面板"
         @click="leftCollapsed = false">
         <span class="i-carbon-chevron-right inline-block h-3 w-3"></span>
       </div>
-      <ProjectPanel 
+      <ProjectPanel
         v-if="!leftCollapsed"
-        v-model:collapsed="leftCollapsed" 
-        v-model:project-path="projectPath" 
+        v-model:collapsed="leftCollapsed"
+        v-model:project-path="projectPath"
         :thread-id="threadId" />
-      
-      <div class="middle-area">
+
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkbenchPanel />
         <!-- 终端面板（可折叠） -->
-        <div class="terminal-section" :class="{ collapsed: terminalCollapsed }">
-          <button class="terminal-toggle" @click="terminalCollapsed = !terminalCollapsed">
+        <div
+          class="flex min-h-0 flex-shrink-0 flex-col transition-[height] duration-150"
+          :class="terminalCollapsed ? 'h-auto' : 'h-[200px]'">
+          <button
+            class="flex h-6 w-full flex-shrink-0 items-center gap-1 border-t border-border/30 bg-muted/20 px-2.5 text-[11px] text-muted-foreground/50 transition-all hover:bg-muted/40 hover:text-foreground/70"
+            @click="terminalCollapsed = !terminalCollapsed">
             <span
               class="inline-block h-3 w-3 transition-transform"
               :class="terminalCollapsed ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'">
@@ -161,155 +168,11 @@ watch(threadId, (newId) => {
           <TerminalPanel v-if="!terminalCollapsed" :thread-id="threadId" />
         </div>
       </div>
-      
-      <div class="right-area">
+
+      <div class="flex w-[400px] flex-shrink-0 min-h-0 flex-col">
         <ContextPanel :thread-id="threadId" />
         <ChatPanel ref="chatPanelRef" :thread-id="threadId" />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.thread-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  background: hsl(var(--background));
-}
-
-.middle-area {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-.terminal-section {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  height: 200px;
-  min-height: 0;
-  transition: height 0.15s ease;
-}
-
-.terminal-section.collapsed {
-  height: auto;
-}
-
-.terminal-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 10px;
-  border-top: 1px solid hsl(var(--border) / 0.3);
-  background: hsl(var(--muted) / 0.2);
-  color: hsl(var(--muted-foreground) / 0.5);
-  font-size: 11px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.1s ease;
-  width: 100%;
-}
-
-.terminal-toggle:hover {
-  background: hsl(var(--muted) / 0.4);
-  color: hsl(var(--foreground) / 0.7);
-}
-
-.right-area {
-  display: flex;
-  flex-direction: column;
-  width: 400px;
-  flex-shrink: 0;
-  min-height: 0;
-}
-
-.expand-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  flex-shrink: 0;
-  cursor: pointer;
-  background: hsl(var(--surface) / 0.5);
-  color: hsl(var(--muted-foreground) / 0.3);
-  transition: all 0.15s ease;
-}
-
-.expand-bar:hover {
-  background: hsl(var(--surface));
-  color: hsl(var(--muted-foreground) / 0.6);
-}
-
-.expand-bar.left {
-  border-right: 1px solid hsl(var(--border) / 0.4);
-}
-
-/* 未找到页面 */
-.not-found {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  background: hsl(var(--background));
-}
-
-.not-found-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  max-width: 360px;
-  padding: 40px;
-}
-
-.not-found-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 20px;
-  background: hsl(var(--error) / 0.08);
-  color: hsl(var(--error) / 0.5);
-  margin-bottom: 24px;
-}
-
-.not-found-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: hsl(var(--foreground));
-  margin-bottom: 8px;
-}
-
-.not-found-desc {
-  font-size: 13px;
-  line-height: 1.7;
-  color: hsl(var(--muted-foreground) / 0.75);
-  margin-bottom: 28px;
-}
-
-.not-found-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 20px;
-  border-radius: 9px;
-  font-size: 13px;
-  font-weight: 500;
-  color: hsl(var(--primary-foreground));
-  background: hsl(var(--primary));
-  transition: all 0.15s ease;
-}
-
-.not-found-btn:hover {
-  background: hsl(var(--primary-hover));
-  box-shadow: 0 2px 12px hsl(var(--primary) / 0.2);
-}
-</style>

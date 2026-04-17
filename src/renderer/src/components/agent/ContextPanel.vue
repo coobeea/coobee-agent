@@ -37,23 +37,6 @@ const currentAgent = computed<AgentEntry | null>(() => {
 
 const agentType = computed<AgentType>(() => currentThread.value?.agentType ?? 'agent');
 
-const agentTypeLabel = computed(() => {
-  switch (agentType.value) {
-    case 'agent':
-      return '自由模式';
-    case 'orchestrator':
-      return '编排模式';
-    case 'swarm':
-      return '群体模式';
-    case 'quality-loop':
-      return '质量闭环';
-    case 'discussion':
-      return '讨论模式';
-    default:
-      return '自由模式';
-  }
-});
-
 const agentTypeIcon = computed(() => {
   switch (agentType.value) {
     case 'agent':
@@ -173,7 +156,6 @@ onUnmounted(() => {
     <div class="agent-info">
       <span :class="agentTypeIcon" class="agent-icon inline-block h-3 w-3" />
       <span class="agent-name">{{ currentAgent?.name ?? '默认 Agent' }}</span>
-      <span class="agent-mode">{{ agentTypeLabel }}</span>
     </div>
 
     <!-- 右：模型选择器 -->
