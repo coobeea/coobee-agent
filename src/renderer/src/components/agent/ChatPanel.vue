@@ -33,7 +33,6 @@ const { messages, isStreaming, execOutputs, handleStreamMessage, addUserMessage,
 // ==================== Refs ====================
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null);
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
-const isCollapsed = defineModel<boolean>('collapsed', { default: false });
 
 // 提供 execOutputs 给子组件（如 TerminalPanel）
 provide('execOutputs', execOutputs);
@@ -236,12 +235,7 @@ defineExpose({
 </script>
 
 <template>
-  <aside v-show="!isCollapsed" class="chat-panel">
-    <!-- 折叠按钮 -->
-    <button class="collapse-btn" title="折叠面板" @click="isCollapsed = true">
-      <span class="i-carbon-chevron-right inline-block h-3 w-3"></span>
-    </button>
-
+  <aside class="chat-panel">
     <!-- 消息区域 -->
     <ChatMessages
       ref="chatMessagesRef"
@@ -266,27 +260,5 @@ defineExpose({
   min-height: 0;
   background: hsl(var(--background));
   border-left: 1px solid hsl(var(--border) / 0.4);
-  position: relative;
-}
-
-.collapse-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  color: hsl(var(--muted-foreground) / 0.5);
-  transition: all 0.15s ease;
-  cursor: pointer;
-}
-
-.collapse-btn:hover {
-  background: hsl(var(--foreground) / 0.06);
-  color: hsl(var(--foreground) / 0.7);
 }
 </style>

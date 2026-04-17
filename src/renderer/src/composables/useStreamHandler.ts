@@ -59,6 +59,7 @@ export function useStreamHandler(options: UseStreamHandlerOptions = {}) {
     currentAssistantMsg = {
       id: `${idPrefix}-assistant-${nanoid(8)}`,
       role: 'assistant',
+      content: '',
       blocks: [],
       status: 'streaming',
       timestamp: Date.now()

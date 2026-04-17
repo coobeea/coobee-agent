@@ -165,7 +165,7 @@ watch(threadId, (newId) => {
       
       <div class="right-area">
         <ContextPanel :thread-id="threadId" />
-        <ChatPanel ref="chatPanelRef" v-model:collapsed="rightCollapsed" :thread-id="threadId" />
+        <ChatPanel ref="chatPanelRef" :thread-id="threadId" />
       </div>
     </div>
   </div>
