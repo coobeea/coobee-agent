@@ -5,7 +5,7 @@
  */
 
 import type { MethodGroup } from '@main/common/gateway/types';
-import configManager from '@main/common/config';
+import { config as configManager } from '@main/common/config';
 import { createLogger } from '@main/common/logger';
 
 const log = createLogger('config-methods');

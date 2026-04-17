@@ -110,7 +110,9 @@ export function registerThreadRoutes(router: Router): void {
       }
 
       // 提取用户消息（从 session 文件）
+      log.debug(`[GET /threads/${threadId}/history] workspacePath: ${workspacePath}, sessionId: ${thread.sessionId}`);
       const userMessages = await extractUserMessages(workspacePath, thread.sessionId);
+      log.debug(`[GET /threads/${threadId}/history] extracted ${userMessages.length} user messages`);
 
       ctx.body = {
         events,
@@ -181,12 +183,16 @@ async function extractUserMessages(
 ): Promise<{ content: string; timestamp: number }[]> {
   const sessionsDir = path.join(workspacePath, '.runtime', 'sessions', sessionId);
 
+  log.debug(`[extractUserMessages] sessionsDir: ${sessionsDir}, exists: ${await fs.pathExists(sessionsDir)}`);
+
   if (!(await fs.pathExists(sessionsDir))) {
     return [];
   }
 
   const files = await fs.readdir(sessionsDir);
   const jsonlFiles = files.filter((f) => f.endsWith('.jsonl'));
+  
+  log.debug(`[extractUserMessages] found ${jsonlFiles.length} session files`);
 
   const userMessages: { content: string; timestamp: number }[] = [];
 
@@ -200,12 +206,21 @@ async function extractUserMessages(
       try {
         const event = JSON.parse(line) as Record<string, unknown>;
 
-        // 查找 user-input 类型的事件
-        if (event.type === 'user-input' && typeof event.content === 'string') {
-          userMessages.push({
-            content: event.content,
-            timestamp: (event.timestamp as number) || Date.now()
-          });
+        // 查找用户消息：type === 'message' 且 message.role === 'user'
+        if (event.type === 'message') {
+          const message = event.message as Record<string, unknown> | undefined;
+          if (message?.role === 'user') {
+            // 提取文本内容：message.content[0].text
+            const content = message.content as Array<Record<string, unknown>> | undefined;
+            const text = content?.[0]?.text as string | undefined;
+            
+            if (text) {
+              userMessages.push({
+                content: text,
+                timestamp: (message.timestamp as number) || Date.now()
+              });
+            }
+          }
         }
       } catch {
         // 忽略解析错误

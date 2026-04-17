@@ -83,10 +83,10 @@ const refreshThreads = (): void => {
 
 const updateActiveState = (): void => {
   const path = route.path;
-  if (path.startsWith('/agent-workspace/')) {
-    // 在工作区时，清空菜单高亮
+  if (path.startsWith('/thread/') || path.startsWith('/agent-workspace/')) {
+    // 任务详情页：高亮当前 thread
     activeMenuId.value = '';
-    // 这里暂不高亮 thread（需要从路由获取 threadId）
+    activeThreadId.value = route.params.id as string;
   } else if (path.startsWith('/agents')) {
     activeMenuId.value = 'agents';
     activeThreadId.value = null;
@@ -216,45 +216,67 @@ onMounted(() => {
   border-radius: 6px;
   color: hsl(var(--muted-foreground) / 0.6);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
 }
 
 .refresh-btn:hover {
   background: hsl(var(--foreground) / 0.08);
   color: hsl(var(--foreground));
+  transform: scale(1.05);
+}
+
+.refresh-btn:active {
+  transform: scale(0.95);
 }
 
 .session-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 12px;
+  padding: 6px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .session-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  padding: 10px 14px;
-  border-radius: 10px;
-  color: hsl(var(--foreground) / 0.75);
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: hsl(var(--foreground) / 0.8);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border: 1px solid hsl(var(--border));
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+}
+
+.session-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: hsl(var(--primary));
+  border-radius: 0 2px 2px 0;
+  transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .session-item:hover {
-  background: hsl(var(--foreground) / 0.04);
-  border-color: hsl(var(--border));
+  background: hsl(var(--foreground) / 0.06);
+  color: hsl(var(--foreground));
 }
 
 .session-item.active {
-  background: hsl(var(--primary) / 0.15);
+  background: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
-  border-color: hsl(var(--border));
-  box-shadow: 0 1px 3px hsl(var(--primary) / 0.1);
+}
+
+.session-item.active::before {
+  height: 20px;
 }
 
 /* view all button */
@@ -271,14 +293,13 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 500;
   color: hsl(var(--muted-foreground) / 0.6);
-  transition: all 0.15s ease;
-  border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
 }
 
 .view-all-btn:hover {
-  background: hsl(var(--foreground) / 0.04);
+  background: hsl(var(--foreground) / 0.06);
   color: hsl(var(--foreground) / 0.8);
-  border-color: hsl(var(--border) / 0.4);
 }
 
 .session-info {
@@ -304,20 +325,26 @@ onMounted(() => {
   font-weight: 500;
   flex: 1;
   min-width: 0;
+  transition: color 0.2s ease;
+}
+
+.session-item.active .session-title {
+  font-weight: 600;
 }
 
 .session-meta {
   font-size: 11px;
-  color: hsl(var(--muted-foreground) / 0.5);
+  color: hsl(var(--muted-foreground) / 0.55);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  transition: color 0.2s ease;
 }
 
 .session-item.active .session-meta {
-  color: hsl(var(--primary) / 0.5);
+  color: hsl(var(--primary) / 0.65);
 }
 
 /* 空态 */
@@ -343,27 +370,24 @@ onMounted(() => {
   gap: 12px;
   width: 100%;
   height: 40px;
-  padding: 0 14px;
-  border-radius: 10px;
+  padding: 0 12px;
+  border-radius: 8px;
   color: hsl(var(--muted-foreground));
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border: 1px solid hsl(var(--border));
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
 }
 
 .nav-btn:hover {
-  background: hsl(var(--foreground) / 0.05);
+  background: hsl(var(--foreground) / 0.06);
   color: hsl(var(--foreground));
-  border-color: hsl(var(--border));
 }
 
 .nav-btn.active {
-  background: hsl(var(--primary) / 0.15);
+  background: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
-  border-color: hsl(var(--border));
-  box-shadow: 0 1px 3px hsl(var(--primary) / 0.1);
 }
 
 .nav-btn.active .icon-sm {
