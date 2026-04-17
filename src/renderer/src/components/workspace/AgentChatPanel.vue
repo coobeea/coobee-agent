@@ -15,6 +15,7 @@ import { useChatStore } from '@/stores/chat';
 import { useStreamHandler } from '@/composables/useStreamHandler';
 import { streamSubscribe, streamUnsubscribe } from '@/composables/useStreamWs';
 import { useGateway } from '@/composables/useGateway';
+import { gateway } from '@/plugins/gatewaySetup';
 import type { StreamMessage } from '@shared/stream-protocol';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
 import { nanoid } from 'nanoid';
@@ -224,23 +225,64 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
+/**
+ * 初始化整个聊天流程（等待连接 + 创建 Thread + 加载历史 + 订阅）
+ */
+async function initializeChatFlow(): Promise<void> {
+  // 1. 等待 WebSocket 连接成功
+  if (gateway.connectionState.value !== 'connected') {
+    console.log('[AgentChatPanel] 等待 WebSocket 连接...');
+    
+    await new Promise<void>((resolve) => {
+      if (gateway.connectionState.value === 'connected') {
+        resolve();
+        return;
+      }
+      
+      const checkConnection = (): void => {
+        if (gateway.connectionState.value === 'connected') {
+          cleanup();
+          resolve();
+        }
+      };
+      
+      const unwatch = watch(() => gateway.connectionState.value, checkConnection);
+      const timeout = setTimeout(() => {
+        cleanup();
+        console.warn('[AgentChatPanel] WebSocket 连接超时');
+        resolve();
+      }, 10000);
+      
+      function cleanup(): void {
+        unwatch();
+        clearTimeout(timeout);
+      }
+    });
+  }
+  
+  // 2. 创建 Thread
+  await initializeThread();
+  
+  // 3. 加载历史消息
+  await loadHistory();
+  
+  // 4. 订阅流式消息
+  ensureSubscription();
+}
+
 // 监听 agentId 变化，重新初始化
 watch(
   () => props.agentId,
   async () => {
     resetAll();
     threadId.value = null;
-    await initializeThread();
-    await loadHistory();
-    ensureSubscription();
+    await initializeChatFlow();
   }
 );
 
 // 组件挂载时初始化
 onMounted(async () => {
-  await initializeThread();
-  await loadHistory();
-  ensureSubscription();
+  await initializeChatFlow();
 });
 
 // 组件卸载时取消订阅
