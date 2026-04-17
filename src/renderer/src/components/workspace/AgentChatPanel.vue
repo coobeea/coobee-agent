@@ -229,18 +229,23 @@ function handleKeydown(event: KeyboardEvent): void {
  * 初始化整个聊天流程（等待连接 + 创建 Thread + 加载历史 + 订阅）
  */
 async function initializeChatFlow(): Promise<void> {
+  console.log('[AgentChatPanel] 开始初始化聊天流程...');
+  
   // 1. 等待 WebSocket 连接成功
   if (gateway.connectionState.value !== 'connected') {
-    console.log('[AgentChatPanel] 等待 WebSocket 连接...');
+    console.log('[AgentChatPanel] 等待 WebSocket 连接...当前状态:', gateway.connectionState.value);
     
     await new Promise<void>((resolve) => {
       if (gateway.connectionState.value === 'connected') {
+        console.log('[AgentChatPanel] WebSocket 已连接');
         resolve();
         return;
       }
       
       const checkConnection = (): void => {
+        console.log('[AgentChatPanel] WebSocket 状态变化:', gateway.connectionState.value);
         if (gateway.connectionState.value === 'connected') {
+          console.log('[AgentChatPanel] WebSocket 连接成功！');
           cleanup();
           resolve();
         }
@@ -249,7 +254,7 @@ async function initializeChatFlow(): Promise<void> {
       const unwatch = watch(() => gateway.connectionState.value, checkConnection);
       const timeout = setTimeout(() => {
         cleanup();
-        console.warn('[AgentChatPanel] WebSocket 连接超时');
+        console.warn('[AgentChatPanel] WebSocket 连接超时，继续初始化');
         resolve();
       }, 10000);
       
@@ -258,16 +263,23 @@ async function initializeChatFlow(): Promise<void> {
         clearTimeout(timeout);
       }
     });
+  } else {
+    console.log('[AgentChatPanel] WebSocket 已连接');
   }
   
   // 2. 创建 Thread
+  console.log('[AgentChatPanel] 开始创建 Thread...');
   await initializeThread();
   
   // 3. 加载历史消息
+  console.log('[AgentChatPanel] 开始加载历史消息...');
   await loadHistory();
   
   // 4. 订阅流式消息
+  console.log('[AgentChatPanel] 开始订阅流式消息...');
   ensureSubscription();
+  
+  console.log('[AgentChatPanel] 聊天流程初始化完成！');
 }
 
 // 监听 agentId 变化，重新初始化
