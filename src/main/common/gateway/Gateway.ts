@@ -13,12 +13,24 @@
  *   - 类似 IpcEventBroadcaster 的简洁模式
  */
 
+import type { WebSocket } from 'ws';
 import { log } from '@main/common/logger';
 import { eventBus } from '@main/common/eventbus';
-import { scanGatewayPublishers, scanGatewayRoutes } from '@main/common/scan';
+import { scanGatewayPublishers, scanGatewayRoutes, scanRpcMethods } from '@main/common/scan';
 import { GatewayServer } from './GatewayServer';
-import type { GatewayApi, EventBridgeInit, RouteRegistrar, GatewayEvent, ClientMeta, ClientPredicate } from './types';
-import type { WebSocket } from 'ws';
+import { GatewayErrorCode, GatewayMethodError } from './errors';
+import type {
+  GatewayApi,
+  GatewayRequest,
+  GatewayResponse,
+  GatewayOutMessage,
+  EventBridgeInit,
+  RouteRegistrar,
+  ClientMeta,
+  ClientPredicate,
+  MethodHandler,
+  MethodGroup
+} from './types';
 
 /**
  * Gateway 核心类
@@ -30,6 +42,7 @@ import type { WebSocket } from 'ws';
  */
 export class Gateway implements GatewayApi {
   private server: GatewayServer | null = null;
+  private methods = new Map<string, MethodHandler>();
   private eventBridgeCleanups: Array<() => void> = [];
   private initialized = false;
 
@@ -49,17 +62,199 @@ export class Gateway implements GatewayApi {
     // 1. 创建 GatewayServer（统一管理 HTTP + WebSocket）
     this.server = new GatewayServer();
 
-    // 2. 自动发现并注册事件推送配置
+    // 设置消息处理回调
+    this.server.onMessage = (ws, data, meta) => {
+      this.handleMessage(ws, data, meta).catch((error) => {
+        log.error('[Gateway] Error handling message:', error);
+      });
+    };
+
+    this.server.onConnect = (_ws, meta) => {
+      log.debug(`[Gateway] Client connected: ${meta.connectionId}`);
+    };
+
+    this.server.onDisconnect = (_ws, meta) => {
+      log.debug(`[Gateway] Client disconnected: ${meta.connectionId}`);
+    };
+
+    // 2. 自动发现并注册 RPC 方法
+    this.discoverMethods();
+
+    // 3. 注册内置方法
+    this.registerBuiltinMethods();
+
+    // 4. 自动发现并注册事件推送配置
     this.discoverEventPublishers();
 
-    // 3. 自动发现并注册 HTTP 路由
+    // 5. 自动发现并注册 HTTP 路由
     this.discoverHttpRoutes();
 
-    // 4. 启动网络层
+    // 6. 启动网络层
     this.server.start();
 
     this.initialized = true;
-    log.info('[Gateway] Started');
+    log.info(`[Gateway] Started with ${this.methods.size} method(s)`);
+  }
+
+  // ==================== 方法发现和注册 ====================
+
+  /**
+   * 自动发现并注册 RPC 方法
+   *
+   * 扫描 @main/rpc/*Methods.ts 文件
+   */
+  private discoverMethods(): void {
+    const modules = scanRpcMethods();
+
+    for (const { path: filePath, module } of modules) {
+      for (const [exportName, exportValue] of Object.entries(module)) {
+        if (this.isMethodGroup(exportValue)) {
+          this.registerMethods(exportValue as MethodGroup);
+          log.debug(`[Gateway] 发现方法组: ${exportName} (来自 ${filePath})`);
+        }
+      }
+    }
+
+    log.info(`[Gateway] 方法发现完成: ${this.methods.size} 个方法 [${[...this.methods.keys()].join(', ')}]`);
+  }
+
+  /**
+   * 类型守卫：判断导出值是否为 MethodGroup
+   */
+  private isMethodGroup(value: unknown): value is MethodGroup {
+    if (!value || typeof value !== 'object') return false;
+    const obj = value as Record<string, unknown>;
+    return typeof obj.namespace === 'string' && typeof obj.methods === 'object' && obj.methods !== null;
+  }
+
+  /**
+   * 注册方法组（展开为 'namespace.action' 格式）
+   */
+  registerMethods(group: MethodGroup): void {
+    group.onInit?.(this);
+    for (const [action, handler] of Object.entries(group.methods)) {
+      const fullName = `${group.namespace}.${action}`;
+      if (this.methods.has(fullName)) {
+        log.warn(`[Gateway] 方法名冲突，覆盖已有: ${fullName}`);
+      }
+      this.methods.set(fullName, handler);
+    }
+    log.info(`[Gateway] 注册方法组: ${group.namespace} (${Object.keys(group.methods).length} 个方法)`);
+  }
+
+  /**
+   * 注册内置方法
+   */
+  private registerBuiltinMethods(): void {
+    // system.methods — 返回所有已注册方法名
+    this.methods.set('system.methods', async () => {
+      return { methods: [...this.methods.keys()] };
+    });
+
+    // system.health — 健康检查
+    this.methods.set('system.health', async () => {
+      return {
+        status: 'ok',
+        clients: this.clientCount,
+        methods: this.methods.size
+      };
+    });
+
+    log.debug('[Gateway] Built-in methods registered');
+  }
+
+  // ==================== 消息路由 ====================
+
+  /**
+   * 处理客户端消息
+   */
+  private async handleMessage(ws: WebSocket, data: string, meta: ClientMeta): Promise<void> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      this.sendError(ws, '', GatewayErrorCode.PARSE_ERROR, 'Failed to parse JSON');
+      return;
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      this.sendError(ws, '', GatewayErrorCode.INVALID_MESSAGE, 'Invalid message format');
+      return;
+    }
+
+    const msg = parsed as Record<string, unknown>;
+
+    if (msg.type === 'req') {
+      await this.handleRequest(ws, msg as unknown as GatewayRequest, meta);
+    } else {
+      this.sendError(
+        ws,
+        (msg.id as string) || '',
+        GatewayErrorCode.UNKNOWN_MESSAGE_TYPE,
+        `Unknown message type: ${String(msg.type)}`
+      );
+    }
+  }
+
+  /**
+   * 处理 RPC 请求
+   */
+  private async handleRequest(ws: WebSocket, req: GatewayRequest, meta: ClientMeta): Promise<void> {
+    // 校验请求格式
+    if (!req.id || !req.method) {
+      this.sendError(ws, req.id || '', GatewayErrorCode.INVALID_MESSAGE, 'Missing id or method');
+      return;
+    }
+
+    // 查找 handler
+    const handler = this.methods.get(req.method);
+    if (!handler) {
+      this.sendError(ws, req.id, GatewayErrorCode.METHOD_NOT_FOUND, `Method not found: ${req.method}`);
+      return;
+    }
+
+    // 执行 handler
+    try {
+      const result = await handler(req.params ?? {}, {
+        clientId: meta.connectionId,
+        ws,
+        meta,
+        gateway: this
+      });
+
+      const response: GatewayResponse = {
+        type: 'res',
+        id: req.id,
+        ok: true,
+        payload: result
+      };
+      this.server?.send(ws, response);
+    } catch (error) {
+      // 结构化错误处理
+      if (error instanceof GatewayMethodError) {
+        this.sendError(ws, req.id, error.code, error.message);
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        log.error(`[Gateway] Method ${req.method} error:`, error);
+        this.sendError(ws, req.id, GatewayErrorCode.INTERNAL_ERROR, message);
+      }
+    }
+  }
+
+  /**
+   * 发送错误响应
+   */
+  private sendError(ws: WebSocket, requestId: string, code: GatewayErrorCode, message?: string): void {
+    const response: GatewayResponse = {
+      type: 'res',
+      id: requestId,
+      ok: false,
+      error: {
+        code,
+        message: message ?? `Error ${code}`
+      }
+    };
+    this.server?.send(ws, response);
   }
 
   /**
@@ -203,11 +398,15 @@ export class Gateway implements GatewayApi {
 
   // ==================== GatewayApi 实现 ====================
 
+  send(ws: WebSocket, payload: GatewayOutMessage): void {
+    this.server?.send(ws, payload);
+  }
+
   broadcastEvent(event: string, payload: unknown): void {
     if (!this.server) return;
 
-    const msg: GatewayEvent = {
-      type: 'event',
+    const msg = {
+      type: 'event' as const,
       event,
       payload,
       timestamp: Date.now()
@@ -219,8 +418,8 @@ export class Gateway implements GatewayApi {
   broadcastEventIf(event: string, payload: unknown, predicate: ClientPredicate): number {
     if (!this.server) return 0;
 
-    const msg: GatewayEvent = {
-      type: 'event',
+    const msg = {
+      type: 'event' as const,
       event,
       payload,
       timestamp: Date.now()

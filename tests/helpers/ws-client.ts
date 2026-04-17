@@ -210,9 +210,10 @@ export class TestWsClient {
     if (response.ok) {
       pending.resolve(response.payload);
     } else {
-      pending.reject(
-        new Error(`RPC Error [${response.error?.code}]: ${response.error?.message}`)
-      );
+      const error = new Error(`RPC Error [${response.error?.code}]: ${response.error?.message}`) as any;
+      error.code = response.error?.code;
+      error.rpcError = response.error;
+      pending.reject(error);
     }
   }
 

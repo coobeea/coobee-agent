@@ -21,7 +21,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import Router from '@koa/router';
 import { log } from '@main/common/logger';
 import { Env } from '@main/common/env';
-import type { ClientMeta, GatewayEvent, ClientPredicate } from './types';
+import type { ClientMeta, GatewayOutMessage, ClientPredicate } from './types';
 
 let connectionIdCounter = 0;
 
@@ -29,6 +29,12 @@ function generateConnectionId(): string {
   connectionIdCounter++;
   return `gw-${Date.now()}-${connectionIdCounter}`;
 }
+
+/** GatewayServer 消息处理回调 */
+export type GatewayMessageHandler = (ws: WebSocket, data: string, meta: ClientMeta) => void | Promise<void>;
+
+/** GatewayServer 连接事件回调 */
+export type GatewayConnectionHandler = (ws: WebSocket, meta: ClientMeta) => void;
 
 export class GatewayServer {
   private static instance: GatewayServer | null = null;
@@ -42,6 +48,11 @@ export class GatewayServer {
   private heartbeatInterval = 30000; // 30秒
   private serverPort: number = Env.main.serverPort ? parseInt(Env.main.serverPort, 10) : 8765;
   private serverHost: string = Env.main.serverHost || '127.0.0.1';
+
+  // RPC 消息处理回调
+  public onMessage?: GatewayMessageHandler;
+  public onConnect?: GatewayConnectionHandler;
+  public onDisconnect?: GatewayConnectionHandler;
 
   constructor() {
     if (GatewayServer.instance) {
@@ -199,17 +210,31 @@ export class GatewayServer {
 
       log.info(`[GatewayServer] Client connected: ${meta.connectionId} (total: ${this.clients.size})`);
 
+      // 调用连接回调
+      this.onConnect?.(ws, meta);
+
       ws.on('pong', () => {
         meta.isAlive = true;
       });
 
+      // 处理客户端消息
+      ws.on('message', (data: Buffer) => {
+        try {
+          this.onMessage?.(ws, data.toString(), meta);
+        } catch (error) {
+          log.error('[GatewayServer] Error handling message:', error);
+        }
+      });
+
       ws.on('close', () => {
+        this.onDisconnect?.(ws, meta);
         this.cleanupClient(ws);
         log.info(`[GatewayServer] Client disconnected: ${meta.connectionId} (total: ${this.clients.size})`);
       });
 
       ws.on('error', (error) => {
         log.error(`[GatewayServer] Client error (${meta.connectionId}):`, error);
+        this.onDisconnect?.(ws, meta);
         this.cleanupClient(ws);
       });
     });
@@ -276,9 +301,22 @@ export class GatewayServer {
   // ==================== WebSocket 通信 ====================
 
   /**
+   * 向单个客户端发送消息
+   */
+  send(ws: WebSocket, payload: GatewayOutMessage): void {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch (error) {
+        log.warn('[GatewayServer] Send failed:', error);
+      }
+    }
+  }
+
+  /**
    * 向所有客户端广播事件
    */
-  broadcast(payload: GatewayEvent): void {
+  broadcast(payload: GatewayOutMessage): void {
     const msg = JSON.stringify(payload);
     let sentCount = 0;
 
@@ -293,13 +331,14 @@ export class GatewayServer {
       }
     }
 
-    log.debug(`[GatewayServer] Broadcast: ${payload.event} -> ${sentCount} clients`);
+    const eventName = 'type' in payload && payload.type === 'event' ? payload.event : 'unknown';
+    log.debug(`[GatewayServer] Broadcast: ${eventName} -> ${sentCount} clients`);
   }
 
   /**
    * 按条件广播事件
    */
-  broadcastIf(payload: GatewayEvent, predicate: ClientPredicate): number {
+  broadcastIf(payload: GatewayOutMessage, predicate: ClientPredicate): number {
     const msg = JSON.stringify(payload);
     let count = 0;
 
@@ -314,7 +353,8 @@ export class GatewayServer {
       }
     }
 
-    log.debug(`[GatewayServer] Broadcast (filtered): ${payload.event} -> ${count} clients`);
+    const eventName = 'type' in payload && payload.type === 'event' ? payload.event : 'unknown';
+    log.debug(`[GatewayServer] Broadcast (filtered): ${eventName} -> ${count} clients`);
     return count;
   }
 

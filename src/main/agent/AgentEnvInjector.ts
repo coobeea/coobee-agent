@@ -126,6 +126,40 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         );
       }
 
+      // 7c. 注入工具到 builder（如果 builder 还没有设置工具）
+      //     从 ToolRegistry 获取所有已注册的工具（builtin + Extension）
+      //     过滤：应用 Agent 定义的 excludeTools 黑名单
+      if (!(builder as unknown as { _tools?: unknown })._tools) {
+        const { ToolRegistry } = await import('./tools/registry');
+        const allTools = ToolRegistry.getInstance().getAll();
+
+        // 从 AgentStore 加载 Agent 定义（如果有 agentId）
+        let excludeTools: string[] = [];
+        if (agentId) {
+          try {
+            const { AgentStore } = await import('./agents/AgentStore');
+            const store = await AgentStore.getInstance();
+            const agentDef = await store.get(agentId);
+            if (agentDef?.excludeTools) {
+              excludeTools = agentDef.excludeTools;
+              log.info(`[EnvInjector] Agent ${agentId} excludes tools: ${excludeTools.join(', ')}`);
+            }
+          } catch (error) {
+            log.warn(`[EnvInjector] Failed to load agent definition for ${agentId}:`, error);
+          }
+        }
+
+        // 应用黑名单过滤
+        const excludeSet = new Set(excludeTools);
+        const filteredTools = allTools.filter((t) => !excludeSet.has(t.name));
+
+        builder.tools(filteredTools);
+        log.info(
+          `[EnvInjector] Injected ${filteredTools.length} tools from ToolRegistry` +
+            (excludeTools.length > 0 ? ` (excluded ${excludeTools.length})` : '')
+        );
+      }
+
       // 8. 构建工具执行上下文（由 Runtime 的 convertTools 注入到每个工具）
       //    包含沙箱信息 + Agent/Session 上下文
       //    有工程目录时，工具操作的根目录指向工程目录

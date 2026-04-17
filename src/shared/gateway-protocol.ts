@@ -43,6 +43,8 @@ export interface GatewayEvent {
   event: string;
   /** 事件数据 */
   payload: unknown;
+  /** 时间戳（可选） */
+  timestamp?: number;
 }
 
 /** Gateway 出站消息联合类型 */

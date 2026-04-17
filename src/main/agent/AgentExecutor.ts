@@ -81,6 +81,9 @@ class AgentExecutor {
   /** Provider 配置注入器（初始化后通过 setProviderSystem 注入） */
   private providerInjector = new ProviderInjector();
 
+  /** 活跃会话的 AbortController 映射（用于按 sessionId 中止） */
+  private abortControllers = new Map<string, AbortController>();
+
   // ========== Provider 系统 ==========
 
   /**
@@ -202,6 +205,24 @@ class AgentExecutor {
     return this.sessionStatus.getActiveList();
   }
 
+  /**
+   * 中止指定 session 的执行
+   *
+   * @param sessionId - 会话 ID
+   * @returns 是否成功中止（false 表示 session 不存在或未在执行）
+   */
+  abort(sessionId: string): boolean {
+    const controller = this.abortControllers.get(sessionId);
+    if (controller) {
+      log.info(`[AgentExecutor] Aborting session: ${sessionId}`);
+      controller.abort();
+      return true;
+    }
+
+    log.warn(`[AgentExecutor] Cannot abort session: ${sessionId} (not found or not running)`);
+    return false;
+  }
+
   // ========== 流式执行（SSE 透传） ==========
 
   /**
@@ -212,7 +233,7 @@ class AgentExecutor {
    * 每个 chunk 同时通过 StreamEmitter.forward() 广播到 EventBus。
    */
   async *stream(request: Omit<ExecuteRequest, 'onChunk'>): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const { sessionId, message, builder, signal, modelSourceRef } = request;
+    const { sessionId, message, builder, signal: externalSignal, modelSourceRef } = request;
 
     if (!builder) {
       throw new Error('stream() requires a builder. Use submit() with runtime for pre-built runtimes.');
@@ -224,6 +245,16 @@ class AgentExecutor {
 
     this.sessionStatus.register(sessionId);
     let runtime: AgentRuntime | null = null;
+
+    // 创建或使用外部提供的 AbortController
+    let internalController: AbortController | undefined;
+    let signal = externalSignal;
+
+    if (!signal) {
+      internalController = new AbortController();
+      signal = internalController.signal;
+      this.abortControllers.set(sessionId, internalController);
+    }
 
     // 检查是否轻量模式
     const isLightweight = (builder as unknown as { getLightweight?: () => boolean }).getLightweight?.() ?? false;
@@ -347,6 +378,12 @@ class AgentExecutor {
       return r.value;
     } catch (error: unknown) {
       log.error(`[AgentExecutor] Stream error: sessionId=${sessionId}`, error);
+      // 打印详细错误堆栈
+      if (error instanceof Error) {
+        console.error(`[AgentExecutor] Error stack:`, error.stack);
+        console.error(`[AgentExecutor] Error message:`, error.message);
+        console.error(`[AgentExecutor] Error name:`, error.name);
+      }
       throw error;
     } finally {
       // 清理（轻量模式下跳过）
@@ -365,6 +402,12 @@ class AgentExecutor {
 
       await this.destroyRuntime(runtime);
       runtime = null;
+
+      // 清理 AbortController
+      if (internalController) {
+        this.abortControllers.delete(sessionId);
+      }
+
       this.sessionStatus.unregister(sessionId);
     }
   }

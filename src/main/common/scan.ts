@@ -100,6 +100,28 @@ export function scanGatewayRoutes(): DiscoveredModule[] {
 }
 
 /**
+ * 扫描 RPC 方法文件
+ * 扫描 @main/rpc 目录下所有 *Methods.ts 文件
+ *
+ * 方法组命名规范：
+ * - 文件名以 Methods.ts 结尾（如 ChatMethods.ts）
+ * - 必须导出 MethodGroup 类型的对象
+ */
+export function scanRpcMethods(): DiscoveredModule[] {
+  log.info('[Scan] 开始扫描 RPC 方法文件...');
+
+  const modules = import.meta.glob('@main/rpc/**/*Methods.ts', { eager: true });
+  const totalFound = Object.keys(modules).length;
+
+  const filteredModules = filterModules(modules, ['__tests__']);
+  const filteredCount = filteredModules.length;
+
+  log.info(`[Scan] RPC 方法扫描完成: 发现 ${totalFound} 个文件，过滤后剩余 ${filteredCount} 个`);
+
+  return filteredModules;
+}
+
+/**
  * 通用过滤函数 - 过滤掉指定的文件
  *
  * @param modules 扫描结果对象 (使用 eager: true 时，值直接是模块内容)
