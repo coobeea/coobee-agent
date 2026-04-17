@@ -11,7 +11,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AgentChatPanel: typeof import('./../components/workspace/AgentChatPanel.vue')['default']
     AgentResourcePanel: typeof import('./../components/workspace/AgentResourcePanel.vue')['default']
     AgentsPanel: typeof import('./../components/agent/AgentsPanel.vue')['default']
     AgentWorkbenchPanel: typeof import('./../components/workspace/AgentWorkbenchPanel.vue')['default']

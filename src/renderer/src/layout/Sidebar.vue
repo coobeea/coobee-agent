@@ -83,7 +83,7 @@ const refreshThreads = (): void => {
 
 const updateActiveState = (): void => {
   const path = route.path;
-  if (path.startsWith('/thread/') || path.startsWith('/agent-workspace/')) {
+  if (path.startsWith('/thread/')) {
     // 任务详情页：高亮当前 thread
     activeMenuId.value = '';
     activeThreadId.value = route.params.id as string;

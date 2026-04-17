@@ -29,11 +29,6 @@ const router = createRouter({
           component: () => import('@/views/AgentEditorView.vue')
         },
         {
-          path: 'agent-workspace/:id',
-          name: 'agent-workspace',
-          component: () => import('@/views/AgentWorkspaceView.vue')
-        },
-        {
           path: 'thread/:id',
           name: 'thread',
           component: () => import('@/views/ThreadView.vue')

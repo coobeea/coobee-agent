@@ -23,8 +23,8 @@ src/renderer/src/
     │       ├── BlockText.vue        # 文本内容块
     │       ├── BlockThinking.vue    # 思考过程块（带折叠）
     │       └── BlockTool.vue        # 工具调用块（带状态）
-    └── workspace/
-        └── AgentChatPanel.vue       # 集成示例
+    └── agent/
+        └── ChatPanel.vue            # 集成示例
 ```
 
 ## 🔄 数据流
@@ -109,7 +109,7 @@ async function send(content: string): Promise<void> {
 
 ### 2. 完整示例
 
-参考 `AgentChatPanel.vue` 的实现，包含：
+参考 `ChatPanel.vue` 的实现，包含：
 - ✅ 消息订阅和取消订阅
 - ✅ 发送消息到 Gateway RPC
 - ✅ 状态同步到 Store

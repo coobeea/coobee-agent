@@ -29,7 +29,7 @@ class StreamSubscriptionManager {
     // payload 格式: { type: 'stream:message', sessionId: 'xxx', message: StreamMessage, timestamp: number }
     gateway.on('stream:message', (payload: unknown) => {
       const event = payload as { message?: StreamMessage; sessionId?: string };
-      
+
       // 提取真正的 StreamMessage
       const msg = event.message;
       if (!msg) {
