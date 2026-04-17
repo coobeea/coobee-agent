@@ -9,9 +9,6 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { createLogger } from '@shared/logger';
-
-const log = createLogger('threads-store');
 
 /** Thread 索引条目（轻量版） */
 export interface ThreadEntry {
