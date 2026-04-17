@@ -6,7 +6,7 @@
 
 ## 测试列表
 
-### chat-api.e2e.test.ts
+### 1. chat-api.e2e.test.ts
 
 测试 Chat API 的完整流程，包括：
 
@@ -24,6 +24,44 @@
   - 不存在的会话（404）
   - 空消息（400）
   - 发送消息到不存在的会话（404）
+
+### 2. gateway-websocket.e2e.test.ts
+
+测试 Gateway WebSocket 的完整通信流程，包括：
+
+- **Connection Management（连接管理）**
+  - 建立 WebSocket 连接
+  - 正常关闭连接
+  - 处理无效连接
+  - 多客户端并发连接
+
+- **Health Check（健康检查）**
+  - 服务器健康状态
+  - 运行时间查询
+  - 客户端数量统计
+
+- **Event Broadcasting（事件推送）**
+  - 接收服务端广播事件
+  - 多个事件监听器
+  - 事件分发机制
+
+- **Connection Stability（连接稳定性）**
+  - 空闲期间保持连接（心跳）
+  - 快速连接/断开循环
+
+- **Error Handling（错误处理）**
+  - 格式错误的消息
+  - 连接超时
+
+- **Performance（性能测试）**
+  - 突发连接处理
+  - 连接延迟测量
+
+- **Integration（集成测试）**
+  - 与 Chat API 协作
+  - 接收流式消息事件
+
+详细文档: [WEBSOCKET-TEST.md](./WEBSOCKET-TEST.md)
 
 ## 前置条件
 
@@ -99,16 +137,32 @@ pnpm test:e2e --watch
 ### 运行特定测试文件
 
 ```bash
+# Chat API 测试
 pnpm test:e2e tests/chat-api.e2e.test.ts
+
+# WebSocket 测试
+pnpm test:e2e tests/gateway-websocket.e2e.test.ts
 ```
 
 ### 运行特定测试用例
 
 ```bash
+# Chat API 测试用例
 pnpm test:e2e -t "should create a new thread"
+
+# WebSocket 测试用例
+pnpm test:e2e -t "should establish WebSocket connection"
+```
+
+### 详细输出模式
+
+```bash
+pnpm test:e2e --reporter=verbose
 ```
 
 ## 测试输出示例
+
+### Chat API 测试输出
 
 ```
 🚀 开始 Chat API 端到端测试
@@ -131,6 +185,51 @@ pnpm test:e2e -t "should create a new thread"
 
 Test Files  1 passed (1)
      Tests  8 passed (8)
+  Duration  24.58s
+```
+
+### WebSocket 测试输出
+
+```
+🚀 开始 Gateway WebSocket 端到端测试
+📍 WebSocket 地址: ws://127.0.0.1:8765/gateway/ws
+📍 HTTP 地址: http://127.0.0.1:8765
+
+ ✓ Connection Management (4)
+   ✓ should establish WebSocket connection
+   ✓ should handle connection close
+   ✓ should reject connection to invalid URL
+   ✓ should handle multiple concurrent connections
+
+ ✓ Health Check (1)
+   ✓ should return server health status
+
+ ✓ Event Broadcasting (2)
+   ✓ should receive broadcasted events
+   ✓ should handle multiple event listeners
+
+ ✓ Connection Stability (2)
+   ✓ should maintain connection during idle period
+   ✓ should handle rapid connect/disconnect cycles
+
+ ✓ Error Handling (2)
+   ✓ should handle malformed WebSocket messages gracefully
+   ✓ should handle connection timeout
+
+ ✓ Performance (2)
+   ✓ should handle burst connections
+   ✓ should measure connection latency
+
+ ✓ Integration with Chat API (1)
+   ✓ should receive stream events when sending chat message
+
+Test Files  1 passed (1)
+     Tests  14 passed (14)
+  Duration  9.54s
+
+性能指标:
+  - 连接延迟: 平均 1.60ms, 最小 1ms, 最大 3ms
+  - 并发连接: 10 个连接耗时 4ms (平均 0.40ms/连接)
 ```
 
 ## 故障排查
@@ -243,6 +342,13 @@ jobs:
 
 ## 相关文档
 
+### Chat API
 - [Chat API 数据流设计](../docs/01-designs/05-chat-api-data-flow.md)
 - [Chat API 路由实现](../src/main/routes/ChatRoutes.ts)
 - [AgentExecutor 集成测试](../src/main/agent/__tests__/AgentExecutor.integration.test.ts)
+
+### Gateway WebSocket
+- [WebSocket 测试详细文档](./WEBSOCKET-TEST.md)
+- [Gateway Server 实现](../src/main/common/gateway/GatewayServer.ts)
+- [Gateway 协议定义](../src/shared/gateway-protocol.ts)
+- [前端客户端实现](../src/renderer/src/services/GatewayClient.ts)
