@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ChatMessage } from '../ChatMessages.vue';
-import type { PendingApproval } from '@/composables/useStreamHandler';
+import type { PendingApproval } from '@/types/chat';
 import type { HitlApprovalDecision } from '@shared/stream-protocol';
 import BlockText from '../blocks/BlockText.vue';
 import BlockThinking from '../blocks/BlockThinking.vue';

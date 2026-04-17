@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ContentBlock } from '@/composables/useStreamHandler';
+import type { ContentBlock } from '@/types/chat';
 
 defineProps<{
   block: ContentBlock & { type: 'delegate' };

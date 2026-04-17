@@ -6,7 +6,7 @@
  * 被 ChatPanel 和 CopilotBubble 共同使用。
  */
 
-import type { PendingApproval } from '@/composables/useStreamHandler';
+import type { PendingApproval } from '@/types/chat';
 import type { HitlApprovalDecision } from '@shared/stream-protocol';
 
 const props = defineProps<{

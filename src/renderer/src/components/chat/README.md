@@ -9,10 +9,9 @@ src/renderer/src/
 ├── types/
 │   └── chat.ts                      # 聊天类型定义
 ├── stores/
-│   └── chat.ts                      # Chat Store（流状态管理）
-├── composables/
-│   ├── useStreamHandler.ts          # 流式消息处理器
-│   └── useStreamWs.ts               # WebSocket 订阅管理
+│   └── chat.ts                      # Chat Store（全局消息管理）
+├── plugins/
+│   └── gatewaySetup.ts              # Gateway 连接 + 全局流式监听
 └── components/
     ├── chat/
     │   ├── README.md                # 本文档
@@ -32,11 +31,13 @@ src/renderer/src/
 ```
 后端 StreamMessage
       ↓
-useStreamWs (订阅管理)
+gatewaySetup 全局监听（应用启动时自动启动）
       ↓
-useStreamHandler (消息转换)
+chatStore.handleStreamMessage (自动聚合转换)
       ↓
-StreamChatMessage + ContentBlock[]
+StreamChatMessage[] 按 threadId 存储
+      ↓
+组件 computed 自动响应式读取
       ↓
 ChatMessages + MessageItem* + Block* (组件渲染)
 ```
@@ -83,22 +84,23 @@ interface ToolCall {
 
 ```vue
 <script setup lang="ts">
-import { useStreamHandler } from '@/composables/useStreamHandler';
-import { streamSubscribe, streamUnsubscribe } from '@/composables/useStreamWs';
+import { computed } from 'vue';
+import { useChatStore } from '@/stores/chat';
+import { useGateway } from '@/composables/useGateway';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
-import type { StreamMessage } from '@shared/stream-protocol';
 
-const { messages, isStreaming, handleStreamMessage, addUserMessage } = useStreamHandler();
+const props = defineProps<{ threadId: string }>();
+const chatStore = useChatStore();
+const { request } = useGateway();
 
-// 订阅流式消息
-function subscribe(threadId: string): void {
-  streamSubscribe(threadId, handleStreamMessage);
-}
+// 从 store 读取消息（自动响应式）
+const messages = computed(() => chatStore.getThreadMessages(props.threadId));
+const isStreaming = computed(() => chatStore.getState(props.threadId).isStreaming);
 
 // 发送消息
 async function send(content: string): Promise<void> {
-  addUserMessage(content);
-  await gateway.request('chat.sendMessage', { threadId, content });
+  chatStore.addUserMessage(props.threadId, content);
+  await request('chat.sendMessage', { threadId: props.threadId, message: content });
 }
 </script>
 
@@ -110,9 +112,9 @@ async function send(content: string): Promise<void> {
 ### 2. 完整示例
 
 参考 `ChatPanel.vue` 的实现，包含：
-- ✅ 消息订阅和取消订阅
+- ✅ 从全局 store 读取消息（自动响应式）
 - ✅ 发送消息到 Gateway RPC
-- ✅ 状态同步到 Store
+- ✅ 加载历史消息
 - ✅ 错误处理
 - ✅ 清空对话
 
@@ -193,41 +195,38 @@ const html = computed(() => marked.parse(props.text));
 
 ### 3. 添加 HITL 审批 UI
 
-在 `useStreamHandler.ts` 中处理 `hitl` 类型消息，创建 `BlockApproval.vue` 组件。
+在 `chatStore.handleStreamMessage` 中处理 `hitl` 类型消息，创建 `BlockApproval.vue` 组件。
 
 ## 🛡️ 状态管理
 
 ### useChatStore
-- 管理多个 thread 的流状态（是否正在流式响应）
-- 每个 thread 的消息列表由组件本地管理（useStreamHandler）
-
-### useStreamHandler
-- 组件级状态，每个聊天面板独立维护
-- 将 StreamMessage 转换为 UI 可渲染的 ContentBlock 结构
-- 支持消息累积、状态更新
-
-### useStreamWs
-- 全局 WebSocket 订阅管理
-- 支持多个组件订阅同一个 thread
-- 自动路由消息到订阅者
+- **全局管理所有 thread 的消息和流状态**
+- 应用启动时自动监听流式消息（通过 gatewaySetup）
+- 自动聚合 StreamMessage → StreamChatMessage
+- 按 threadId 存储，支持多窗口共享状态
+- 自动限制每个 thread 最多 50 条消息
 
 ## ⚡ 性能优化
 
-1. **消息限制**：`maxMessages` 参数限制消息数量
+1. **消息限制**：每个 thread 最多保留 50 条消息
 2. **虚拟滚动**：可扩展 vue-virtual-scroller
-3. **懒加载**：历史消息分页加载
+3. **懒加载**：历史消息按需加载（store 无缓存时）
 4. **防抖滚动**：避免频繁滚动操作
+5. **全局状态共享**：多窗口自动同步，无需重复加载
 
 ## 🧪 测试建议
 
-1. **单元测试**：测试 useStreamHandler 的消息转换逻辑
+1. **单元测试**：测试 chatStore.handleStreamMessage 的消息聚合逻辑
 2. **组件测试**：测试各 Block 组件的渲染
-3. **集成测试**：测试完整的消息流转和订阅机制
+3. **集成测试**：测试全局监听和 store 更新流程
 4. **E2E 测试**：测试用户发送消息 → AI 响应的完整流程
+5. **多窗口测试**：测试多个窗口打开同一 thread 时的状态同步
 
 ## 📚 参考
 
 - `coobee-ai` 项目的消息展示实现
 - `src/shared/stream-protocol.ts` - 流式协议定义
+- `src/renderer/src/stores/chat.ts` - 全局消息管理
+- `src/renderer/src/plugins/gatewaySetup.ts` - 全局流式监听
 - `src/main/rpc/ChatMethods.ts` - Chat RPC 方法
-- `src/main/ai/AgentEventWriter.ts` - 事件持久化
+- `src/main/agent/AgentEventWriter.ts` - 事件持久化

@@ -1,15 +1,13 @@
 <script setup lang="ts">
 /**
- * ChatPanel — 对话面板（重构版）
+ * ChatPanel — 对话面板（全局 store 版）
  *
- * Agent 的对话交互区域：消息流、工具调用。
- * messages 由组件本地持有（useStreamHandler），unmounted 时自动释放。
+ * 消息由全局 chatStore 管理，组件只负责展示和交互。
+ * 不需要手动订阅/退订，流式消息自动更新。
  */
 
-import { ref, provide, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
-import { useStreamHandler } from '@/composables/useStreamHandler';
-import { streamSubscribe, streamUnsubscribe } from '@/composables/useStreamWs';
 import type { StreamMessage } from '@shared/stream-protocol';
 import { useGateway } from '@/composables/useGateway';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
@@ -24,18 +22,14 @@ const props = defineProps<{
 const chatStore = useChatStore();
 const { request } = useGateway();
 
-// 使用 useStreamHandler 管理本地消息（组件级状态）
-const { messages, isStreaming, execOutputs, handleStreamMessage, addUserMessage, resetAll } = useStreamHandler({
-  idPrefix: 'chat',
-  maxMessages: 500
-});
-
 // ==================== Refs ====================
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null);
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 
-// 提供 execOutputs 给子组件（如 TerminalPanel）
-provide('execOutputs', execOutputs);
+// ==================== Computed ====================
+// 直接从 store 读取消息（自动响应式）
+const messages = computed(() => chatStore.getThreadMessages(props.threadId));
+const isStreaming = computed(() => chatStore.getState(props.threadId).isStreaming);
 
 // ==================== Methods ====================
 function scrollToBottom(force = false): void {
@@ -59,10 +53,7 @@ watch(
     if (msgs.length === 0) return 0;
     const last = msgs[msgs.length - 1];
     if (!last) return 0;
-    const blockCount = last.blocks?.length ?? 0;
-    const lastBlock = blockCount > 0 && last.blocks ? last.blocks[blockCount - 1] : null;
-    const lastLen = lastBlock && 'text' in lastBlock ? lastBlock.text?.length ?? 0 : 0;
-    return (last.content?.length ?? 0) + blockCount * 1000 + lastLen;
+    return (last.content?.length ?? 0) + (last.blocks?.length ?? 0) * 1000;
   },
   () => scrollToBottom()
 );
@@ -72,8 +63,8 @@ async function handleSend(data: { text: string; files?: { path: string; name: st
 
   scrollToBottom(true);
 
-  // 添加用户消息到本地
-  addUserMessage(data.text);
+  // 添加用户消息到 store
+  chatStore.addUserMessage(props.threadId, data.text);
 
   // 发送到后端（后端会推送流式事件）
   try {
@@ -97,47 +88,14 @@ async function handleStop(): Promise<void> {
   }
 }
 
-// ==================== 流式消息处理包装 ====================
-
-/**
- * 处理流式消息并同步 Store 的 isStreaming 状态
- */
-function handleStreamMessageWithSync(msg: StreamMessage): void {
-  // 更新本地消息
-  handleStreamMessage(msg);
-
-  // 同步 Store 的 isStreaming 状态
-  if (msg.type === 'run:start') {
-    chatStore.setState(props.threadId, true);
-  } else if (msg.type === 'run:done' || msg.type === 'run:error') {
-    chatStore.setState(props.threadId, false);
-  }
-}
-
-// ==================== 订阅管理 ====================
-
-let subscribedSessionId: string | null = null;
-
-function ensureSubscription(): void {
-  if (subscribedSessionId !== props.threadId) {
-    if (subscribedSessionId) {
-      streamUnsubscribe(subscribedSessionId, handleStreamMessageWithSync);
-    }
-    streamSubscribe(props.threadId, handleStreamMessageWithSync);
-    subscribedSessionId = props.threadId;
-  }
-}
-
-function unsubscribe(): void {
-  if (subscribedSessionId) {
-    streamUnsubscribe(subscribedSessionId, handleStreamMessageWithSync);
-    subscribedSessionId = null;
-  }
-}
-
 // ==================== 历史加载 ====================
 
 async function loadThreadHistory(): Promise<void> {
+  // 如果 store 里已经有消息，说明是实时接收的，不需要再加载历史
+  if (messages.value.length > 0) {
+    return;
+  }
+
   try {
     const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
     const res = await fetch(`${baseUrl}/threads/${props.threadId}/history`);
@@ -156,12 +114,10 @@ async function loadThreadHistory(): Promise<void> {
       return;
     }
 
-    resetAll(); // 清空旧消息
-
     let userIdx = 0;
 
+    // 重放历史事件到 store
     for (const evt of history.events) {
-      // 转换历史事件为 StreamMessage 格式
       const streamMsg: StreamMessage = {
         id: `hist-${evt.seq}`,
         sessionId: props.threadId,
@@ -173,24 +129,15 @@ async function loadThreadHistory(): Promise<void> {
         source: { type: 'agent', id: props.threadId, name: '' }
       };
 
-      switch (evt.type) {
-        case 'run:start':
-          if (userIdx < history.userMessages.length) {
-            addUserMessage(history.userMessages[userIdx].content);
-            userIdx++;
-          }
-          handleStreamMessage(streamMsg);
-          break;
-
-        default:
-          // 其他历史事件通过 handleStreamMessage 处理
-          handleStreamMessage(streamMsg);
-          break;
+      // 在 run:start 前插入用户消息
+      if (evt.type === 'run:start' && userIdx < history.userMessages.length) {
+        chatStore.addUserMessage(props.threadId, history.userMessages[userIdx].content);
+        userIdx++;
       }
-    }
 
-    // 历史加载完成后，统一同步一次 Store 的 isStreaming 状态
-    chatStore.setState(props.threadId, isStreaming.value);
+      // 交给 store 处理
+      chatStore.handleStreamMessage(streamMsg);
+    }
 
     await nextTick();
     scrollToBottom(true);
@@ -202,10 +149,7 @@ async function loadThreadHistory(): Promise<void> {
 // ==================== 生命周期 ====================
 onMounted(async () => {
   scrollToBottom();
-  // 加载历史消息
   await loadThreadHistory();
-  // 订阅流式更新
-  ensureSubscription();
 });
 
 // 监听 threadId 变化（切换会话时重新加载）
@@ -213,21 +157,10 @@ watch(
   () => props.threadId,
   async (newThreadId, oldThreadId) => {
     if (newThreadId !== oldThreadId) {
-      // 1. 取消旧订阅
-      unsubscribe();
-      // 2. 清空旧消息
-      resetAll();
-      // 3. 重新加载历史
       await loadThreadHistory();
-      // 4. 重新订阅
-      ensureSubscription();
     }
   }
 );
-
-onUnmounted(() => {
-  unsubscribe();
-});
 
 defineExpose({
   insertFileReference
@@ -237,10 +170,7 @@ defineExpose({
 <template>
   <aside class="chat-panel">
     <!-- 消息区域 -->
-    <ChatMessages
-      ref="chatMessagesRef"
-      :messages="messages"
-      :is-streaming="isStreaming" />
+    <ChatMessages ref="chatMessagesRef" :messages="messages" :is-streaming="isStreaming" />
 
     <!-- 输入区域 -->
     <ChatInput

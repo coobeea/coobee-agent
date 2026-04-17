@@ -11,7 +11,7 @@
  *   - 接收：GatewayResponse { type: 'res', id, ok, payload/error }
  *   - 接收：GatewayEvent { type: 'event', event, payload }
  *
- * 替代旧的 wsSetup + useStreamWs + useWorkerWs 组合。
+ * Gateway WebSocket 客户端。
  */
 
 import { ref, type Ref } from 'vue';

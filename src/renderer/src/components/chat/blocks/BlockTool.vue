@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ContentBlock } from '@/composables/useStreamHandler';
+import type { ContentBlock } from '@/types/chat';
 
 const props = defineProps<{
   block: ContentBlock & { type: 'tool' };

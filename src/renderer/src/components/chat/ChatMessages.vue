@@ -6,7 +6,7 @@
  */
 
 import { ref, computed, watch, nextTick, onMounted } from 'vue';
-import type { ContentBlock, PendingApproval } from '@/composables/useStreamHandler';
+import type { ContentBlock, PendingApproval } from '@/types/chat';
 import type { HitlApprovalDecision } from '@shared/stream-protocol';
 import MessageItemUser from './items/MessageItemUser.vue';
 import MessageItemAssistant from './items/MessageItemAssistant.vue';
