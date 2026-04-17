@@ -34,14 +34,17 @@ const currentAgent = computed(() => {
   return agentsStore.agents.find((a) => a.id === props.agentId);
 });
 
-/** Thread ID（暂时使用 agentId，后续可改为独立 thread 管理） */
-const threadId = computed(() => props.agentId);
+/** Thread ID（动态创建） */
+const threadId = ref<string | null>(null);
+
+/** 是否正在初始化 */
+const isInitializing = ref(false);
 
 /** 输入框内容 */
 const chatInput = ref('');
 
 /** 流状态 */
-const streamState = computed(() => chatStore.getState(threadId.value));
+const streamState = computed(() => (threadId.value ? chatStore.getState(threadId.value) : { isStreaming: false, currentSequence: 0 }));
 
 /** 使用 useStreamHandler 管理消息 */
 const { messages, isStreaming, handleStreamMessage, addUserMessage, resetAll } = useStreamHandler({
@@ -68,9 +71,35 @@ function handleStreamMessageWithSync(msg: StreamMessage): void {
 }
 
 /**
+ * 初始化 Thread（创建或复用）
+ */
+async function initializeThread(): Promise<void> {
+  if (isInitializing.value || threadId.value) return;
+
+  isInitializing.value = true;
+
+  try {
+    // 调用 Gateway RPC 创建新 Thread
+    const result = (await request('chat.createThread', {
+      agentId: props.agentId,
+      title: `${currentAgent.value?.name || 'Agent'} 工作区对话`
+    })) as { id: string };
+
+    threadId.value = result.id;
+    console.log(`[AgentChatPanel] Thread 已创建: ${threadId.value}`);
+  } catch (error) {
+    console.error('[AgentChatPanel] Thread 创建失败:', error);
+  } finally {
+    isInitializing.value = false;
+  }
+}
+
+/**
  * 加载历史消息
  */
 async function loadHistory(): Promise<void> {
+  if (!threadId.value) return;
+
   try {
     const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
     const res = await fetch(`${baseUrl}/threads/${threadId.value}/history`);
@@ -121,6 +150,8 @@ async function loadHistory(): Promise<void> {
  * 订阅流式消息
  */
 function ensureSubscription(): void {
+  if (!threadId.value) return;
+
   if (subscribedSessionId !== threadId.value) {
     if (subscribedSessionId) {
       streamUnsubscribe(subscribedSessionId, handleStreamMessageWithSync);
@@ -144,7 +175,7 @@ function unsubscribe(): void {
  * 发送消息
  */
 async function sendMessage(): Promise<void> {
-  if (!chatInput.value.trim() || streamState.value.isStreaming) return;
+  if (!chatInput.value.trim() || streamState.value.isStreaming || !threadId.value) return;
 
   const userMessage = chatInput.value.trim();
   chatInput.value = '';
@@ -193,18 +224,21 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
-// 监听 agentId 变化，重新订阅
+// 监听 agentId 变化，重新初始化
 watch(
   () => props.agentId,
   async () => {
     resetAll();
+    threadId.value = null;
+    await initializeThread();
     await loadHistory();
     ensureSubscription();
   }
 );
 
-// 组件挂载时加载历史并订阅
+// 组件挂载时初始化
 onMounted(async () => {
+  await initializeThread();
   await loadHistory();
   ensureSubscription();
 });
@@ -266,12 +300,12 @@ onUnmounted(() => {
         <textarea
           v-model="chatInput"
           class="chat-input"
-          placeholder="输入消息..."
-          :disabled="streamState.isStreaming"
+          :placeholder="isInitializing ? '初始化中...' : '输入消息...'"
+          :disabled="streamState.isStreaming || isInitializing || !threadId"
           @keydown="handleKeydown" />
         <button
           class="send-btn"
-          :disabled="!chatInput.trim() || streamState.isStreaming"
+          :disabled="!chatInput.trim() || streamState.isStreaming || isInitializing || !threadId"
           @click="sendMessage">
           <span class="i-carbon-send-alt inline-block h-4 w-4" />
         </button>
