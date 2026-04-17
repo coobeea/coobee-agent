@@ -149,11 +149,11 @@ onMounted(() => {
           <div class="session-info">
             <div class="session-title-row">
               <span class="session-title">{{ thread.title }}</span>
-              <span
-                v-if="isThreadStreaming(thread.id)"
-                class="i-carbon-circle-dash inline-block h-3.5 w-3.5 flex-shrink-0 animate-spin"
-                :class="{ 'text-primary': activeThreadId === thread.id }"
-                title="正在执行" />
+              <div v-if="isThreadStreaming(thread.id)" class="streaming-wave" title="正在执行">
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+              </div>
             </div>
             <span class="session-meta">
               {{ formatRelativeTime(thread.updatedAt) }}
@@ -428,5 +428,37 @@ onMounted(() => {
 
 .session-list::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--foreground) / 0.2);
+}
+
+/* ====== 正在执行的波浪动画 ====== */
+
+.streaming-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 12px;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.wave-bar {
+  width: 2.5px;
+  background-color: hsl(var(--primary));
+  border-radius: 2px;
+  animation: wave-bounce 1.2s infinite ease-in-out;
+}
+
+/* 未选中状态下，波浪颜色变浅以融入背景 */
+.session-item:not(.active) .wave-bar {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.wave-bar:nth-child(1) { height: 60%; animation-delay: -0.24s; }
+.wave-bar:nth-child(2) { height: 100%; animation-delay: -0.12s; }
+.wave-bar:nth-child(3) { height: 80%; animation-delay: 0s; }
+
+@keyframes wave-bounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
 }
 </style>
