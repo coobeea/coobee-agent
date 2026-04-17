@@ -40,27 +40,23 @@ export const useChatStore = defineStore('chat', () => {
    * 获取或创建 thread 的消息状态
    */
   function getOrCreateThreadState(threadId: string): ThreadMessageState {
-    let state = threadMessageStates.value.get(threadId);
-    if (!state) {
-      state = {
+    if (!threadMessageStates.value.has(threadId)) {
+      threadMessageStates.value.set(threadId, {
         messages: [],
         currentAssistantMsg: null
-      };
-      threadMessageStates.value.set(threadId, state);
+      });
     }
-    return state;
+    return threadMessageStates.value.get(threadId)!;
   }
 
   /**
    * 获取 thread 的流状态
    */
   function getState(threadId: string): StreamState {
-    let state = streamStates.value.get(threadId);
-    if (!state) {
-      state = { isStreaming: false, currentSequence: 0 };
-      streamStates.value.set(threadId, state);
+    if (!streamStates.value.has(threadId)) {
+      streamStates.value.set(threadId, { isStreaming: false, currentSequence: 0 });
     }
-    return state;
+    return streamStates.value.get(threadId)!;
   }
 
   /**
