@@ -8,9 +8,9 @@
  *   │  🤖 智能体            │
  *   │  ⚙ 设置              │
  *   ├──────────────────────┤
- *   │  我的智能体           │  标题
- *   │  · 智能体 A          │  智能体快捷列表（可滚动）
- *   │  · 智能体 B          │
+ *   │  最近任务             │  标题
+ *   │  · 任务 A            │  任务列表（可滚动）
+ *   │  · 任务 B            │
  *   │  ...                 │
  *   └──────────────────────┘
  */
@@ -18,6 +18,7 @@
 import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
+import { useThreadsStore } from '@/stores/threads';
 
 interface MenuItem {
   id: string;
@@ -29,58 +30,79 @@ interface MenuItem {
 const router = useRouter();
 const route = useRoute();
 const agentsStore = useAgentsStore();
+const threadsStore = useThreadsStore();
 
 const activeMenuId = ref('home');
-const activeAgentId = ref<string | null>(null);
+const activeThreadId = ref<string | null>(null);
 
 // 常用菜单（显示在侧边栏）
 const mainMenuItems: MenuItem[] = [
   { id: 'home', label: '主页', icon: 'i-carbon-home', route: '/home' },
-  { id: 'agents', label: '智能体管理', icon: 'i-carbon-bot', route: '/agents' },
+  { id: 'agents', label: '智能体', icon: 'i-carbon-bot', route: '/agents' },
   { id: 'settings', label: '系统设置', icon: 'i-carbon-settings', route: '/settings' }
 ];
 
-// 我的智能体列表（最多显示5个）
-const myAgents = computed(() => {
-  return agentsStore.agents.slice(0, 5);
+// 最近任务列表（最多显示10个）
+const recentThreads = computed(() => {
+  return threadsStore.threads.slice(0, 10);
 });
 
+// 格式化相对时间
+function formatRelativeTime(timestamp: string): string {
+  const now = Date.now();
+  const then = new Date(timestamp).getTime();
+  const diff = now - then;
+  
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  if (hours < 24) return `${hours} 小时前`;
+  if (days < 7) return `${days} 天前`;
+  return new Date(timestamp).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+}
+
 const handleMenuClick = (item: MenuItem): void => {
-  activeAgentId.value = null;
+  activeThreadId.value = null;
   router.push(item.route);
 };
 
-const handleAgentClick = (agentId: string): void => {
-  activeAgentId.value = agentId;
-  router.push(`/agent-workspace/${agentId}`);
+const handleThreadClick = (threadId: string): void => {
+  activeThreadId.value = threadId;
+  threadsStore.selectThread(threadId);
+  
+  // 找到该 Thread 对应的 Agent，跳转到 Agent 工作区（带 threadId 参数）
+  const thread = threadsStore.threads.find((t) => t.id === threadId);
+  if (thread) {
+    router.push(`/agent-workspace/${thread.agentId}?threadId=${threadId}`);
+  }
 };
 
-const viewAllAgents = (): void => {
-  activeAgentId.value = null;
-  router.push('/agents');
+const refreshThreads = (): void => {
+  threadsStore.fetchThreads();
 };
 
 const updateActiveState = (): void => {
   const path = route.path;
   if (path.startsWith('/agent-workspace/')) {
-    // 在智能体工作区时，提取 agentId
-    const match = path.match(/^\/agent-workspace\/([^/]+)/);
-    if (match) {
-      activeAgentId.value = match[1];
-      activeMenuId.value = '';
-    }
+    // 在工作区时，清空菜单高亮
+    activeMenuId.value = '';
+    // 这里暂不高亮 thread（需要从路由获取 threadId）
   } else if (path.startsWith('/agents')) {
     activeMenuId.value = 'agents';
-    activeAgentId.value = null;
+    activeThreadId.value = null;
   } else if (route.name) {
     activeMenuId.value = route.name as string;
-    activeAgentId.value = null;
+    activeThreadId.value = null;
   }
 };
 
 watch(() => route.path, updateActiveState);
 onMounted(() => {
   agentsStore.fetchAgents();
+  threadsStore.fetchThreads();
   updateActiveState();
 });
 </script>
@@ -100,50 +122,44 @@ onMounted(() => {
       </button>
     </nav>
 
-    <!-- 智能体列表 -->
+    <!-- 最近任务 -->
     <div class="session-section">
       <div class="section-header">
-        <span>我的智能体</span>
+        <span>最近任务</span>
         <button
           class="refresh-btn"
           title="刷新"
-          @click="agentsStore.fetchAgents()">
-          <span class="i-carbon-renew inline-block h-3 w-3" :class="{ 'animate-spin': agentsStore.loading }" />
+          @click="refreshThreads">
+          <span class="i-carbon-renew inline-block h-3 w-3" :class="{ 'animate-spin': threadsStore.loading }" />
         </button>
       </div>
 
       <div class="session-list">
-        <!-- 智能体列表 -->
+        <!-- 任务列表 -->
         <div
-          v-for="agent in myAgents"
-          :key="agent.id"
+          v-for="thread in recentThreads"
+          :key="thread.id"
           class="session-item"
-          :class="{ active: activeAgentId === agent.id }"
-          @click="handleAgentClick(agent.id)">
+          :class="{ active: activeThreadId === thread.id }"
+          @click="handleThreadClick(thread.id)">
           <div class="session-info">
             <div class="session-title-row">
-              <span class="session-title">{{ agent.name }}</span>
+              <span class="session-title">{{ thread.title }}</span>
             </div>
             <span class="session-meta">
-              {{ agent.description }}
+              {{ formatRelativeTime(thread.updatedAt) }}
             </span>
           </div>
         </div>
 
-        <!-- 查看全部 -->
-        <button v-if="agentsStore.agentCount > 5" class="view-all-btn" @click="viewAllAgents">
-          <span class="i-carbon-grid inline-block h-3 w-3" />
-          <span>查看全部 ({{ agentsStore.agentCount }})</span>
-        </button>
-
         <!-- 空态 -->
-        <div v-if="myAgents.length === 0 && !agentsStore.loading" class="empty-state">
-          <span class="i-carbon-bot inline-block h-6 w-6 opacity-[0.08]" />
-          <p>还没有智能体<br />点击上方创建</p>
+        <div v-if="recentThreads.length === 0 && !threadsStore.loading" class="empty-state">
+          <span class="i-carbon-task-star inline-block h-6 w-6 opacity-[0.08]" />
+          <p>选择智能体并开启任务后<br />任务将出现在这里</p>
         </div>
 
         <!-- 加载中 -->
-        <div v-if="agentsStore.loading && myAgents.length === 0" class="empty-state">
+        <div v-if="threadsStore.loading && recentThreads.length === 0" class="empty-state">
           <span class="i-carbon-renew inline-block h-4 w-4 animate-spin opacity-20" />
         </div>
       </div>

@@ -10,8 +10,10 @@
  */
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
 import { useChatStore } from '@/stores/chat';
+import { useThreadsStore } from '@/stores/threads';
 import { useStreamHandler } from '@/composables/useStreamHandler';
 import { streamSubscribe, streamUnsubscribe } from '@/composables/useStreamWs';
 import { useGateway } from '@/composables/useGateway';
@@ -26,8 +28,10 @@ const props = defineProps<{
 
 const isCollapsed = defineModel<boolean>('collapsed', { default: false });
 
+const route = useRoute();
 const agentsStore = useAgentsStore();
 const chatStore = useChatStore();
+const threadsStore = useThreadsStore();
 const { request } = useGateway();
 
 /** 当前智能体 */
@@ -72,7 +76,7 @@ function handleStreamMessageWithSync(msg: StreamMessage): void {
 }
 
 /**
- * 初始化 Thread（创建或复用）
+ * 初始化 Thread（从 URL 加载或创建新的）
  */
 async function initializeThread(): Promise<void> {
   if (isInitializing.value || threadId.value) return;
@@ -80,16 +84,28 @@ async function initializeThread(): Promise<void> {
   isInitializing.value = true;
 
   try {
-    // 调用 Gateway RPC 创建新 Thread
-    const result = (await request('chat.createThread', {
-      agentId: props.agentId,
-      title: `${currentAgent.value?.name || 'Agent'} 工作区对话`
-    })) as { id: string };
+    // 1. 检查 URL 是否有 threadId 参数
+    const urlThreadId = route.query.threadId as string | undefined;
+    
+    if (urlThreadId) {
+      // 从 URL 加载已有 thread
+      threadId.value = urlThreadId;
+      console.log(`[AgentChatPanel] 从 URL 加载 Thread: ${threadId.value}`);
+    } else {
+      // 创建新 Thread
+      const result = (await request('chat.createThread', {
+        agentId: props.agentId,
+        title: `${currentAgent.value?.name || 'Agent'} 工作区对话`
+      })) as { id: string };
 
-    threadId.value = result.id;
-    console.log(`[AgentChatPanel] Thread 已创建: ${threadId.value}`);
+      threadId.value = result.id;
+      console.log(`[AgentChatPanel] 新建 Thread: ${threadId.value}`);
+      
+      // 刷新侧边栏任务列表
+      threadsStore.fetchThreads();
+    }
   } catch (error) {
-    console.error('[AgentChatPanel] Thread 创建失败:', error);
+    console.error('[AgentChatPanel] Thread 初始化失败:', error);
   } finally {
     isInitializing.value = false;
   }

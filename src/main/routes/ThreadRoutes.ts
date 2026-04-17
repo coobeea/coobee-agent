@@ -18,6 +18,40 @@ const log = createLogger('thread-routes');
  */
 export function registerThreadRoutes(router: Router): void {
   /**
+   * GET /gateway/threads
+   *
+   * 获取 Thread 列表
+   *
+   * Query 参数：
+   *   - agentId: 可选，按 Agent 过滤
+   *
+   * 返回格式：
+   * {
+   *   threads: [
+   *     { id, title, agentId, status, runStatus, ... },
+   *     ...
+   *   ]
+   * }
+   */
+  router.get('/threads', async (ctx) => {
+    try {
+      const { agentId } = ctx.query;
+      const store = await ThreadStore.getInstance();
+      
+      const threads = await store.list({
+        agentId: agentId as string | undefined
+      });
+
+      ctx.body = { threads };
+      log.debug(`[GET /threads] 返回 ${threads.length} 个任务`);
+    } catch (error) {
+      log.error('[GET /threads] 错误:', error);
+      ctx.status = 500;
+      ctx.body = { error: error instanceof Error ? error.message : 'Internal server error' };
+    }
+  });
+
+  /**
    * GET /gateway/threads/:threadId/history
    *
    * 获取 Thread 的历史消息（events.jsonl）
