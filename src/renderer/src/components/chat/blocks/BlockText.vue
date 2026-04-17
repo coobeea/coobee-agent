@@ -1,24 +1,56 @@
 <script setup lang="ts">
-/**
- * BlockText — 文本内容块
- *
- * 渲染 AI 的文本内容，支持 Markdown 渲染。
- */
+import type { ContentBlock } from '@/composables/useStreamHandler';
+import NodeRenderer from 'markstream-vue';
 
-import { computed } from 'vue';
-
-const props = defineProps<{
-  text: string;
+defineProps<{
+  block: ContentBlock & { type: 'text' };
 }>();
-
-/** 是否为空 */
-const isEmpty = computed(() => !props.text.trim());
 </script>
 
 <template>
-  <div
-    v-if="!isEmpty"
-    class="rounded-[10px] bg-muted/30 px-3 py-2.5 text-[13px] leading-relaxed text-foreground/92 break-words">
-    <div class="whitespace-pre-wrap">{{ text }}</div>
+  <div class="prose prose-zinc prose-sm dark:prose-invert w-full max-w-none">
+    <NodeRenderer :content="block.text" />
   </div>
 </template>
+
+<style scoped>
+/* 自定义 prose 样式微调 */
+.prose :deep(p) {
+  margin: 0.5rem 0;
+}
+
+.prose :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.prose :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.prose :deep(h1),
+.prose :deep(h2),
+.prose :deep(h3),
+.prose :deep(h4),
+.prose :deep(h5),
+.prose :deep(h6) {
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose :deep(ul),
+.prose :deep(ol) {
+  margin: 0.5rem 0;
+}
+
+.prose :deep(li p) {
+  margin: 0;
+}
+
+.prose :deep(pre) {
+  margin: 0.5rem 0;
+}
+
+.prose :deep(hr) {
+  margin: 1rem 0;
+}
+</style>

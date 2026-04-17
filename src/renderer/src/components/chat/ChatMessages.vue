@@ -1,107 +1,213 @@
 <script setup lang="ts">
 /**
- * ChatMessages — 消息列表容器
+ * ChatMessages — 统一对话消息列表组件
  *
- * 负责渲染消息列表，区分用户消息和 AI 消息。
+ * 封装了优秀的消息排版布局，负责消息的整体渲染与自动滚动控制。
  */
 
-import { ref, watch, nextTick } from 'vue';
-import type { StreamChatMessage } from '@/types/chat';
-import MessageItemUser from './MessageItemUser.vue';
-import MessageItemAssistant from './MessageItemAssistant.vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
+import type { ContentBlock, PendingApproval } from '@/composables/useStreamHandler';
+import type { HitlApprovalDecision } from '@shared/stream-protocol';
+import MessageItemUser from './items/MessageItemUser.vue';
+import MessageItemAssistant from './items/MessageItemAssistant.vue';
 
-const props = defineProps<{
-  messages: StreamChatMessage[];
-  isStreaming?: boolean;
-}>();
-
-const containerRef = ref<HTMLElement | null>(null);
-
-/**
- * 滚动到底部
- */
-async function scrollToBottom(): Promise<void> {
-  await nextTick();
-  if (containerRef.value) {
-    containerRef.value.scrollTop = containerRef.value.scrollHeight;
-  }
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  blocks?: ContentBlock[];
+  status?: string;
+  timestamp: number;
+  error?: string;
+  pendingApprovals?: PendingApproval[];
 }
 
-// 监听消息变化，自动滚动到底部
-watch(
-  () => props.messages.length,
-  () => {
-    scrollToBottom();
-  },
-  { flush: 'post' }
+const props = withDefaults(
+  defineProps<{
+    messages: ChatMessage[];
+    isStreaming?: boolean;
+  }>(),
+  {
+    isStreaming: false
+  }
 );
 
-// 暴露方法给父组件
+const emit = defineEmits<{
+  decide: [approval: PendingApproval, decision: HitlApprovalDecision];
+}>();
+
+const currentActivity = computed<string>(() => {
+  if (!props.isStreaming || props.messages.length === 0) return '处理中...';
+  const last = props.messages[props.messages.length - 1];
+  if (last.role !== 'assistant' || !last.blocks?.length) return '思考中...';
+  const lastBlock = last.blocks[last.blocks.length - 1];
+  if (lastBlock.type === 'tool' && 'tool' in lastBlock) {
+    const toolName = lastBlock.tool.name;
+    if (lastBlock.tool.status === 'calling') return `执行 ${toolName}...`;
+    if (lastBlock.tool.status === 'approval-pending') return `等待审批 ${toolName}...`;
+  }
+  if (lastBlock.type === 'thinking') return '推理中...';
+  if (lastBlock.type === 'delegate' && 'delegate' in lastBlock) {
+    return `委派给 ${lastBlock.delegate.agentName || '子智能体'}...`;
+  }
+  return '生成中...';
+});
+
+const messageContainer = ref<HTMLElement | null>(null);
+
+// ========== 智能滚动：用户往上浏览时不强制拉回底部 ==========
+const userScrolledUp = ref(false);
+
+function isNearBottom(): boolean {
+  const el = messageContainer.value;
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+}
+
+function handleScroll(): void {
+  userScrolledUp.value = !isNearBottom();
+}
+
+function scrollToBottom(force = false): void {
+  if (!force && userScrolledUp.value) return;
+
+  const doScroll = (): void => {
+    if (messageContainer.value) {
+      messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
+      userScrolledUp.value = false;
+    }
+  };
+
+  nextTick(() => {
+    doScroll();
+    // 如果是强制滚动（如加载历史），额外增加一个延迟以确保 Markdown/图片 等异步内容渲染完成
+    if (force) {
+      setTimeout(doScroll, 100);
+      setTimeout(doScroll, 300);
+    }
+  });
+}
+
 defineExpose({
   scrollToBottom
+});
+
+// 监听消息数量变化（新消息到达）
+watch(
+  () => props.messages.length,
+  (newLen, oldLen) => {
+    // 如果是首次加载历史消息（从 0 到有），强制滚动到底部
+    if (oldLen === 0 && newLen > 0) {
+      scrollToBottom(true);
+    } else {
+      scrollToBottom();
+    }
+  }
+);
+
+// 监听流式内容增量更新
+watch(
+  () => {
+    const msgs = props.messages;
+    if (msgs.length === 0) return 0;
+    const last = msgs[msgs.length - 1];
+    const blockCount = last.blocks?.length ?? 0;
+    const lastBlock = blockCount > 0 && last.blocks ? last.blocks[blockCount - 1] : null;
+    const lastLen = lastBlock ? ('text' in lastBlock ? lastBlock.text.length : 0) : 0;
+    return last.content.length + blockCount * 1000 + lastLen;
+  },
+  () => scrollToBottom()
+);
+
+onMounted(() => {
+  scrollToBottom(true);
 });
 </script>
 
 <template>
-  <div
-    ref="containerRef"
-    class="flex-1 overflow-y-auto p-4 flex flex-col gap-4 chat-messages-scrollbar">
+  <div ref="messageContainer" class="panel-messages selectable" @scroll="handleScroll">
     <!-- 空状态 -->
-    <div
-      v-if="messages.length === 0"
-      class="flex flex-col items-center justify-center gap-3 flex-1 text-muted-foreground/40 text-[13px] text-center">
-      <span class="i-carbon-chat inline-block h-12 w-12 opacity-10" />
-      <p>开始与智能体对话</p>
+    <div v-if="messages.length === 0" class="panel-empty">
+      <slot name="empty">
+        <div class="panel-empty-icon">
+          <span class="i-mdi-star-four-points inline-block h-8 w-8" />
+        </div>
+        <p class="panel-empty-title">有什么可以帮您？</p>
+        <p class="panel-empty-sub">输入消息开始对话</p>
+      </slot>
     </div>
 
     <!-- 消息列表 -->
-    <div
-      v-for="message in messages"
-      :key="message.id"
-      class="animate-message-in">
-      <MessageItemUser
-        v-if="message.role === 'user'"
-        :message="message" />
+    <template v-for="msg in messages" :key="msg.id">
+      <MessageItemUser v-if="msg.role === 'user'" :message="msg" />
       <MessageItemAssistant
         v-else
-        :message="message" />
-    </div>
+        :message="msg"
+        @decide="(approval, decision) => emit('decide', approval, decision)" />
+    </template>
 
-    <!-- 流式响应加载状态 -->
-    <div
-      v-if="isStreaming && messages[messages.length - 1]?.role === 'assistant'"
-      class="flex items-center justify-center p-2 text-muted-foreground/50">
-      <span class="i-carbon-renew inline-block h-3 w-3 animate-spin opacity-50" />
+    <div v-if="isStreaming" class="stream-indicator">
+      <span class="relative flex h-2 w-2">
+        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60"></span>
+        <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+      </span>
+      <span class="ml-1.5 text-xs font-medium text-muted-foreground">{{ currentActivity }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes messageIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ====== 消息区域样式 ====== */
+.panel-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.animate-message-in {
-  animation: messageIn 0.2s ease;
+/* 空状态 */
+.panel-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 32px;
+  opacity: 0.8;
 }
 
-.chat-messages-scrollbar::-webkit-scrollbar {
-  width: 4px;
+.panel-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  margin-bottom: 20px;
 }
 
-.chat-messages-scrollbar::-webkit-scrollbar-thumb {
-  background: hsl(var(--foreground) / 0.1);
-  border-radius: 4px;
+.panel-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 8px;
 }
 
-.chat-messages-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--foreground) / 0.2);
+.panel-empty-sub {
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.stream-indicator {
+  padding: 6px 16px 12px;
+  display: flex;
+  align-items: center;
+  color: hsl(var(--muted-foreground) / 0.5);
 }
 </style>

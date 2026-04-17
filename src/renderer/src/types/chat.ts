@@ -1,50 +1,86 @@
 /**
- * 聊天相关类型定义
+ * Chat 相关类型定义
  */
 
-/** 消息状态 */
-export type MessageStatus = 'pending' | 'streaming' | 'done' | 'error';
+import type { HitlApprovalDecision } from '@shared/stream-protocol';
 
-/** 内容块类型 */
-export type ContentBlockType = 'text' | 'thinking' | 'tool';
-
-/** 工具调用状态 */
-export type ToolCallStatus = 'calling' | 'approval-pending' | 'done' | 'error';
-
-/** 工具调用信息 */
-export interface ToolCall {
-  /** 工具名称 */
+/**
+ * 工具调用信息
+ */
+export interface ToolCallInfo {
   name?: string;
-  /** 工具参数 */
   arguments?: string;
-  /** 工具结果 */
   result?: string;
-  /** 状态 */
-  status: ToolCallStatus;
-  /** 错误信息 */
-  error?: string;
+  status: 'calling' | 'done' | 'error' | 'approval-pending';
 }
 
-/** 内容块 */
-export interface ContentBlock {
-  /** 块类型 */
-  type: ContentBlockType;
-  /** 文本内容（text/thinking 类型） */
-  text?: string;
-  /** 工具调用（tool 类型） */
-  tool?: ToolCall;
+/**
+ * 委派信息
+ */
+export interface DelegateInfo {
+  agentId: string;
+  agentName?: string;
+  task?: string;
+  status: 'running' | 'done';
+  output?: string;
+  duration?: number;
 }
 
-/** 流式聊天消息 */
+/**
+ * HITL 审批信息
+ */
+export interface PendingApproval {
+  index: number;
+  toolName: string;
+  arguments?: string;
+  decision?: HitlApprovalDecision;
+  /** 审批所属的 session（支持子 Agent），缺省为当前 thread */
+  sessionId?: string;
+  /** 是否可以显示（必须等到 run:done 后） */
+  canShow?: boolean;
+}
+
+/**
+ * 执行输出条目
+ */
+export interface ExecOutputEntry {
+  timestamp: number;
+  type: 'progress' | 'output' | 'result';
+  toolName: string;
+  content: string;
+}
+
+/**
+ * 内容块类型
+ */
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
+  | { type: 'tool'; tool: ToolCallInfo }
+  | { type: 'delegate'; delegate: DelegateInfo }
+  | { type: 'quality'; status: string; detail?: string }
+  | { type: 'audio'; src: string; title?: string };
+
+/**
+ * 消息状态
+ */
+export type MessageStatus = 'sending' | 'streaming' | 'done' | 'error' | 'interrupted';
+
+/**
+ * 流式聊天消息（UI 可渲染）
+ */
 export interface StreamChatMessage {
-  /** 消息 ID */
   id: string;
-  /** 角色 */
   role: 'user' | 'assistant';
-  /** 内容块列表 */
+  content: string;
   blocks: ContentBlock[];
-  /** 消息状态 */
+  pendingApprovals?: PendingApproval[];
   status: MessageStatus;
-  /** 时间戳 */
+  error?: string;
   timestamp: number;
 }
+
+// 兼容旧的类型别名
+export type { ToolCallInfo as ToolCall };
+export type ContentBlockType = ContentBlock['type'];
+export type ToolCallStatus = ToolCallInfo['status'];

@@ -7,8 +7,11 @@
 
 import { ref, computed, nextTick } from 'vue';
 import type { StreamMessage } from '@shared/stream-protocol';
-import type { StreamChatMessage, ContentBlock } from '@/types/chat';
+import type { StreamChatMessage, ContentBlock, PendingApproval, ExecOutputEntry } from '@/types/chat';
 import { nanoid } from 'nanoid';
+
+// 导出类型供外部使用
+export type { ContentBlock, PendingApproval, ExecOutputEntry };
 
 export interface UseStreamHandlerOptions {
   /** ID 前缀 */
@@ -39,6 +42,7 @@ export function useStreamHandler(options: UseStreamHandlerOptions = {}) {
     const userMsg: StreamChatMessage = {
       id: `${idPrefix}-user-${nanoid(8)}`,
       role: 'user',
+      content,
       blocks: [{ type: 'text', text: content }],
       status: 'done',
       timestamp: Date.now()
