@@ -51,8 +51,15 @@ function removeFile(index: number): void {
   files.value.splice(index, 1);
 }
 
+function focus(): void {
+  // 给 textarea 获取焦点
+  const textarea = document.querySelector('.chat-input') as HTMLTextAreaElement;
+  textarea?.focus();
+}
+
 defineExpose({
-  insertFileReference
+  insertFileReference,
+  focus
 });
 </script>
 
