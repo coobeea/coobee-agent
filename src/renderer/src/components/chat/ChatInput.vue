@@ -1,232 +1,326 @@
 <script setup lang="ts">
 /**
- * ChatInput — 对话输入组件
+ * ChatInput — 统一的对话输入框组件（基于 Tiptap）
  *
- * 提供消息输入、文件引用等功能
+ * 支持富文本编辑、文件引用、Enter 发送等功能。
  */
 
-import { ref } from 'vue';
+import { watch, onUnmounted } from 'vue';
+import { useEditor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import { FileReference } from '../editor/extensions/FileReference';
 
-defineProps<{
-  disabled?: boolean;
-  placeholder?: string;
-  showStopButton?: boolean;
-}>();
+export interface FileReferenceData {
+  path: string;
+  name: string;
+}
+
+const props = withDefaults(
+  defineProps<{
+    placeholder?: string;
+    disabled?: boolean;
+    showStopButton?: boolean;
+  }>(),
+  {
+    placeholder: '输入消息... (Enter 发送，Shift+Enter 换行)',
+    disabled: false,
+    showStopButton: false
+  }
+);
 
 const emit = defineEmits<{
-  send: [data: { text: string; files?: Array<{ path: string; name: string }> }];
+  send: [data: { text: string; files: FileReferenceData[] }];
   stop: [];
 }>();
 
-const inputText = ref('');
-const files = ref<Array<{ path: string; name: string }>>([]);
+// 创建 Tiptap 编辑器
+const editor = useEditor({
+  extensions: [
+    StarterKit.configure({
+      // 禁用默认的 Enter 行为，我们自己处理
+      hardBreak: {
+        keepMarks: true
+      },
+      // 禁用多余的标记（只需要纯文本和文件引用）
+      bold: false,
+      italic: false,
+      strike: false,
+      code: false,
+      heading: false,
+      bulletList: false,
+      orderedList: false,
+      blockquote: false,
+      codeBlock: false,
+      horizontalRule: false
+    }),
+    Placeholder.configure({
+      placeholder: props.placeholder
+    }),
+    FileReference
+  ],
+  editorProps: {
+    attributes: {
+      class: 'tiptap-editor'
+    }
+  },
+  autofocus: false,
+  editable: !props.disabled
+});
 
+// 发送消息
 function handleSend(): void {
-  const text = inputText.value.trim();
+  if (!editor.value || props.disabled) return;
+
+  const text = editor.value.getText().trim();
   if (!text) return;
 
-  emit('send', {
-    text,
-    files: files.value.length > 0 ? [...files.value] : undefined
+  // 提取文件引用
+  const files: FileReferenceData[] = [];
+  const json = editor.value.getJSON();
+
+  // 遍历文档节点，提取文件引用
+  interface TiptapNode {
+    type?: string;
+    content?: TiptapNode[];
+    attrs?: Record<string, unknown>;
+  }
+
+  json.content?.forEach((node: TiptapNode) => {
+    if (node.type === 'paragraph' && node.content) {
+      node.content.forEach((child: TiptapNode) => {
+        if (child.type === 'fileReference' && child.attrs) {
+          files.push({
+            path: child.attrs.path as string,
+            name: child.attrs.name as string
+          });
+        }
+      });
+    }
   });
 
-  inputText.value = '';
-  files.value = [];
+  emit('send', { text, files });
+
+  // 清空编辑器
+  editor.value.commands.clearContent();
+  editor.value.commands.focus();
 }
 
+// 键盘事件处理
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     handleSend();
   }
 }
 
-function insertFileReference(file: { path: string; name: string }): void {
-  if (!files.value.find((f) => f.path === file.path)) {
-    files.value.push(file);
+// 插入文件引用
+function insertFileReference(file: FileReferenceData): void {
+  if (!editor.value) return;
+
+  editor.value
+    .chain()
+    .focus()
+    .insertFileReference({
+      path: file.path,
+      name: file.name
+    })
+    .insertContent(' ')
+    .run();
+}
+
+// 监听 disabled 状态变化
+watch(
+  () => props.disabled,
+  (disabled) => {
+    editor.value?.setEditable(!disabled);
   }
-}
+);
 
-function removeFile(index: number): void {
-  files.value.splice(index, 1);
-}
+// 监听编辑器内容的键盘事件
+let keydownCleanup: (() => void) | null = null;
 
-function focus(): void {
-  // 给 textarea 获取焦点
-  const textarea = document.querySelector('.chat-input') as HTMLTextAreaElement;
-  textarea?.focus();
+watch(
+  () => editor.value,
+  (editorInstance) => {
+    // 清理之前的事件监听
+    if (keydownCleanup) {
+      keydownCleanup();
+      keydownCleanup = null;
+    }
+
+    if (editorInstance) {
+      const el = editorInstance.view.dom;
+      el.addEventListener('keydown', handleKeydown);
+
+      keydownCleanup = () => {
+        el.removeEventListener('keydown', handleKeydown);
+      };
+    }
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  if (keydownCleanup) {
+    keydownCleanup();
+  }
+});
+
+function setInputText(text: string): void {
+  if (!editor.value) return;
+  editor.value.commands.clearContent();
+  editor.value.commands.insertContent(text);
+  editor.value.commands.focus('end');
 }
 
 defineExpose({
+  focus: () => editor.value?.commands.focus(),
+  clear: () => editor.value?.commands.clearContent(),
   insertFileReference,
-  focus
+  setInputText
+});
+
+onUnmounted(() => {
+  editor.value?.destroy();
 });
 </script>
 
 <template>
-  <div class="chat-input-container">
-    <!-- 文件引用列表 -->
-    <div v-if="files.length > 0" class="file-refs">
-      <div v-for="(file, index) in files" :key="file.path" class="file-ref-item">
-        <span class="i-carbon-document inline-block h-3 w-3" />
-        <span class="file-ref-name">{{ file.name }}</span>
-        <button class="file-ref-remove" @click="removeFile(index)">
-          <span class="i-carbon-close inline-block h-3 w-3" />
-        </button>
-      </div>
-    </div>
+  <div class="chat-input-wrapper">
+    <EditorContent :editor="editor" class="chat-input" />
 
-    <!-- 输入区 -->
-    <div class="input-wrapper">
-      <textarea
-        v-model="inputText"
-        class="chat-input"
-        :placeholder="placeholder || '输入消息...'"
-        :disabled="disabled"
-        @keydown="handleKeydown" />
-      
-      <!-- 停止按钮（流式响应时显示） -->
+    <!-- 工具栏（右下角） -->
+    <div v-if="showStopButton" class="chat-input-toolbar">
+      <!-- 停止按钮 -->
       <button
-        v-if="showStopButton"
-        class="stop-btn"
+        class="toolbar-btn-stop"
         title="中断"
-        @click="emit('stop')">
-        <span class="i-carbon-stop-filled inline-block h-4 w-4" />
-      </button>
-
-      <!-- 发送按钮（正常状态） -->
-      <button
-        v-else
-        class="send-btn"
-        :disabled="!inputText.trim() || disabled"
-        @click="handleSend">
-        <span class="i-carbon-send-alt inline-block h-4 w-4" />
+        @click="
+          () => {
+            console.log('[ChatInput] Stop button clicked');
+            emit('stop');
+          }
+        ">
+        <span class="i-carbon-stop-filled inline-block h-3.5 w-3.5" />
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.chat-input-container {
+.chat-input-wrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  border-top: 1px solid hsl(var(--border) / 0.2);
-  background: hsl(var(--surface) / 0.6);
+  padding: 6px 10px;
+  border-top: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--muted) / 0.2);
+  transition: background-color 0.15s ease;
 }
 
-.file-refs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid hsl(var(--border) / 0.15);
-}
-
-.file-ref-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 6px;
+.chat-input-wrapper:focus-within {
   background: hsl(var(--muted) / 0.3);
-  color: hsl(var(--foreground) / 0.7);
-  font-size: 12px;
-  border: 1px solid hsl(var(--border) / 0.3);
-}
-
-.file-ref-name {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-ref-remove {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: 3px;
-  color: hsl(var(--muted-foreground) / 0.5);
-  transition: all 0.1s ease;
-}
-
-.file-ref-remove:hover {
-  background: hsl(var(--error) / 0.1);
-  color: hsl(var(--error));
-}
-
-.input-wrapper {
-  display: flex;
-  gap: 8px;
-  padding: 12px 16px;
 }
 
 .chat-input {
-  flex: 1;
-  min-height: 36px;
-  max-height: 120px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid hsl(var(--border) / 0.4);
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-size: 13px;
-  line-height: 1.5;
-  resize: none;
+  width: 100%;
+  min-height: 80px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.chat-input-toolbar {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-btn-stop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--error));
   transition: all 0.15s ease;
+  cursor: pointer;
 }
 
-.chat-input:focus {
-  border-color: hsl(var(--primary));
+.toolbar-btn-stop:hover {
+  opacity: 0.85;
+}
+
+/* Tiptap 编辑器样式 */
+.chat-input :deep(.tiptap-editor) {
+  padding: 12px 14px;
+  padding-bottom: 40px;
+  min-height: 80px;
+  color: hsl(var(--foreground));
+  font-size: 14px;
+  line-height: 1.6;
   outline: none;
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2);
 }
 
-.chat-input:disabled {
+.chat-input :deep(.tiptap-editor p) {
+  margin: 0;
+}
+
+.chat-input :deep(.tiptap-editor p.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground) / 0.4);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 文件引用样式 */
+.chat-input :deep(.file-reference) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  margin: 0 2px;
+  border-radius: 6px;
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: all;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.chat-input :deep(.file-reference:hover) {
+  background: hsl(var(--primary) / 0.15);
+  border-color: hsl(var(--primary) / 0.25);
+}
+
+.chat-input :deep(.file-reference-icon) {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chat-input :deep(.file-reference-name) {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 编辑器禁用状态 */
+.chat-input :deep(.tiptap-editor.ProseMirror-focused) {
+  outline: none;
+}
+
+.chat-input :deep(.tiptap-editor[contenteditable='false']) {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.send-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.send-btn:hover:not(:disabled) {
-  background: hsl(var(--primary-hover));
-  box-shadow: 0 2px 8px hsl(var(--primary) / 0.3);
-}
-
-.send-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.stop-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.stop-btn:hover {
-  opacity: 0.85;
-  box-shadow: 0 2px 8px hsl(var(--destructive) / 0.3);
 }
 </style>
