@@ -34,6 +34,11 @@ const router = createRouter({
           component: () => import('@/views/AgentWorkspaceView.vue')
         },
         {
+          path: 'thread/:id',
+          name: 'thread',
+          component: () => import('@/views/ThreadView.vue')
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/SettingsView.vue')

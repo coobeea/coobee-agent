@@ -1,23 +1,19 @@
 <script setup lang="ts">
 /**
- * ChatPanel — 对话面板（轻量化重构版）
+ * ChatPanel — 对话面板（重构版）
  *
- * Agent 的对话交互区域：消息流、工具调用、HITL 审批。
- * 重构：messages 由组件本地持有（useStreamHandler），unmounted 时自动释放。
+ * Agent 的对话交互区域：消息流、工具调用。
+ * messages 由组件本地持有（useStreamHandler），unmounted 时自动释放。
  */
 
-import { ref, inject, provide, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, provide, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
 import { useStreamHandler } from '@/composables/useStreamHandler';
 import { streamSubscribe, streamUnsubscribe } from '@/composables/useStreamWs';
-import type { PendingApproval } from '@/composables/useStreamHandler';
-import type { HitlApprovalDecision, StreamMessage } from '@shared/stream-protocol';
-import { gateway } from '@/plugins/gatewaySetup';
-import configManager from '@/config';
+import type { StreamMessage } from '@shared/stream-protocol';
+import { useGateway } from '@/composables/useGateway';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
 import ChatInput from '@/components/chat/ChatInput.vue';
-import MessageQueue from '@/components/chat/MessageQueue.vue';
-import type { Ref } from 'vue';
 
 // ==================== Props ====================
 const props = defineProps<{
@@ -26,7 +22,7 @@ const props = defineProps<{
 
 // ==================== Store & Composables ====================
 const chatStore = useChatStore();
-const streamState = chatStore.getState(props.threadId); // 仅队列状态
+const { request } = useGateway();
 
 // 使用 useStreamHandler 管理本地消息（组件级状态）
 const { messages, isStreaming, execOutputs, handleStreamMessage, addUserMessage, resetAll } = useStreamHandler({
@@ -38,7 +34,6 @@ const { messages, isStreaming, execOutputs, handleStreamMessage, addUserMessage,
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null);
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 const isCollapsed = defineModel<boolean>('collapsed', { default: false });
-const pendingSkillRef = inject<Ref<string | null>>('pendingSkillRef', ref(null));
 
 // 提供 execOutputs 给子组件（如 TerminalPanel）
 provide('execOutputs', execOutputs);
@@ -49,11 +44,7 @@ function scrollToBottom(force = false): void {
 }
 
 function insertFileReference(file: { path: string; name: string }): void {
-  chatInputRef.value?.insertFileReference(file);
-}
-
-function insertSkillPrompt(prompt: string): void {
-  chatInputRef.value?.setInputText(prompt);
+  chatInputRef.value?.insertFileReference?.(file);
 }
 
 // 新消息到达 → 自动滚动
@@ -76,67 +67,33 @@ watch(
   () => scrollToBottom()
 );
 
-async function handleSend(data: { text: string; files: { path: string; name: string }[] }): Promise<void> {
+async function handleSend(data: { text: string; files?: { path: string; name: string }[] }): Promise<void> {
   if (!data.text) return;
 
   scrollToBottom(true);
-
-  const skillRef = pendingSkillRef.value ?? undefined;
-  if (pendingSkillRef.value) {
-    pendingSkillRef.value = null;
-  }
 
   // 添加用户消息到本地
   addUserMessage(data.text);
 
   // 发送到后端（后端会推送流式事件）
-  await chatStore.sendMessage(props.threadId, data.text, data.files, skillRef ? { skillRef } : undefined);
+  try {
+    await request('chat.sendMessage', {
+      sessionId: props.threadId,
+      message: data.text
+    });
+  } catch (error) {
+    console.error('[ChatPanel] sendMessage error:', error);
+  }
 }
 
 async function handleStop(): Promise<void> {
   console.log('[ChatPanel] handleStop called for thread:', props.threadId);
-  await chatStore.abortSession(props.threadId);
-  console.log('[ChatPanel] abortSession completed');
-}
-
-function handleApproval(approval: PendingApproval, decision: HitlApprovalDecision): void {
-  if (approval.decision) return;
-
-  chatStore.submitDecision(props.threadId, approval.index, decision, approval.sessionId);
-
-  const decisionText = decision === 'approve-once' ? '已允许' : decision === 'approve-always' ? '始终允许' : '已拒绝';
-
-  messages.value.push({
-    id: `user-decision-${Date.now()}`,
-    role: 'user',
-    content: `[${decisionText}执行 ${approval.toolName} 工具]`,
-    blocks: [],
-    status: 'done',
-    timestamp: Date.now()
-  });
-}
-
-// ==================== 运行状态验证 ====================
-let statusCheckTimer: ReturnType<typeof setInterval> | null = null;
-const STATUS_CHECK_INTERVAL = 15_000;
-
-async function verifyRunStatus(): Promise<void> {
-  if (!isStreaming.value) return;
-
   try {
-    const baseUrl = configManager.getBaseUrl();
-    const res = await fetch(`${baseUrl}/gateway/threads/${props.threadId}`);
-    if (res.ok) {
-      const data = (await res.json()) as { thread?: { runStatus?: string } };
-      const backendStatus = data?.thread?.runStatus;
-      if (backendStatus && !['running', 'tool-pending', 'approval-pending'].includes(backendStatus)) {
-        console.warn(`[ChatPanel] Backend runStatus="${backendStatus}" but frontend is streaming. Force ending.`);
-        isStreaming.value = false;
-        chatStore.setStreaming(props.threadId, false);
-      }
-    }
-  } catch {
-    // Silent fail
+    await request('chat.abortMessage', {
+      sessionId: props.threadId
+    });
+  } catch (error) {
+    console.error('[ChatPanel] abortMessage error:', error);
   }
 }
 
@@ -151,9 +108,9 @@ function handleStreamMessageWithSync(msg: StreamMessage): void {
 
   // 同步 Store 的 isStreaming 状态
   if (msg.type === 'run:start') {
-    chatStore.setStreaming(props.threadId, true);
+    chatStore.setState(props.threadId, true);
   } else if (msg.type === 'run:done' || msg.type === 'run:error') {
-    chatStore.setStreaming(props.threadId, false);
+    chatStore.setState(props.threadId, false);
   }
 }
 
@@ -178,33 +135,24 @@ function unsubscribe(): void {
   }
 }
 
-// Watch isStreaming: 管理状态检查定时器（不取消订阅！）
-watch(
-  isStreaming,
-  (streaming) => {
-    if (streaming) {
-      if (!statusCheckTimer) {
-        statusCheckTimer = setInterval(verifyRunStatus, STATUS_CHECK_INTERVAL);
-      }
-    } else {
-      // 流式处理结束，只停止定时器
-      // ✅ 不取消订阅！订阅保持到 unmount 或 threadId 变化
-      if (statusCheckTimer) {
-        clearInterval(statusCheckTimer);
-        statusCheckTimer = null;
-      }
-    }
-  },
-  { immediate: true }
-);
-
 // ==================== 历史加载 ====================
 
 async function loadThreadHistory(): Promise<void> {
   try {
-    const history = await chatStore.loadHistory(props.threadId);
+    const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
+    const res = await fetch(`${baseUrl}/threads/${props.threadId}/history`);
 
-    if (history.messages.length === 0 && history.userMessages.length === 0) {
+    if (!res.ok) {
+      console.warn('[ChatPanel] 历史加载失败:', res.statusText);
+      return;
+    }
+
+    const history = (await res.json()) as {
+      events: Array<{ ts: string; seq: number; type: string; content: string; data?: Record<string, unknown> }>;
+      userMessages: Array<{ content: string; timestamp: number }>;
+    };
+
+    if (history.events.length === 0 && history.userMessages.length === 0) {
       return;
     }
 
@@ -212,7 +160,7 @@ async function loadThreadHistory(): Promise<void> {
 
     let userIdx = 0;
 
-    for (const evt of history.messages) {
+    for (const evt of history.events) {
       // 转换历史事件为 StreamMessage 格式
       const streamMsg: StreamMessage = {
         id: `hist-${evt.seq}`,
@@ -242,8 +190,7 @@ async function loadThreadHistory(): Promise<void> {
     }
 
     // 历史加载完成后，统一同步一次 Store 的 isStreaming 状态
-    // 避免在循环中频繁触发 setStreaming 导致副作用（如自动消费队列）
-    chatStore.setStreaming(props.threadId, isStreaming.value);
+    chatStore.setState(props.threadId, isStreaming.value);
 
     await nextTick();
     scrollToBottom(true);
@@ -257,7 +204,7 @@ onMounted(async () => {
   scrollToBottom();
   // 加载历史消息
   await loadThreadHistory();
-  // 订阅流式更新（无论是否正在 streaming，都需要订阅以接收后续事件）
+  // 订阅流式更新
   ensureSubscription();
 });
 
@@ -280,74 +227,65 @@ watch(
 
 onUnmounted(() => {
   unsubscribe();
-  if (statusCheckTimer) {
-    clearInterval(statusCheckTimer);
-    statusCheckTimer = null;
-  }
-  // messages 由 Vue 自动释放，无需手动清理 ✅
 });
 
 defineExpose({
-  insertFileReference,
-  insertSkillPrompt
+  insertFileReference
 });
 </script>
 
 <template>
-  <aside v-show="!isCollapsed" class="flex min-h-0 flex-1 flex-col border-l border-gray-200/80 bg-[#f7f7f8]">
+  <aside v-show="!isCollapsed" class="chat-panel">
+    <!-- 折叠按钮 -->
+    <button class="collapse-btn" title="折叠面板" @click="isCollapsed = true">
+      <span class="i-carbon-chevron-right inline-block h-3 w-3"></span>
+    </button>
+
     <!-- 消息区域 -->
-    <ChatMessages ref="chatMessagesRef" :messages="messages" :is-streaming="isStreaming" @decide="handleApproval">
-      <template #empty>
-        <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-          <span class="i-carbon-chat-bot inline-block h-6 w-6 text-primary"></span>
-        </div>
-        <h2 class="mb-1 text-sm font-semibold text-gray-600">有什么可以帮您？</h2>
-        <p class="text-center text-xs text-gray-400">输入消息开始对话</p>
-      </template>
-    </ChatMessages>
-
-    <!-- 队列状态提示 -->
-    <div
-      v-if="streamState.isQueued && streamState.queueStatus"
-      class="flex items-center gap-1.5 border-t border-amber-200/80 bg-amber-50/60 px-3 py-1.5">
-      <span class="i-carbon-queue inline-block h-3 w-3 text-amber-500"></span>
-      <span class="text-[10px] text-amber-600">
-        消息已排队 (位置:
-        {{ streamState.queueStatus.queueLength }})
-      </span>
-    </div>
-
-    <!-- 待发送消息队列 -->
-    <MessageQueue
-      :queue="streamState.messageQueue"
-      @remove="(queueId) => chatStore.removeFromQueue(threadId, queueId)" />
+    <ChatMessages
+      ref="chatMessagesRef"
+      :messages="messages"
+      :is-streaming="isStreaming" />
 
     <!-- 输入区域 -->
     <ChatInput
       ref="chatInputRef"
-      :placeholder="isStreaming ? '可继续输入（消息将排队处理）' : '输入消息... (Enter 发送，Shift+Enter 换行)'"
-      :disabled="false"
-      :show-stop-button="isStreaming"
+      :disabled="isStreaming"
+      :placeholder="isStreaming ? '智能体正在处理中...' : '输入消息...'"
       @send="handleSend"
       @stop="handleStop" />
-
-    <!-- 错误提示 -->
-    <div v-if="gateway.lastError.value" class="error-banner">
-      <span class="i-carbon-warning inline-block h-3 w-3"></span>
-      <span>{{ gateway.lastError.value }}</span>
-    </div>
   </aside>
 </template>
 
 <style scoped>
-.error-banner {
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: hsl(var(--background));
+  border-left: 1px solid hsl(var(--border) / 0.4);
+  position: relative;
+}
+
+.collapse-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: hsl(var(--error) / 0.1);
-  color: hsl(var(--error));
-  font-size: 11px;
-  border-top: 1px solid hsl(var(--error) / 0.2);
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: hsl(var(--muted-foreground) / 0.5);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.collapse-btn:hover {
+  background: hsl(var(--foreground) / 0.06);
+  color: hsl(var(--foreground) / 0.7);
 }
 </style>

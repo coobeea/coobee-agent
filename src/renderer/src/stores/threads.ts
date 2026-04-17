@@ -52,10 +52,10 @@ export const useThreadsStore = defineStore('threads', () => {
       const data = await res.json();
       threads.value = data.threads || [];
       
-      log.info(`[fetchThreads] 已加载 ${threads.value.length} 个任务`);
+      console.log(`[ThreadsStore] 已加载 ${threads.value.length} 个任务`);
     } catch (err) {
       error.value = err instanceof Error ? err.message : '加载任务列表失败';
-      log.error('[fetchThreads] 失败:', err);
+      console.error('[ThreadsStore] 加载失败:', err);
       threads.value = [];
     } finally {
       loading.value = false;

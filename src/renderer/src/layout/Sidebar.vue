@@ -73,11 +73,8 @@ const handleThreadClick = (threadId: string): void => {
   activeThreadId.value = threadId;
   threadsStore.selectThread(threadId);
   
-  // 找到该 Thread 对应的 Agent，跳转到 Agent 工作区（带 threadId 参数）
-  const thread = threadsStore.threads.find((t) => t.id === threadId);
-  if (thread) {
-    router.push(`/agent-workspace/${thread.agentId}?threadId=${threadId}`);
-  }
+  // 跳转到任务视图
+  router.push(`/thread/${threadId}`);
 };
 
 const refreshThreads = (): void => {
