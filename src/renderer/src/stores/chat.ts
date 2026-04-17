@@ -120,12 +120,23 @@ export const useChatStore = defineStore('chat', () => {
         setState(sessionId, true, msg.sequence);
         break;
 
-      case 'text:delta':
-        // 累加文本到当前消息
-        if (threadState.currentAssistantMsg) {
-          threadState.currentAssistantMsg.content += msg.content || '';
+      case 'text:delta': {
+        // 累加文本到当前消息和 text block
+        if (!threadState.currentAssistantMsg) break;
+
+        threadState.currentAssistantMsg.content += msg.content || '';
+
+        // 同时更新 text block（前端通过 blocks 渲染）
+        let textBlock = threadState.currentAssistantMsg.blocks.find((b) => b.type === 'text') as
+          | { type: 'text'; text: string }
+          | undefined;
+        if (!textBlock) {
+          textBlock = { type: 'text', text: '' };
+          threadState.currentAssistantMsg.blocks.push(textBlock);
         }
+        textBlock.text += msg.content || '';
         break;
+      }
 
       case 'reasoning:delta': {
         // 思考过程（累积到 thinking block）
