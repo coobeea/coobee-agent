@@ -25,8 +25,28 @@ const form = ref<CreateAgentParams>({
   description: '',
   instructions: '', // 暂时保留，但实际会从 SOUL.md 读取
   skills: [],
-  model: ''
+  model: '',
+  metadata: {
+    greeting: '',
+    starterPrompts: []
+  }
 });
+
+// 快捷问题管理
+const starterPrompts = ref<string[]>([]);
+const newPrompt = ref('');
+
+const addStarterPrompt = () => {
+  const prompt = newPrompt.value.trim();
+  if (prompt && !starterPrompts.value.includes(prompt)) {
+    starterPrompts.value.push(prompt);
+    newPrompt.value = '';
+  }
+};
+
+const removeStarterPrompt = (index: number) => {
+  starterPrompts.value.splice(index, 1);
+};
 
 // 第2步：人格文件
 type PersonalityFile = 'IDENTITY.md' | 'SOUL.md' | 'USER.md' | 'NOTES.md' | 'HEARTBEAT.md' | 'AGENTS.md';
@@ -143,8 +163,14 @@ onMounted(async () => {
           description: res.description,
           instructions: res.instructions || '',
           skills: res.skills || [],
-          model: res.model || ''
+          model: res.model || '',
+          metadata: res.metadata || { greeting: '', starterPrompts: [] }
         };
+        
+        // 初始化快捷问题列表
+        if (res.metadata && Array.isArray(res.metadata.starterPrompts)) {
+          starterPrompts.value = [...res.metadata.starterPrompts];
+        }
       } else {
         form.value = {
           id: agent.id,
@@ -152,7 +178,8 @@ onMounted(async () => {
           description: agent.description,
           instructions: '',
           skills: agent.skills || [],
-          model: agent.model || ''
+          model: agent.model || '',
+          metadata: { greeting: '', starterPrompts: [] }
         };
       }
 
@@ -250,7 +277,12 @@ const handleSubmit = async () => {
         description: form.value.description,
         instructions: personalityFiles.value['SOUL.md'] || '你是一个智能助手。', // 使用 SOUL.md 作为 instructions，如果为空则使用默认值
         skills: form.value.skills,
-        model: form.value.model
+        model: form.value.model,
+        metadata: {
+          ...form.value.metadata,
+          greeting: form.value.metadata?.greeting || '',
+          starterPrompts: starterPrompts.value
+        }
       });
 
       // 更新人格文件
@@ -267,7 +299,12 @@ const handleSubmit = async () => {
       // 创建模式
       success = await agentsStore.createNewAgent({
         ...form.value,
-        instructions: personalityFiles.value['SOUL.md'] || '你是一个智能助手。' // 使用 SOUL.md 作为 instructions，如果为空则使用默认值
+        instructions: personalityFiles.value['SOUL.md'] || '你是一个智能助手。', // 使用 SOUL.md 作为 instructions，如果为空则使用默认值
+        metadata: {
+          ...form.value.metadata,
+          greeting: form.value.metadata?.greeting || '',
+          starterPrompts: starterPrompts.value
+        }
       });
 
       // 创建后更新人格文件
@@ -390,6 +427,61 @@ const handleCancel = () => {
               <label class="text-sm font-medium">默认模型</label>
               <ModelSelector v-model="form.model" />
               <p class="text-xs text-muted-foreground">留空则使用系统默认模型。</p>
+            </div>
+            
+            <div class="border-t border-border/40 pt-4 mt-2"></div>
+            
+            <div class="space-y-2">
+              <label class="text-sm font-medium">开场白 (Greeting)</label>
+              <textarea 
+                v-if="form.metadata"
+                v-model="form.metadata.greeting" 
+                rows="2"
+                placeholder="例如：你好！我是你的专属助手，今天想聊点什么？" 
+                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              ></textarea>
+              <p class="text-xs text-muted-foreground">智能体在新对话开始时发送的第一句话。</p>
+            </div>
+            
+            <div class="space-y-2">
+              <label class="text-sm font-medium">快捷问题 (Starter Prompts)</label>
+              
+              <!-- 已添加的问题列表 -->
+              <div v-if="starterPrompts.length > 0" class="flex flex-col gap-2 mb-3">
+                <div 
+                  v-for="(prompt, index) in starterPrompts" 
+                  :key="index"
+                  class="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
+                >
+                  <span class="flex-1 truncate">{{ prompt }}</span>
+                  <button 
+                    @click="removeStarterPrompt(index)"
+                    class="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    title="移除"
+                  >
+                    <span class="i-carbon-close"></span>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 添加新问题输入框 -->
+              <div class="flex gap-2">
+                <input 
+                  v-model="newPrompt" 
+                  @keydown.enter.prevent="addStarterPrompt"
+                  type="text" 
+                  placeholder="输入快捷问题，按回车添加..." 
+                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button 
+                  @click="addStarterPrompt"
+                  :disabled="!newPrompt.trim()"
+                  class="shrink-0 rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  添加
+                </button>
+              </div>
+              <p class="text-xs text-muted-foreground">提供给用户的快捷提问选项，帮助用户快速开始对话。</p>
             </div>
           </div>
         </div>
