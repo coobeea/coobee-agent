@@ -35,7 +35,7 @@ const statusText = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color: hsl(var(--muted-foreground));
   background: hsl(var(--muted) / 0.5);

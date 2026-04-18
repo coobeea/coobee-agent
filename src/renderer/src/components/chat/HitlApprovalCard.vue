@@ -65,7 +65,7 @@ function decisionLabel(decision: HitlApprovalDecision): string {
   gap: 6px;
   border-radius: 4px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .hitl-decided--approved {
@@ -93,7 +93,7 @@ function decisionLabel(decision: HitlApprovalDecision): string {
 }
 
 .hitl-pending-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: rgb(55 65 81);
 }

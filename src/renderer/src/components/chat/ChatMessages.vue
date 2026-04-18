@@ -190,14 +190,14 @@ onMounted(() => {
 }
 
 .panel-empty-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: hsl(var(--foreground));
   margin-bottom: 8px;
 }
 
 .panel-empty-sub {
-  font-size: 13px;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   text-align: center;
   line-height: 1.6;

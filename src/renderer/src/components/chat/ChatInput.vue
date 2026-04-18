@@ -262,7 +262,7 @@ onUnmounted(() => {
   padding-bottom: 40px;
   min-height: 80px;
   color: hsl(var(--foreground));
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   outline: none;
 }

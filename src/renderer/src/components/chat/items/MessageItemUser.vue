@@ -57,14 +57,14 @@ defineProps<{
 }
 
 .msg-role-name {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  color: hsl(var(--foreground) / 0.85);
+  color: hsl(var(--foreground));
 }
 
 .msg-time {
-  font-size: 10px;
-  color: hsl(var(--muted-foreground) / 0.6);
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
   margin-left: auto;
 }
 
@@ -75,9 +75,9 @@ defineProps<{
 }
 
 .msg-text {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
-  color: hsl(var(--foreground) / 0.9);
+  color: hsl(var(--foreground));
   white-space: pre-wrap;
   word-break: break-word;
 }

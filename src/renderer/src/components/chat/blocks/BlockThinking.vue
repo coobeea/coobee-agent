@@ -61,7 +61,7 @@ function toggleCollapse(): void {
 
 <style scoped>
 .msg-thinking {
-  font-size: 12px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground));
   background: hsl(var(--muted) / 0.3);
   border-radius: 6px;
@@ -84,13 +84,13 @@ function toggleCollapse(): void {
 
 .thinking-label {
   font-weight: 500;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .thinking-line-count {
-  font-size: 10px;
+  font-size: 11px;
   color: hsl(var(--muted-foreground) / 0.6);
   margin-left: auto;
 }
@@ -113,13 +113,13 @@ function toggleCollapse(): void {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: pre-wrap;
   word-break: break-all;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .collapsed-preview {
   padding: 0 10px 5px;
-  font-size: 11px;
+  font-size: 12px;
   color: hsl(var(--muted-foreground) / 0.5);
   font-style: italic;
   cursor: pointer;

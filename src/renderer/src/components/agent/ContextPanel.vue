@@ -216,9 +216,9 @@ onUnmounted(() => {
 }
 
 .agent-name {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 500;
-  color: hsl(var(--foreground) / 0.75);
+  color: hsl(var(--foreground) / 0.85);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -245,12 +245,12 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 22px;
+  height: 24px;
   padding: 0 8px;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
-  color: hsl(var(--primary) / 0.65);
+  color: hsl(var(--primary) / 0.8);
   background: hsl(var(--primary) / 0.07);
   border: 1px solid hsl(var(--primary) / 0.12);
   transition: all 0.12s ease;

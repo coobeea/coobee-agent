@@ -211,7 +211,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
   letter-spacing: 0.04em;
@@ -257,8 +257,8 @@ onMounted(() => {
   align-items: flex-start;
   padding: 10px 12px;
   border-radius: 8px;
-  color: hsl(var(--foreground) / 0.8);
-  font-size: 13px;
+  color: hsl(var(--foreground));
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
@@ -333,7 +333,7 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.4;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   flex: 1;
   min-width: 0;
@@ -345,8 +345,8 @@ onMounted(() => {
 }
 
 .session-meta {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground) / 0.55);
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
