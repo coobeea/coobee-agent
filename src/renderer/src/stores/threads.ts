@@ -27,8 +27,10 @@ export interface ThreadEntry {
   updatedAt: string;
   /** 工程目录（用户指定的输出目标路径） */
   projectDir?: string;
-  /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
-  overrideModel?: string;
+  /** 任务级别的模型覆盖（优先于 Agent 默认模型）；null 表示清除覆盖 */
+  overrideModel?: string | null;
+  /** 是否启用思维链（Thinking/Reasoning） */
+  enableThinking?: boolean;
   /** Agent Home 路径 */
   agentHomePath?: string;
   /** Workspace 路径 */
@@ -55,14 +57,14 @@ export const useThreadsStore = defineStore('threads', () => {
       const url = agentId ? `${baseUrl}/threads?agentId=${agentId}` : `${baseUrl}/threads`;
 
       const res = await fetch(url);
-      
+
       if (!res.ok) {
         throw new Error(`Failed to fetch threads: ${res.statusText}`);
       }
 
       const data = await res.json();
       threads.value = data.threads || [];
-      
+
       console.log(`[ThreadsStore] 已加载 ${threads.value.length} 个任务`);
     } catch (err) {
       error.value = err instanceof Error ? err.message : '加载任务列表失败';
@@ -97,7 +99,8 @@ export const useThreadsStore = defineStore('threads', () => {
       messageCount?: number;
       status?: string;
       projectDir?: string | null;
-      overrideModel?: string;
+      overrideModel?: string | null;
+      enableThinking?: boolean;
     }
   ): Promise<boolean> {
     try {

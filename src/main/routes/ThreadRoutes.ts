@@ -37,7 +37,7 @@ export function registerThreadRoutes(router: Router): void {
     try {
       const { agentId } = ctx.query;
       const store = await ThreadStore.getInstance();
-      
+
       const threads = await store.list({
         agentId: agentId as string | undefined
       });
@@ -147,7 +147,7 @@ export function registerThreadRoutes(router: Router): void {
       }
 
       // 只允许更新特定字段
-      const allowedFields = ['title', 'status', 'projectDir', 'overrideModel'];
+      const allowedFields = ['title', 'status', 'projectDir', 'overrideModel', 'enableThinking'];
       const filteredUpdates: Record<string, unknown> = {};
 
       for (const key of allowedFields) {
@@ -191,7 +191,7 @@ async function extractUserMessages(
 
   const files = await fs.readdir(sessionsDir);
   const jsonlFiles = files.filter((f) => f.endsWith('.jsonl'));
-  
+
   log.debug(`[extractUserMessages] found ${jsonlFiles.length} session files`);
 
   const userMessages: { content: string; timestamp: number }[] = [];
@@ -213,7 +213,7 @@ async function extractUserMessages(
             // 提取文本内容：message.content[0].text
             const content = message.content as Array<Record<string, unknown>> | undefined;
             const text = content?.[0]?.text as string | undefined;
-            
+
             if (text) {
               userMessages.push({
                 content: text,

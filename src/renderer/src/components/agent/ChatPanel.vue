@@ -11,12 +11,17 @@ import { useChatStore } from '@/stores/chat';
 import type { StreamMessage } from '@shared/stream-protocol';
 import { useGateway } from '@/composables/useGateway';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
-import ChatInput from '@/components/chat/ChatInput.vue';
+import ChatComposer from '@/components/chat/ChatComposer.vue';
 
 // ==================== Props ====================
-const props = defineProps<{
-  threadId: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    threadId: string;
+    /** sidebar: 右侧栏（左边框）；stacked: 主列内上下堆叠（上边框） */
+    borderVariant?: 'sidebar' | 'stacked';
+  }>(),
+  { borderVariant: 'sidebar' }
+);
 
 // ==================== Store & Composables ====================
 const chatStore = useChatStore();
@@ -24,7 +29,7 @@ const { request } = useGateway();
 
 // ==================== Refs ====================
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null);
-const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
+const chatComposerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 
 // ==================== Computed ====================
 // 直接从 store 读取消息（自动响应式）
@@ -37,7 +42,7 @@ function scrollToBottom(force = false): void {
 }
 
 function insertFileReference(file: { path: string; name: string }): void {
-  chatInputRef.value?.insertFileReference?.(file);
+  chatComposerRef.value?.insertFileReference?.(file);
 }
 
 // 新消息到达 → 自动滚动
@@ -168,13 +173,14 @@ defineExpose({
 </script>
 
 <template>
-  <aside class="chat-panel">
+  <aside class="chat-panel" :class="props.borderVariant === 'stacked' ? 'chat-panel--stacked' : ''">
     <!-- 消息区域 -->
     <ChatMessages ref="chatMessagesRef" :messages="messages" :is-streaming="isStreaming" />
 
-    <!-- 输入区域 -->
-    <ChatInput
-      ref="chatInputRef"
+    <!-- 输入区：模型选择 + 富文本输入（可复用 ChatComposer） -->
+    <ChatComposer
+      ref="chatComposerRef"
+      :thread-id="threadId"
       :disabled="isStreaming"
       :placeholder="isStreaming ? '智能体正在处理中...' : '输入消息，Enter 发送，Shift+Enter 换行'"
       :show-stop-button="isStreaming"
@@ -189,7 +195,13 @@ defineExpose({
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  padding: 12px;
   background: hsl(var(--background));
   border-left: 1px solid hsl(var(--border) / 0.4);
+}
+
+.chat-panel--stacked {
+  border-left: none;
+  border-top: 1px solid hsl(var(--border) / 0.4);
 }
 </style>

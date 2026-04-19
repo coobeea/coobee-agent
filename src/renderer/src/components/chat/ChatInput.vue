@@ -190,20 +190,29 @@ onUnmounted(() => {
   <div class="chat-input-wrapper">
     <EditorContent :editor="editor" class="chat-input" />
 
-    <!-- 工具栏（右下角） -->
-    <div v-if="showStopButton" class="chat-input-toolbar">
-      <!-- 停止按钮 -->
-      <button
-        class="toolbar-btn-stop"
-        title="中断"
-        @click="
-          () => {
-            console.log('[ChatInput] Stop button clicked');
-            emit('stop');
-          }
-        ">
-        <span class="i-carbon-stop-filled inline-block h-3.5 w-3.5" />
-      </button>
+    <!-- 底部工具栏（内嵌在输入框内） -->
+    <div class="chat-input-toolbar">
+      <!-- 左侧：模型选择等（slot） -->
+      <div class="toolbar-left">
+        <slot name="toolbar-left" />
+      </div>
+
+      <!-- 右侧：操作按钮 -->
+      <div class="toolbar-right">
+        <!-- 停止按钮（流式时显示） -->
+        <button v-if="showStopButton" class="toolbar-btn toolbar-btn-stop" title="中断" @click="emit('stop')">
+          <span class="i-carbon-stop-filled inline-block h-4 w-4" />
+        </button>
+        <!-- 发送按钮（未流式时显示） -->
+        <button
+          v-else
+          class="toolbar-btn toolbar-btn-send"
+          title="发送 (Enter)"
+          :disabled="disabled"
+          @click="handleSend">
+          <span class="i-carbon-arrow-up inline-block h-4 w-4" />
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -213,54 +222,112 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 6px 10px;
-  border-top: 1px solid hsl(var(--border) / 0.5);
-  background: hsl(var(--muted) / 0.2);
-  transition: background-color 0.15s ease;
+  min-height: 120px;
+  border: 1px solid hsl(var(--border) / 0.25);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.06);
+  transition: all 0.15s ease;
+  /* 允许模型下拉等浮层向外展开，避免被卡片边界裁掉 */
+  overflow: visible;
 }
 
 .chat-input-wrapper:focus-within {
-  background: hsl(var(--muted) / 0.3);
+  border-color: hsl(var(--primary) / 0.4);
+  box-shadow:
+    0 0 0 3px hsl(var(--primary) / 0.08),
+    0 2px 6px hsl(var(--foreground) / 0.08);
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .chat-input-wrapper {
+    background: hsl(var(--surface) / 0.4);
+    border-color: hsl(var(--border) / 0.3);
+    box-shadow: 0 1px 3px hsl(var(--foreground) / 0.1);
+  }
 }
 
 .chat-input {
-  width: 100%;
-  min-height: 80px;
+  flex: 1;
+  min-height: 0;
   max-height: 240px;
   overflow-y: auto;
+  padding: 14px 16px;
+  padding-bottom: 50px;
 }
 
 .chat-input-toolbar {
   position: absolute;
-  bottom: 8px;
-  right: 12px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: transparent;
+  border-top: 1px solid hsl(var(--border) / 0.12);
 }
 
-.toolbar-btn-stop {
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  color: hsl(var(--primary-foreground));
-  background: hsl(var(--error));
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   transition: all 0.15s ease;
   cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar-btn-send {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.toolbar-btn-send:hover:not(:disabled) {
+  background: hsl(var(--primary) / 0.9);
+  transform: scale(1.05);
+}
+
+.toolbar-btn-stop {
+  background: hsl(var(--error));
+  color: hsl(var(--primary-foreground));
 }
 
 .toolbar-btn-stop:hover {
-  opacity: 0.85;
+  background: hsl(var(--error) / 0.9);
+  transform: scale(1.05);
 }
 
 /* Tiptap 编辑器样式 */
 .chat-input :deep(.tiptap-editor) {
-  padding: 12px 14px;
-  padding-bottom: 40px;
-  min-height: 80px;
+  width: 100%;
+  min-height: 60px;
   color: hsl(var(--foreground));
   font-size: 15px;
   line-height: 1.6;

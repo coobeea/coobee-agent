@@ -18,22 +18,44 @@ const logStore = useLogStore();
 
 // 从 ThreadView 注入目录模式
 type DirectoryMode = 'agent-home' | 'workspace' | 'project';
-const directoryMode = inject<Ref<DirectoryMode>>('directoryMode', ref('agent-home'));
+const injectedDirectoryMode = inject<Ref<DirectoryMode>>('directoryMode', ref('agent-home'));
 const toggleDirectoryMode = inject<() => void>('toggleDirectoryMode', () => {});
 const setProjectDir = inject<() => Promise<void>>('setProjectDir', async () => {});
 
 const DIRECTORY_META: Record<DirectoryMode, { title: string; icon: string }> = {
-  'agent-home': { title: '智能体目录', icon: 'i-carbon-user-avatar' },
+  'agent-home': { title: '智能体', icon: 'i-carbon-user-avatar' },
   workspace: { title: '任务工作目录', icon: 'i-carbon-folder-shared' },
   project: { title: '工程目录', icon: 'i-carbon-folder-details' }
 };
 
-const directoryTitle = computed(() => DIRECTORY_META[directoryMode.value].title);
-const directoryIcon = computed(() => DIRECTORY_META[directoryMode.value].icon);
+const props = withDefaults(
+  defineProps<{
+    threadId?: string;
+    /** 嵌入右侧抽屉时：全宽、隐藏折叠按钮 */
+    embedded?: boolean;
+    /** 覆盖默认：是否显示折叠按钮（embedded 时默认 false） */
+    showCollapseButton?: boolean;
+    /** 是否显示顶部标题/操作栏 */
+    showHeader?: boolean;
+    /** 固定显示某个目录模式；不传则使用注入的目录模式 */
+    directoryMode?: DirectoryMode;
+    /** 是否显示内部“切换目录模式”按钮 */
+    showModeSwitcher?: boolean;
+  }>(),
+  {
+    embedded: false,
+    showCollapseButton: undefined,
+    showHeader: true,
+    directoryMode: undefined,
+    showModeSwitcher: true
+  }
+);
 
-const props = defineProps<{
-  threadId?: string;
-}>();
+const showCollapse = computed(() => props.showCollapseButton ?? !props.embedded);
+const effectiveDirectoryMode = computed(() => props.directoryMode ?? injectedDirectoryMode.value);
+const directoryTitle = computed(() => DIRECTORY_META[effectiveDirectoryMode.value].title);
+const directoryIcon = computed(() => DIRECTORY_META[effectiveDirectoryMode.value].icon);
+const showModeSwitcher = computed(() => props.showModeSwitcher);
 
 const projectPath = defineModel<string | null>('projectPath', { default: null });
 const isCollapsed = defineModel<boolean>('collapsed', { default: false });
@@ -329,14 +351,14 @@ defineExpose({ selectDirectory });
 <template>
   <aside
     v-show="!isCollapsed"
-    class="flex h-full w-64 shrink-0 flex-col border-r border-gray-200/80 bg-gray-50/50"
+    class="flex h-full flex-col border-r border-gray-200/80 bg-gray-50/50"
+    :class="props.embedded ? 'w-full min-w-0 flex-1' : 'w-64 shrink-0'"
     tabindex="0"
     @keydown="handlePaste">
-    <!-- 面板标题 -->
-    <div class="flex h-10 shrink-0 items-center border-b border-gray-200/60 px-2">
+    <div v-if="showHeader" class="flex h-10 shrink-0 items-center border-b border-gray-200/60 px-2">
       <!-- 左侧：目录模式切换（点击循环切换） -->
       <button
-        v-if="projectPath"
+        v-if="projectPath && showModeSwitcher"
         class="flex flex-1 items-center gap-1.5 rounded px-1 py-0.5 transition hover:bg-gray-100"
         title="点击切换目录模式"
         @click="toggleDirectoryMode">
@@ -366,6 +388,7 @@ defineExpose({ selectDirectory });
           <span class="i-carbon-renew inline-block h-3.5 w-3.5" :class="{ 'animate-spin': loading }"></span>
         </button>
         <button
+          v-if="showCollapse"
           class="flex h-6 w-6 items-center justify-center rounded text-gray-400 transition hover:bg-gray-200 hover:text-gray-600"
           title="折叠面板"
           @click="isCollapsed = true">

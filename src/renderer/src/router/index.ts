@@ -40,7 +40,8 @@ const router = createRouter({
         {
           path: 'thread/:id',
           name: 'thread',
-          component: () => import('@/views/ThreadView.vue')
+          // 三栏布局备份：@/views/ThreadView.vue
+          component: () => import('@/views/ThreadViewDual.vue')
         },
         {
           path: 'settings',

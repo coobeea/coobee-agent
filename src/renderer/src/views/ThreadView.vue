@@ -15,7 +15,6 @@ import ProjectPanel from '@/components/agent/ProjectPanel.vue';
 import WorkbenchPanel from '@/components/agent/WorkbenchPanel.vue';
 import ChatPanel from '@/components/agent/ChatPanel.vue';
 import TerminalPanel from '@/components/agent/TerminalPanel.vue';
-import ContextPanel from '@/components/agent/ContextPanel.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -170,7 +169,6 @@ watch(threadId, (newId) => {
       </div>
 
       <div class="flex w-[400px] flex-shrink-0 min-h-0 flex-col">
-        <ContextPanel :thread-id="threadId" />
         <ChatPanel ref="chatPanelRef" :thread-id="threadId" />
       </div>
     </div>

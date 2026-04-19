@@ -898,17 +898,34 @@
   lmstudio: {
     id: 'lmstudio',
     name: 'LM Studio',
-    description: 'LM Studio本地模型运行环境',
+    description: 'LM Studio本地模型运行环境，支持加载本地LLM并通过OpenAI兼容API访问',
     api: 'openai-compatible',
-    baseUrl: 'http://127.0.0.1:1234/v1',
-    apiKey: 'lmstudio', // 占位符
+    baseUrl: 'http://localhost:1234/v1',
+    apiKey: 'lm-studio', // 占位符
     requiresApiKey: false, // 标记为不需要配置凭证
     enabled: false,
     websites: {
-      official: 'https://lmstudio.ai/docs/app',
-      docs: 'https://lmstudio.ai/docs/app',
+      official: 'https://lmstudio.ai/',
+      docs: 'https://lmstudio.ai/docs/basics/server',
       models: 'https://lmstudio.ai/models',
     },
-    models: [],
+    models: [
+      {
+        id: 'google/gemma-4-e4b',
+        name: 'Gemma 4 E4B (LM Studio)',
+        contextWindow: 8192,
+        maxInputTokens: 8192,
+        maxOutputTokens: 2048,
+        reasoning: true,
+        free: true,
+        features: [
+          'LM Studio',
+          '本地运行',
+          'Google',
+          '思维链',
+          '4B参数',
+        ],
+      },
+    ],
   },
 }
