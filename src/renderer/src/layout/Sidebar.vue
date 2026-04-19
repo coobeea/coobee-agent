@@ -93,7 +93,7 @@ const updateActiveState = (): void => {
   if (path.startsWith('/thread/')) {
     // 任务详情页：高亮当前 thread
     activeMenuId.value = '';
-    activeThreadId.value = route.params.id as string;
+    activeThreadId.value = path.split('/')[2];
   } else if (path.startsWith('/agents')) {
     activeMenuId.value = 'agents';
     activeThreadId.value = null;

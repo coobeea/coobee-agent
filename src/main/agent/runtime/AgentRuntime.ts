@@ -39,10 +39,6 @@ export interface AgentRuntime {
   readonly name: string;
   /** 运行时配置选项 */
   readonly options: AgentRuntimeOptions;
-  /** 是否处于中断状态（HITL 工具审批等待中） */
-  readonly interrupted: boolean;
-  /** 是否支持 HITL 工具审批（调用方可据此判断，避免 try-catch） */
-  readonly supportsHITL: boolean;
 
   // ========== 生命周期 ==========
 
@@ -76,26 +72,16 @@ export interface AgentRuntime {
    */
   run(input: string, config?: ExecutionConfig): Promise<ExecutionResult>;
 
-  // ========== HITL 工具审批 ==========
+  // ========== 错误恢复与动态控制 ==========
 
-  /**
-   * 批准工具调用
-   * @param index 审批项索引
-   * @param options 选项（如 alwaysApprove）
-   */
-  approveToolCall(index: number, options?: { alwaysApprove?: boolean }): void;
+  /** 当前思考级别（如 'high', 'medium', 'low'，如果支持） */
+  readonly thinkingLevel?: string;
 
-  /**
-   * 拒绝工具调用
-   * @param index 审批项索引
-   * @param options 选项（如 alwaysReject）
-   */
-  rejectToolCall(index: number, options?: { alwaysReject?: boolean }): void;
+  /** 动态修改思考级别（用于错误恢复降级） */
+  setThinkingLevel?(level: string): void;
 
-  /**
-   * 恢复被中断的执行（AsyncGenerator 模式）
-   */
-  resumeStream(config?: ExecutionConfig): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
+  /** 手动触发上下文压缩（用于 context_length_exceeded 错误恢复） */
+  compressSession?(options?: { force?: boolean }): Promise<unknown>;
 
   // ========== 会话管理 ==========
 

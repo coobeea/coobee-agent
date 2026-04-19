@@ -13,6 +13,7 @@
  */
 
 import { createLogger } from '@main/common/logger';
+import type { AgentRuntime } from './AgentRuntime';
 
 const log = createLogger('error-recovery');
 
@@ -43,15 +44,11 @@ export interface RecoveryContext {
    * Runtime 引用（可选）
    *
    * 允许恢复策略访问 Runtime 能力：
-   *   - compressor: 上下文压缩器（ContextCompressionStrategy 使用）
+   *   - compressSession: 上下文压缩器（ContextCompressionStrategy 使用）
    *   - thinkingLevel: 当前思考级别（ThinkingLevelFallbackStrategy 使用）
    *   - setThinkingLevel: 修改思考级别
    */
-  runtime?: {
-    compressor?: { compress(): Promise<void> };
-    thinkingLevel?: string;
-    setThinkingLevel?: (level: string) => void;
-  };
+  runtime?: AgentRuntime;
 }
 
 // ==================== Strategies ====================
@@ -134,10 +131,10 @@ export class ContextCompressionStrategy implements RecoveryStrategy {
     }
 
     // 有 compressor → 主动压缩后重试
-    if (context.runtime?.compressor) {
+    if (context.runtime?.compressSession) {
       try {
         log.info('[ErrorRecovery] Triggering context compression...');
-        await context.runtime.compressor.compress();
+        await context.runtime.compressSession();
         return {
           action: 'retry',
           reason: 'Context compressed, retrying'

@@ -161,9 +161,6 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   private readonly sessionId: string;
   private createdAt: number;
 
-  // 中断状态（pi-SDK 通过 Extension 处理，此处始终为 false）
-  private _interrupted = false;
-
   constructor(options: PiMonoAgentRuntimeOptions) {
     super();
     this.options = options;
@@ -174,14 +171,6 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
 
   get name(): string {
     return this.options.name;
-  }
-
-  get interrupted(): boolean {
-    return this._interrupted;
-  }
-
-  get supportsHITL(): boolean {
-    return false;
   }
 
   // ========== 生命周期 ==========
@@ -319,8 +308,17 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     if (this.piSession) {
       this.piSession.dispose();
     }
-    this._interrupted = false;
     log.info(`Destroyed: ${this.name}`);
+  }
+
+  // ========== 错误恢复与动态控制 ==========
+
+  get thinkingLevel(): string | undefined {
+    return this.options.thinkingLevel;
+  }
+
+  setThinkingLevel(level: string): void {
+    this.options.thinkingLevel = level as any;
   }
 
   // ========== 执行方法 ==========
@@ -488,7 +486,6 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   }
 
   // runStream() 由基类 AbstractAgentRuntime 提供
-  // HITL 方法（approveToolCall, rejectToolCall, resumeStream）由基类提供默认 throw 实现
 
   // ========== 会话管理 ==========
 

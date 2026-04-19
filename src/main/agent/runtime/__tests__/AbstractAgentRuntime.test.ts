@@ -112,24 +112,6 @@ describe('AbstractAgentRuntime', () => {
       expect(result.output).toBe('hello world');
     });
   });
-
-  describe('HITL 默认实现', () => {
-    it('approveToolCall 抛出错误', () => {
-      const runtime = new MockRuntime([], mockResult);
-      expect(() => runtime.approveToolCall(0)).toThrow('MockRuntime does not support');
-    });
-
-    it('rejectToolCall 抛出错误', () => {
-      const runtime = new MockRuntime([], mockResult);
-      expect(() => runtime.rejectToolCall(0)).toThrow('MockRuntime does not support');
-    });
-
-    it('resumeStream 抛出错误', async () => {
-      const runtime = new MockRuntime([], mockResult);
-      const gen = runtime.resumeStream();
-      await expect(gen.next()).rejects.toThrow('MockRuntime does not support');
-    });
-  });
 });
 
 // ========== 工具函数测试 ==========

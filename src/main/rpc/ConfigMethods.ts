@@ -5,7 +5,7 @@
  */
 
 import type { MethodGroup } from '@main/common/gateway/types';
-import { config as configManager } from '@main/common/config';
+import { configStoreInstance } from '@main/common/config/ConfigStore';
 import { createLogger } from '@main/common/logger';
 
 const log = createLogger('config-methods');
@@ -21,7 +21,7 @@ export const configMethods: MethodGroup = {
      */
     getAll: async () => {
       try {
-        const config = configManager.getAll();
+        const config = configStoreInstance?.getAll();
         log.debug('[config.getAll] 返回配置');
         return config;
       } catch (error) {
@@ -43,7 +43,7 @@ export const configMethods: MethodGroup = {
           throw new Error('key is required');
         }
 
-        const value = configManager.get(key as string);
+        const value = configStoreInstance?.get(key as never);
         log.debug(`[config.get] 返回配置: ${key}`);
         return value;
       } catch (error) {

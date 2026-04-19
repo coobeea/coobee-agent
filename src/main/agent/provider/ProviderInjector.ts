@@ -12,31 +12,8 @@
 
 import { Models, Providers } from '@main/config';
 import { resolveApiKey } from './ApiKeyResolver';
-import type { ProviderRegistry } from './ProviderRegistry';
-import type { ModelSelector } from './ModelSelector';
-
-export interface ProviderSystem {
-  registry: ProviderRegistry;
-  selector: ModelSelector;
-}
 
 export class ProviderInjector {
-  private providerSystem: ProviderSystem | null = null;
-
-  /**
-   * @deprecated 保留用于兼容，但新代码应直接使用 Providers 和 Models
-   */
-  setProviderSystem(system: ProviderSystem): void {
-    this.providerSystem = system;
-  }
-
-  /**
-   * @deprecated 保留用于兼容，但新代码应直接使用 Providers 和 Models
-   */
-  getProviderSystem(): ProviderSystem | null {
-    return this.providerSystem;
-  }
-
   /**
    * 注入 Provider 配置到 Builder（API Key + 模型 + baseURL）
    *
@@ -71,7 +48,8 @@ export class ProviderInjector {
       }
 
       // 注入到 Builder
-      builder.fromProviderConfig(provider, resolved.model.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      builder.fromProviderConfig(provider as any, resolved.model.id);
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
       if (opts?.modelOverride) {

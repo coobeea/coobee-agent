@@ -18,7 +18,7 @@
 import type { AgentRuntime } from './AgentRuntime';
 import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from './types';
 import { saveContextSnapshot } from './ContextSnapshot';
-import { defaultRecoveryChain, type RecoveryContext } from './ErrorRecoveryChain';
+import { defaultRecoveryChain } from './ErrorRecoveryChain';
 
 // ==================== Logger 工具 ====================
 
@@ -87,8 +87,6 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
   abstract readonly id: string;
   abstract readonly name: string;
   abstract readonly options: AgentRuntimeOptions;
-  abstract readonly interrupted: boolean;
-  abstract readonly supportsHITL: boolean;
 
   // ========== 生命周期（子类必须实现） ==========
 
@@ -148,7 +146,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
           attempt,
           maxAttempts,
           sessionId: config?.sessionId as string | undefined,
-          runtime: this.buildRecoveryRuntime()
+          runtime: this
         });
 
         if (recovery.action === 'retry') {
@@ -170,34 +168,6 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
         throw error;
       }
     }
-  }
-
-  // ========== Recovery 辅助 ==========
-
-  /**
-   * 构建 RecoveryContext.runtime 对象
-   *
-   * 子类若有 sessionCompressor / thinkingLevel 等字段，
-   * 会通过此方法自动注入到恢复策略中。
-   * 使用 `any` 安全访问子类特有字段，基类本身不强制依赖。
-   */
-  protected buildRecoveryRuntime(): RecoveryContext['runtime'] {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const self = this as any;
-
-    const compressor = self.sessionCompressor;
-    const thinkingLevel: string | undefined = self.options?.thinkingLevel;
-
-    return {
-      compressor:
-        compressor && typeof compressor.compress === 'function' ? { compress: () => compressor.compress() } : undefined,
-      thinkingLevel,
-      setThinkingLevel: (level: string) => {
-        if (self.options) {
-          self.options.thinkingLevel = level;
-        }
-      }
-    };
   }
 
   // ========== 默认实现：run ==========
@@ -237,21 +207,6 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
       r = await gen.next();
     }
     return r.value;
-  }
-
-  // ========== 默认实现：HITL（不支持时 throw） ==========
-
-  approveToolCall(_index: number, _options?: { alwaysApprove?: boolean }): void {
-    throw new Error(`${this.constructor.name} does not support HITL tool approval`);
-  }
-
-  rejectToolCall(_index: number, _options?: { alwaysReject?: boolean }): void {
-    throw new Error(`${this.constructor.name} does not support HITL tool approval`);
-  }
-
-  // eslint-disable-next-line require-yield
-  async *resumeStream(_config?: ExecutionConfig): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    throw new Error(`${this.constructor.name} does not support HITL resume`);
   }
 
   // ========== 会话管理（子类必须实现） ==========

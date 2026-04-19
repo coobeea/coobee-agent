@@ -115,15 +115,6 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     return this.options.name;
   }
 
-  get interrupted(): boolean {
-    return false;
-  }
-
-  get supportsHITL(): boolean {
-    // HITL 现在由 tool-approval Extension 统一处理，Runtime 不再管理 HITL 状态
-    return false;
-  }
-
   // ========== 生命周期 ==========
 
   async initialize(): Promise<void> {
@@ -174,6 +165,18 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
 
   async destroy(): Promise<void> {
     log.info(`Destroyed: ${this.name}`);
+  }
+
+  // ========== 错误恢复与动态控制 ==========
+
+  get thinkingLevel(): string | undefined {
+    // @ts-expect-error thinkingLevel is not officially in OpenAIAgentRuntimeOptions yet, but we support it dynamically
+    return this.options.thinkingLevel;
+  }
+
+  setThinkingLevel(level: string): void {
+    // @ts-expect-error thinkingLevel is not officially in OpenAIAgentRuntimeOptions yet, but we support it dynamically
+    this.options.thinkingLevel = level;
   }
 
   // ========== 执行方法 ==========
