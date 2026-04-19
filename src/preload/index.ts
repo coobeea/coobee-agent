@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
-import { ShellChannels, TabChannels, AgentChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
+import { ShellChannels, TabChannels, OnboardingChannels, IPC_EVENT_CHANNEL } from '@shared/ipc';
 import type {
   WindowInfoResponse,
   CreateTabRequest,
@@ -36,14 +36,6 @@ const api = {
   },
 
   /**
-   * Agent 操作
-   */
-  agent: {
-    submit: (req: { sessionId: string; message: string }): Promise<any> =>
-      ipcRenderer.invoke(AgentChannels.SUBMIT, req)
-  },
-
-  /**
    * 打开目录选择对话框，返回选中的路径或 null
    */
   openDirectory: (): Promise<string | null> => ipcRenderer.invoke(ShellChannels.OPEN_DIRECTORY),
@@ -68,6 +60,15 @@ const api = {
     ipcRenderer.on(IPC_EVENT_CHANNEL, (_, message: IpcEventMessage) => {
       callback(message);
     });
+  },
+
+  /**
+   * Onboarding 引导操作
+   */
+  onboarding: {
+    check: (): Promise<boolean> => ipcRenderer.invoke(OnboardingChannels.CHECK),
+    complete: (): Promise<boolean> => ipcRenderer.invoke(OnboardingChannels.COMPLETE),
+    reset: (): Promise<boolean> => ipcRenderer.invoke(OnboardingChannels.RESET)
   }
 };
 

@@ -4,10 +4,12 @@
  */
 
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import ModelSelector from '@/components/ModelSelector.vue';
 import { useMessageStore } from '@/components/Message';
 import { getDefaultModel, updateDefaultModel } from '@/api/config';
 
+const router = useRouter();
 const message = useMessageStore();
 const defaultModel = ref('');
 const saving = ref(false);
@@ -53,6 +55,20 @@ async function saveDefaultModel(): Promise<void> {
     message.error('保存默认模型失败');
   } finally {
     saving.value = false;
+  }
+}
+
+// 重新运行引导
+async function resetOnboarding(): Promise<void> {
+  try {
+    await window.api.onboarding.reset();
+    message.success('正在重新启动引导...');
+    setTimeout(() => {
+      router.push('/welcome');
+    }, 500);
+  } catch (error) {
+    console.error('重置引导失败:', error);
+    message.error('操作失败，请重试');
   }
 }
 </script>
@@ -102,6 +118,27 @@ async function saveDefaultModel(): Promise<void> {
                   />
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 引导向导 -->
+      <section class="mt-8">
+        <h3 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">引导向导</h3>
+        <div class="rounded-xl border border-border bg-card shadow-sm">
+          <div class="p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="font-medium text-foreground text-base">重新运行引导</p>
+                <p class="text-sm text-muted-foreground mt-1">重新体验首次使用时的配置向导</p>
+              </div>
+              <button
+                class="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:border-primary"
+                @click="resetOnboarding">
+                <span class="i-carbon-restart"></span>
+                重新运行
+              </button>
             </div>
           </div>
         </div>

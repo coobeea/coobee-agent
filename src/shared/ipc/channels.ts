@@ -58,6 +58,16 @@ export const AgentChannels = {
   SUBMIT: 'agent:submit'
 } as const;
 
+/** Onboarding 引导通道（invoke） */
+export const OnboardingChannels = {
+  /** 检查是否完成引导 */
+  CHECK: 'onboarding:check',
+  /** 标记引导完成 */
+  COMPLETE: 'onboarding:complete',
+  /** 重置引导状态 */
+  RESET: 'onboarding:reset'
+} as const;
+
 /** 讨论室通道（invoke） */
 export const DiscussionChannels = {
   /** 创建讨论室 */
@@ -103,3 +113,4 @@ export type TabChannel = (typeof TabChannels)[keyof typeof TabChannels];
 export type AppChannel = (typeof AppChannels)[keyof typeof AppChannels];
 export type EventChannel = (typeof EventChannels)[keyof typeof EventChannels];
 export type AgentChannel = (typeof AgentChannels)[keyof typeof AgentChannels];
+export type OnboardingChannel = (typeof OnboardingChannels)[keyof typeof OnboardingChannels];
