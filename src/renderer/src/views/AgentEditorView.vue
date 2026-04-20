@@ -16,7 +16,7 @@ const isEdit = computed(() => route.name === 'agent-edit');
 const agentId = computed(() => route.params.id as string);
 
 const currentStep = ref(1);
-const totalSteps = 3;
+const totalSteps = 4;
 
 // 第1步：基本信息
 const form = ref<CreateAgentParams>({
@@ -235,7 +235,7 @@ const personalityFiles = ref<Record<PersonalityFile, string>>({
   'AGENTS.md': ''
 });
 
-// 第3步：技能选择
+// 第4步：技能选择
 const availableSkills = [
   { id: 'web-search', name: '网络搜索', description: '允许智能体搜索互联网获取最新信息', icon: 'i-carbon-search' },
   { id: 'file-system', name: '文件系统', description: '允许智能体读取和写入本地文件', icon: 'i-carbon-document' },
@@ -522,7 +522,7 @@ onUnmounted(() => {
             :class="currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
             >2</div
           >
-          <span>人格设置</span>
+          <span>数据目录</span>
         </div>
         <div class="h-px w-8 bg-border"></div>
         <div class="flex items-center gap-2" :class="currentStep >= 3 ? 'text-primary' : 'text-muted-foreground'">
@@ -530,6 +530,15 @@ onUnmounted(() => {
             class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
             :class="currentStep >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
             >3</div
+          >
+          <span>人格设置</span>
+        </div>
+        <div class="h-px w-8 bg-border"></div>
+        <div class="flex items-center gap-2" :class="currentStep >= 4 ? 'text-primary' : 'text-muted-foreground'">
+          <div
+            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+            :class="currentStep >= 4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
+            >4</div
           >
           <span>技能设置</span>
         </div>
@@ -541,12 +550,12 @@ onUnmounted(() => {
       <div class="mx-auto max-w-5xl">
         <!-- Step 1: 基本信息 -->
         <div v-show="currentStep === 1" class="space-y-6">
-          <div class="space-y-1">
+          <div class="space-y-1 selectable">
             <h2 class="text-xl font-semibold tracking-tight">基本信息</h2>
             <p class="text-sm text-muted-foreground">定义智能体的名称、标识和使用的模型。</p>
           </div>
 
-          <div class="space-y-4 rounded-xl border border-border/40 bg-card p-6 shadow-sm">
+          <div class="space-y-4 rounded-xl border border-border/40 bg-card p-6 shadow-sm selectable">
             <div class="space-y-2">
               <label class="text-sm font-medium">名称 <span class="text-red-500">*</span></label>
               <input
@@ -583,38 +592,14 @@ onUnmounted(() => {
               <p class="text-xs text-muted-foreground">留空则使用系统默认模型。</p>
             </div>
 
-            <div class="space-y-2">
-              <label class="text-sm font-medium flex items-center gap-2">
-                <span class="i-carbon-folder-details text-primary"></span>
-                数据目录
-              </label>
-              <div class="flex gap-2">
-                <input
-                  v-if="form.metadata"
-                  v-model="form.metadata.dataDirectory"
-                  type="text"
-                  placeholder="/path/to/data"
-                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
-                <button
-                  type="button"
-                  class="shrink-0 flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
-                  @click="selectDataDirectory">
-                  <span class="i-carbon-folder-open"></span>
-                  选择
-                </button>
-              </div>
-              <p class="text-xs text-muted-foreground">
-                智能体的固定数据存储目录。所有任务产生的文件、中间结果都会保存在这里。
-              </p>
-            </div>
-
             <div class="border-t border-border/40 pt-4 mt-2"></div>
 
             <div class="space-y-2">
               <label class="text-sm font-medium">开场白 (Greeting)</label>
               <textarea
                 v-if="form.metadata"
-                v-model="form.metadata.greeting"
+                :value="(form.metadata.greeting as string) || ''"
+                @input="(e) => { if (form.metadata) form.metadata.greeting = (e.target as HTMLTextAreaElement).value }"
                 rows="2"
                 placeholder="例如：你好！我是你的专属助手，今天想聊点什么？"
                 class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"></textarea>
@@ -664,9 +649,88 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Step 2: 人格设置 -->
+        <!-- Step 2: 数据目录配置 -->
         <div v-show="currentStep === 2" class="space-y-6">
-          <div class="space-y-1">
+          <div class="space-y-1 selectable">
+            <h2 class="text-xl font-semibold tracking-tight">数据目录配置</h2>
+            <p class="text-sm text-muted-foreground">为智能体指定固定的数据存储位置</p>
+          </div>
+
+          <div class="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 space-y-4 selectable">
+            <!-- 重要性说明 -->
+            <div class="flex items-start gap-3">
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <span class="i-carbon-information text-xl"></span>
+              </div>
+              <div class="flex-1 space-y-2">
+                <h3 class="text-base font-semibold text-foreground">为什么需要数据目录？</h3>
+                <div class="text-sm text-foreground/85 leading-relaxed space-y-2">
+                  <p>
+                    数据目录是智能体的<strong class="text-primary">固定工作区</strong>，用于存储所有任务产生的文件和中间结果。
+                  </p>
+                  <p class="flex items-start gap-2">
+                    <span class="i-carbon-checkmark-filled text-primary shrink-0 mt-0.5"></span>
+                    <span><strong>持久化存储</strong>：所有任务生成的文件都保存在这里，不会丢失</span>
+                  </p>
+                  <p class="flex items-start gap-2">
+                    <span class="i-carbon-checkmark-filled text-primary shrink-0 mt-0.5"></span>
+                    <span><strong>跨任务访问</strong>：下次开启新任务时，智能体能自动找到之前的数据</span>
+                  </p>
+                  <p class="flex items-start gap-2">
+                    <span class="i-carbon-checkmark-filled text-primary shrink-0 mt-0.5"></span>
+                    <span><strong>数据组织</strong>：按智能体分类存储，便于管理和查找</span>
+                  </p>
+                  <p class="flex items-start gap-2 mt-3 pt-2 border-t border-primary/20">
+                    <span class="i-carbon-idea text-primary shrink-0 mt-0.5"></span>
+                    <span>系统会自动为每个智能体初始化数据目录（<code class="text-xs px-1 py-0.5 rounded bg-background/60">~/.coobee-agent/data/{'{agentId}'}</code>），您也可以自定义为其他位置</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 数据目录选择 -->
+          <div class="rounded-xl border border-border/40 bg-card p-6 shadow-sm space-y-4 selectable">
+            <div class="space-y-2">
+              <label class="text-sm font-medium flex items-center gap-2">
+                <span class="i-carbon-folder-details text-primary"></span>
+                数据目录路径
+                <span class="text-xs font-normal text-muted-foreground">（可选，留空使用默认位置）</span>
+              </label>
+              <div class="flex gap-2">
+                <input
+                  v-if="form.metadata"
+                  :value="(form.metadata.dataDirectory as string) || ''"
+                  @input="(e) => { if (form.metadata) form.metadata.dataDirectory = (e.target as HTMLInputElement).value }"
+                  type="text"
+                  placeholder="留空使用默认位置，或自定义路径，例如：/Users/you/Documents/进销存数据"
+                  class="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <button
+                  type="button"
+                  class="shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  @click="selectDataDirectory">
+                  <span class="i-carbon-folder-open"></span>
+                  浏览选择
+                </button>
+              </div>
+            </div>
+
+            <!-- 预览当前设置 -->
+            <div v-if="form.metadata?.dataDirectory" class="rounded-lg bg-primary/5 border border-primary/20 p-4 selectable">
+              <div class="flex items-center gap-2 text-sm">
+                <span class="i-carbon-folder-details text-primary"></span>
+                <span class="font-medium text-foreground">当前数据目录：</span>
+              </div>
+              <code class="block mt-2 text-xs font-mono text-primary bg-background/60 px-3 py-2 rounded border border-primary/20">
+                {{ form.metadata.dataDirectory }}
+              </code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: 人格设置 -->
+        <div v-show="currentStep === 3" class="space-y-6">
+          <div class="space-y-1 selectable">
             <h2 class="text-xl font-semibold tracking-tight">人格设置</h2>
             <p class="text-sm text-muted-foreground">通过人格文件定义智能体的身份、核心灵魂和行为准则。</p>
           </div>
@@ -689,7 +753,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Tab Content -->
-          <div class="rounded-xl border border-border/40 bg-card p-6 shadow-sm">
+          <div class="rounded-xl border border-border/40 bg-card p-6 shadow-sm selectable">
             <div class="space-y-3">
               <div class="flex items-start justify-between">
                 <div>
@@ -710,14 +774,14 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Step 3: 技能设置 -->
-        <div v-show="currentStep === 3" class="space-y-6">
-          <div class="space-y-1">
+        <!-- Step 4: 技能设置 -->
+        <div v-show="currentStep === 4" class="space-y-6">
+          <div class="space-y-1 selectable">
             <h2 class="text-xl font-semibold tracking-tight">技能设置</h2>
             <p class="text-sm text-muted-foreground">为智能体配备外部工具和技能，扩展其能力边界。</p>
           </div>
 
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 selectable">
             <div
               v-for="skill in availableSkills"
               :key="skill.id"

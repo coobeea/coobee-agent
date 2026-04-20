@@ -54,11 +54,10 @@ const router = createRouter({
 });
 
 // 路由守卫：检查引导状态
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to) => {
   // 如果已经在欢迎页，直接放行
   if (to.path === '/welcome') {
-    next();
-    return;
+    return true;
   }
 
   // 如果还没检查过引导状态，检查一次
@@ -70,16 +69,14 @@ router.beforeEach(async (to, from, next) => {
 
       // 未完成引导，跳转到欢迎页
       if (!completed) {
-        next('/welcome');
-        return;
+        return '/welcome';
       }
     } catch (error) {
       console.error('检查引导状态失败:', error);
       // 发生错误时，仍然放行（避免阻塞用户）
     }
   }
-
-  next();
+  return true;
 });
 
 export default router;

@@ -258,7 +258,7 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
       <!-- 空状态 -->
       <div
         v-else-if="agentsStore.agents.length === 0 && !agentsStore.loading"
-        class="mx-auto max-w-md flex flex-col items-center justify-center py-20 text-center">
+        class="mx-auto max-w-md flex flex-col items-center justify-center py-20 text-center selectable">
         <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mb-6">
           <span class="i-carbon-bot text-3xl"></span>
         </div>
@@ -277,7 +277,7 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
         <div
           v-for="agent in sortedAgents"
           :key="agent.id"
-          class="group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-md cursor-pointer"
+          class="group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-md cursor-pointer selectable"
           @click="handleCardClick(agent.id, $event)">
           <!-- 头部 -->
           <div class="flex items-start justify-between mb-3">

@@ -181,6 +181,14 @@ export class AgentStore {
 
     const now = new Date().toISOString();
 
+    // 如果用户没有设置数据目录，自动初始化默认路径
+    const metadata = params.metadata || {};
+    if (!metadata.dataDirectory) {
+      const defaultDataDir = path.join(Env.paths.userHome, 'data', params.id);
+      metadata.dataDirectory = defaultDataDir;
+      log.debug(`[AgentStore] Auto-initialized dataDirectory: ${defaultDataDir}`);
+    }
+
     const definition: AgentDefinition = {
       id: params.id,
       name: params.name,
@@ -193,21 +201,31 @@ export class AgentStore {
       updatedAt: now,
       createdBy: params.createdBy ?? 'user',
       version: 1,
-      metadata: params.metadata
+      metadata
     };
 
     // 1. 创建工作空间
     this.homeManager.initHome(params.id);
 
-    // 2. 如果提供了 instructions，写入 SOUL.md
+    // 2. 创建数据目录（如果不存在）
+    if (metadata.dataDirectory && !fs.existsSync(metadata.dataDirectory as string)) {
+      try {
+        fs.mkdirSync(metadata.dataDirectory as string, { recursive: true });
+        log.info(`[AgentStore] Created dataDirectory: ${metadata.dataDirectory}`);
+      } catch (err) {
+        log.warn(`[AgentStore] Failed to create dataDirectory ${metadata.dataDirectory}:`, err);
+      }
+    }
+
+    // 3. 如果提供了 instructions，写入 SOUL.md
     if (params.instructions) {
       this.homeManager.writeFile(params.id, 'SOUL.md', params.instructions);
     }
 
-    // 3. 写入基本定义文件
+    // 4. 写入基本定义文件
     this.writeDefinition(definition);
 
-    // 4. 更新索引
+    // 5. 更新索引
     this.index.set(definition.id, toIndexEntry(definition, this.homeManager));
 
     log.info(`[AgentStore] Created agent: ${definition.id} (v${definition.version})`);

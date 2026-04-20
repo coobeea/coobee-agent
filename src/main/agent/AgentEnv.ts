@@ -78,6 +78,10 @@ export interface AgentEnv {
   /** 用户指定的工程目录（中间产物、输出文件的目标路径） */
   projectDir?: string;
 
+  // --- 数据目录 ---
+  /** Agent 专属的数据目录（持久化业务数据） */
+  dataDirectory?: string;
+
   // --- Agent Home ---
   /** Agent 定义 ID（关联了 AgentDefinition 时存在） */
   agentId?: string;
@@ -246,6 +250,15 @@ export function formatRuntimePaths(env: AgentEnv): string {
 `
     : '';
 
+  const dataDirectorySection = env.dataDirectory
+    ? `
+📂 **数据目录 / Data Directory**: \`${env.dataDirectory}/\`
+  这是智能体的专属数据目录，用于持久化存储业务数据。
+  所有跨任务的数据（如客户信息、进销存记录、知识库等）都应保存到此目录。
+  这个目录在不同任务之间保持不变，智能体可以随时读取历史数据。
+`
+    : '';
+
   const projectDirSection = env.projectDir
     ? `
 ⭐ **工程目录 / Project Directory**: \`${env.projectDir}/\`
@@ -258,6 +271,7 @@ export function formatRuntimePaths(env: AgentEnv): string {
   return `<runtime_environment>
 Your Runtime Environment:
 - Session: ${env.sessionId}
+${env.dataDirectory ? `- 数据目录 (Data Dir): ${env.dataDirectory}` : ''}
 ${env.projectDir ? `- 工程目录 (Project Dir): ${env.projectDir}` : ''}
 - Internal Workspace: ${env.workspace}
 - Platform: ${env.platform}/${env.arch} (${env.isDev ? 'dev' : 'prod'})
@@ -266,6 +280,7 @@ ${env.projectDir ? `- 工程目录 (Project Dir): ${env.projectDir}` : ''}
 - Extensions: ${extensionsList}
 
 Directory Structure:
+${dataDirectorySection}
 ${projectDirSection}
 ${agentHomeSection}
 **Current Task Workspace (Internal/Temporary)**: ${env.workspace}/
@@ -284,27 +299,42 @@ File Output Guidelines:
 
 **Where to save files?**
 ${
+  env.dataDirectory
+    ? `
+1. **数据目录（业务数据持久化）** → ${env.dataDirectory}/
+   - 客户信息、进销存记录、知识库等业务数据
+   - 跨任务的持久化数据，下次开启新任务时可以继续访问
+   - 这是智能体专属的固定数据存储位置
+`
+    : ''
+}
+${
   env.projectDir
     ? `
-1. **工程目录（首选输出位置）** → ${env.projectDir}/
-   - 所有任务输出、中间结果、解析数据、生成内容都放这里
+2. **工程目录（任务输出）** → ${env.projectDir}/
+   - 当前任务的输出、中间结果、解析数据、生成内容
    - 用户说"根目录""项目目录""工程目录"时，指的就是这个路径
    - 读取用户资料、浏览项目文件时，也应从此目录开始
-
-2. **Agent Home（跨会话持久化）** → ${env.agentHome || '{agentHome}'}/
-   - output/           — 跨会话持久化文件（训练成果、知识积累）
-   - skill-data/       — Skill 结构化数据
 `
     : `
-1. **Persistent Outputs (Training Results, Knowledge)** → Agent Home
+2. **Persistent Outputs (Training Results, Knowledge)** → Agent Home
    - {agentHome}/output/           — General persistent files
    - {agentHome}/skill-data/       — Structured data from skills
    Example: Model checkpoints, curated datasets, configuration templates
+`
+}
 
-2. **Temporary Task Files** → Current Task Workspace
+3. **Agent Home（配置和记忆）** → ${env.agentHome || '{agentHome}'}/
+   - output/           — 训练成果、知识积累
+   - skill-data/       — Skill 结构化数据
+${
+  !env.projectDir
+    ? `
+4. **Temporary Task Files** → Current Task Workspace
    - {workspace}/                  — Task-specific temporary files
    Example: Intermediate results, debug logs, scratch files
 `
+    : ''
 }
 3. **System Files** (DO NOT manually modify)
    - {workspace}/.runtime/         — Managed by system

@@ -71,16 +71,31 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
       agentEnv.projectDir = builderProjectDir;
     }
 
+    // 6. 注入数据目录（从 Agent 定义的 metadata 中读取）
+    if (agentId) {
+      try {
+        const { AgentStore } = await import('./agents/AgentStore');
+        const store = await AgentStore.getInstance();
+        const agentDef = await store.get(agentId);
+        if (agentDef?.metadata?.dataDirectory) {
+          agentEnv.dataDirectory = agentDef.metadata.dataDirectory as string;
+          log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
+        }
+      } catch (error) {
+        log.warn(`[EnvInjector] Failed to load dataDirectory for agent ${agentId}:`, error);
+      }
+    }
+
     // ====== Agent 模式独有：Skill + 执行协议 + 运行时路径 ======
     if (mode === 'agent') {
-      // 6. 扫描 Skill 并存储到 SkillManager（供 skill_list 工具按需查询）
+      // 7. 扫描 Skill 并存储到 SkillManager（供 skill_list 工具按需查询）
       //    使用 agentEnv.skillPaths（已包含 Agent Home skills + Extension 贡献的 Skill 目录）
       //    传入 configDir 以加载 skills.json5 中的 Skill 配置
       const skillManager = new SkillManager();
       skillManager.scanSkills(agentEnv.skillPaths, Env.paths.secretsDir);
       SkillManager.setCurrent(skillManager, sessionId);
 
-      // 7. 注入核心执行协议 + 运行时环境 + Skill 发现提示 + Agent 发现提示到 appendInstructions
+      // 8. 注入核心执行协议 + 运行时环境 + Skill 发现提示 + Agent 发现提示到 appendInstructions
       //    执行协议可通过同名 Skill 覆盖（用户在 skills/execution-protocol/ 创建即可）
       // 🔕 执行协议注入已禁用（过于复杂）
       // const executionProtocol = buildExecutionProtocol(skillManager);
@@ -114,7 +129,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         ...extensionInstructions
       );
 
-      // 7b. 注入核心技能到 builder（确保子 Agent 也拥有核心技能）
+      // 8b. 注入核心技能到 builder（确保子 Agent 也拥有核心技能）
       //     builder.skills() 是累加模式，不会覆盖已有 skills
       const coreSkillDefs = CORE_SKILLS.map((name) => skillManager.getByName(name)).filter(
         (s): s is NonNullable<typeof s> => s !== null
@@ -126,7 +141,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         );
       }
 
-      // 7c. 注入工具到 builder（如果 builder 还没有设置工具）
+      // 8c. 注入工具到 builder（如果 builder 还没有设置工具）
       //     从 ToolRegistry 获取所有已注册的工具（builtin + Extension）
       //     过滤：应用 Agent 定义的 excludeTools 黑名单
       if (!(builder as unknown as { _tools?: unknown })._tools) {

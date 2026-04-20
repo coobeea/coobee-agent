@@ -190,6 +190,7 @@ watch(
 </script>
 
 <template>
+  <!-- 包裹所有内容，确保只有一个根节点 -->
   <div class="flex h-full w-full flex-col bg-background">
     <!-- Thread 不存在 -->
     <div
@@ -339,14 +340,14 @@ watch(
         </aside>
       </Transition>
     </div>
-  </div>
 
-  <!-- 文件预览弹窗 -->
-  <FilePreviewModal
-    v-model:visible="filePreviewVisible"
-    :file-path="previewFilePath"
-    :file-name="previewFileName"
-    @close="filePreviewVisible = false" />
+    <!-- 文件预览弹窗 (使用 Teleport，不会影响布局) -->
+    <FilePreviewModal
+      v-model:visible="filePreviewVisible"
+      :file-path="previewFilePath"
+      :file-name="previewFileName"
+      @close="filePreviewVisible = false" />
+  </div>
 </template>
 
 <style scoped>

@@ -25,11 +25,7 @@ const route = useRoute();
 
     <!-- 主内容区域 -->
     <main class="flex flex-col min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+      <router-view />
     </main>
   </div>
 </template>

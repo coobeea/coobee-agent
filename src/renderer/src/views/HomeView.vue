@@ -84,7 +84,7 @@ function formatTime(iso: string): string {
 <template>
   <div class="flex h-full flex-col bg-background text-foreground overflow-y-auto">
     <!-- 顶部欢迎区 -->
-    <div class="px-10 py-12 pb-8 max-w-5xl mx-auto w-full">
+    <div class="px-10 py-12 pb-8 max-w-5xl mx-auto w-full selectable">
       <h1 class="text-4xl font-bold tracking-tight mb-3">{{ greeting }}，今天想完成什么？</h1>
       <p class="text-lg text-muted-foreground">选择一个智能体开始新任务，或者继续之前的工作。</p>
     </div>
@@ -107,7 +107,7 @@ function formatTime(iso: string): string {
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- 默认主助手卡片 -->
           <div
-            class="group relative flex flex-col p-5 rounded-xl border border-border bg-card hover:bg-accent/50 hover:border-primary/50 cursor-pointer transition-all shadow-sm hover:shadow-md"
+            class="group relative flex flex-col p-5 rounded-xl border border-border bg-card hover:bg-accent/50 hover:border-primary/50 cursor-pointer transition-all shadow-sm hover:shadow-md selectable"
             @click="createNewTask('app-copilot')">
             <div
               class="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -123,7 +123,7 @@ function formatTime(iso: string): string {
           <div
             v-for="agent in recommendedAgents.filter((a) => a.id !== 'app-copilot').slice(0, 3)"
             :key="agent.id"
-            class="group relative flex flex-col p-5 rounded-xl border border-border bg-card hover:bg-accent/50 hover:border-primary/50 cursor-pointer transition-all shadow-sm hover:shadow-md"
+            class="group relative flex flex-col p-5 rounded-xl border border-border bg-card hover:bg-accent/50 hover:border-primary/50 cursor-pointer transition-all shadow-sm hover:shadow-md selectable"
             @click="createNewTask(agent.id)">
             <div
               class="h-10 w-10 rounded-lg bg-secondary text-secondary-foreground flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -148,7 +148,7 @@ function formatTime(iso: string): string {
           <div
             v-for="thread in recentThreads"
             :key="thread.id"
-            class="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent/50 cursor-pointer transition-all shadow-sm group"
+            class="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent/50 cursor-pointer transition-all shadow-sm group selectable"
             @click="continueTask(thread.id)">
             <div class="flex items-center gap-4">
               <div class="h-10 w-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
@@ -182,7 +182,7 @@ function formatTime(iso: string): string {
       <!-- 欢迎/空状态区 (仅当没有任务时显示) -->
       <section
         v-else
-        class="flex flex-col items-center justify-center py-12 text-center border border-dashed border-border rounded-xl bg-muted/20">
+        class="flex flex-col items-center justify-center py-12 text-center border border-dashed border-border rounded-xl bg-muted/20 selectable">
         <div class="h-16 w-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-4">
           <span class="i-carbon-rocket text-3xl"></span>
         </div>
