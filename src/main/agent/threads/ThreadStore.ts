@@ -165,6 +165,7 @@ export class ThreadStore {
   private async ensureAgentDataDirectory(agentId: string): Promise<void> {
     try {
       const { AgentStore } = await import('../agents/AgentStore');
+      const { Env } = await import('@main/common/env');
       const store = await AgentStore.getInstance();
       const agent = await store.get(agentId);
 
@@ -173,10 +174,27 @@ export class ThreadStore {
         return;
       }
 
-      const dataDirectory = agent.metadata?.dataDirectory as string | undefined;
-      if (dataDirectory && !fs.existsSync(dataDirectory)) {
+      let dataDirectory = agent.metadata?.dataDirectory as string | undefined;
+
+      // 如果智能体没有配置数据目录，自动初始化一个默认的
+      if (!dataDirectory) {
+        dataDirectory = path.join(Env.paths.userHome, 'data', agentId);
+        
+        // 更新 Agent 定义
+        await store.modify(agentId, {
+          metadata: {
+            ...agent.metadata,
+            dataDirectory
+          }
+        });
+        
+        log.info(`[ThreadStore] Auto-initialized dataDirectory for agent ${agentId}: ${dataDirectory}`);
+      }
+
+      // 创建目录（如果不存在）
+      if (!fs.existsSync(dataDirectory)) {
         fs.mkdirSync(dataDirectory, { recursive: true });
-        log.info(`[ThreadStore] Created dataDirectory for agent ${agentId}: ${dataDirectory}`);
+        log.info(`[ThreadStore] Created dataDirectory: ${dataDirectory}`);
       }
     } catch (err) {
       log.warn(`[ThreadStore] Failed to ensure dataDirectory for agent ${agentId}:`, err);
