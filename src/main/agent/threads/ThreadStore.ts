@@ -153,26 +153,14 @@ export class ThreadStore {
   /** 创建 Thread 的工作空间目录结构 */
   private async createWorkspaceDirectories(threadId: string): Promise<void> {
     try {
-      const { Env } = await import('@main/common/env');
-      // 1. 创建工作空间根目录
-      const workspaceRoot = await Env.getAgentWorkspaceDir(threadId);
-      
-      // 2. 创建标准子目录结构
-      const subdirs = [
-        'tasks',      // 任务输出目录
-        'contexts',   // 上下文文件
-        'sessions',   // 会话数据
-        'events',     // 事件日志
-        'outputs'     // 通用输出目录
-      ];
-      
-      for (const subdir of subdirs) {
-        const dirPath = path.join(workspaceRoot, subdir);
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
-        }
-      }
-      
+      const { Threads } = await import('@main/config/threads');
+      // Threads.getWorkspaceDir 会自动创建完整的目录结构：
+      // - workspaces/{threadId}/
+      // - workspaces/{threadId}/.runtime/sessions/
+      // - workspaces/{threadId}/.runtime/contexts/
+      // - workspaces/{threadId}/.runtime/events/
+      // - workspaces/{threadId}/.runtime/logs/
+      await Threads.getWorkspaceDir(threadId);
       log.debug(`[ThreadStore] Created workspace structure for thread ${threadId}`);
     } catch (err) {
       log.warn(`[ThreadStore] Failed to create workspace directories for thread ${threadId}:`, err);
