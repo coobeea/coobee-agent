@@ -187,7 +187,7 @@ export class ThreadStore {
         dataDirectory = path.join(Env.paths.userHome, 'data', agentId);
 
         // 更新 Agent 定义
-        await store.modify(agentId, {
+        await store.update(agentId, {
           metadata: {
             ...agent.metadata,
             dataDirectory
