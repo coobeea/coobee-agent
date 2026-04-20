@@ -136,6 +136,9 @@ export class ThreadStore {
     // 立即创建工作空间目录结构（sessions、contexts、events 等）
     await this.createWorkspaceDirectories(id);
 
+    // 确保智能体的数据目录存在
+    await this.ensureAgentDataDirectory(params.agentId);
+
     // 追加到 agent home 的 sessions.jsonl 索引
     await this.appendToAgentSessionIndex(definition.agentId, {
       id: definition.id,
@@ -155,6 +158,28 @@ export class ThreadStore {
       await Env.getAgentWorkspaceDir(threadId);
     } catch (err) {
       log.warn(`[ThreadStore] Failed to create workspace directories for thread ${threadId}:`, err);
+    }
+  }
+
+  /** 确保智能体的数据目录存在 */
+  private async ensureAgentDataDirectory(agentId: string): Promise<void> {
+    try {
+      const { AgentStore } = await import('../agents/AgentStore');
+      const store = await AgentStore.getInstance();
+      const agent = await store.get(agentId);
+
+      if (!agent) {
+        log.warn(`[ThreadStore] Agent not found for dataDirectory check: ${agentId}`);
+        return;
+      }
+
+      const dataDirectory = agent.metadata?.dataDirectory as string | undefined;
+      if (dataDirectory && !fs.existsSync(dataDirectory)) {
+        fs.mkdirSync(dataDirectory, { recursive: true });
+        log.info(`[ThreadStore] Created dataDirectory for agent ${agentId}: ${dataDirectory}`);
+      }
+    } catch (err) {
+      log.warn(`[ThreadStore] Failed to ensure dataDirectory for agent ${agentId}:`, err);
     }
   }
 
