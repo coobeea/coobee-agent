@@ -32,12 +32,13 @@ function handleSettings(): void {
 
     <!-- 右侧快捷按钮 -->
     <div class="flex items-center gap-0.5">
-      <button 
-        class="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground/60 cursor-pointer transition-all duration-150 select-none hover:bg-foreground/5 hover:text-foreground/80" 
-        :class="{ 'bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary': activeMenuId === 'settings' }" 
-        title="设置" 
-        @click="handleSettings"
-      >
+      <button
+        class="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs text-muted-foreground/60 cursor-pointer transition-all duration-150 select-none hover:bg-foreground/5 hover:text-foreground/80"
+        :class="{
+          'bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary': activeMenuId === 'settings'
+        }"
+        title="设置"
+        @click="handleSettings">
         <span class="i-carbon-settings inline-block h-3.5 w-3.5" />
         <span>设置</span>
       </button>

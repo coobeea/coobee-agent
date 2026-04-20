@@ -18,7 +18,9 @@
           </div>
 
           <!-- 关闭按钮 -->
-          <button class="message-close opacity-50 hover:opacity-100 transition-opacity" @click="removeMessage(message.id)">
+          <button
+            class="message-close opacity-50 hover:opacity-100 transition-opacity"
+            @click="removeMessage(message.id)">
             <i class="i-carbon-close w-4 h-4" />
           </button>
         </div>

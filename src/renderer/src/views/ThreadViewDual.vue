@@ -17,6 +17,7 @@ import ProjectPanel from '@/components/agent/ProjectPanel.vue';
 import WorkbenchPanel from '@/components/agent/WorkbenchPanel.vue';
 import ChatPanel from '@/components/agent/ChatPanel.vue';
 import TerminalPanel from '@/components/agent/TerminalPanel.vue';
+import FilePreviewModal from '@/components/common/FilePreviewModal.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -31,6 +32,11 @@ const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
 const projectPath = ref<string | null>(null);
 /** ProjectPanel v-model:collapsed；抽屉内不设为 true，避免内容被 v-show 隐藏 */
 const projectPanelCollapsedStub = ref(false);
+
+// 文件预览弹窗状态
+const filePreviewVisible = ref(false);
+const previewFilePath = ref('');
+const previewFileName = ref('');
 
 /** 右侧抽屉是否展开 */
 const rightDrawerOpen = ref(false);
@@ -55,35 +61,58 @@ function addToChat(node: { path: string; name: string; type: 'file' | 'directory
   });
 }
 
+// 打开文件预览弹窗
+function openFilePreview(filePath: string): void {
+  const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '未命名文件';
+  previewFilePath.value = filePath;
+  previewFileName.value = fileName;
+  filePreviewVisible.value = true;
+}
+
 provide('addToChat', addToChat);
 provide('addFileToTask', undefined);
+provide('openFilePreview', openFilePreview);
 provide('directoryMode', directoryMode);
 provide('toggleDirectoryMode', toggleDirectoryMode);
 provide('setProjectDir', setProjectDir);
 
-function updateProjectPathForMode(thread: { agentHomePath?: string; workspacePath?: string }): void {
+async function updateProjectPathForMode(thread: {
+  agentId?: string;
+  agentHomePath?: string;
+  workspacePath?: string;
+}): Promise<void> {
   if (rightTab.value === 'agent-home') {
     projectPath.value = thread.agentHomePath || '';
   } else if (rightTab.value === 'workspace') {
     projectPath.value = thread.workspacePath || '';
   } else if (rightTab.value === 'project') {
-    projectPath.value = currentThread.value?.projectDir || '';
+    // 数据目录：从 Agent 的 metadata.dataDirectory 读取
+    if (thread.agentId) {
+      const agent = await agentsStore.getAgentDetail(thread.agentId);
+      if (agent && agent.metadata && agent.metadata.dataDirectory) {
+        projectPath.value = agent.metadata.dataDirectory as string;
+      } else {
+        projectPath.value = '';
+      }
+    } else {
+      projectPath.value = '';
+    }
   }
 }
 
-function toggleDirectoryMode(): void {
+async function toggleDirectoryMode(): Promise<void> {
   const thread = currentThread.value;
   if (!thread) return;
   rightTab.value = rightTab.value === 'agent-home' ? 'workspace' : 'agent-home';
-  updateProjectPathForMode(thread);
+  await updateProjectPathForMode(thread);
 }
 
-function enterWorkspaceForThread(id: string): void {
+async function enterWorkspaceForThread(id: string): Promise<void> {
   const thread = threadsStore.threads.find((t) => t.id === id);
   rightTab.value = 'agent-home';
   if (thread) {
     agentsStore.selectAgent(thread.agentId);
-    updateProjectPathForMode(thread);
+    await updateProjectPathForMode(thread);
   }
   threadsStore.selectThread(id);
   closeAllFiles();
@@ -95,12 +124,12 @@ function goBackToAgents(): void {
   router.push('/agents');
 }
 
-function openRightPanel(tab: 'agent-home' | 'workspace' | 'project' | 'terminal'): void {
+async function openRightPanel(tab: 'agent-home' | 'workspace' | 'project' | 'terminal'): Promise<void> {
   rightTab.value = tab;
   rightDrawerOpen.value = true;
   const thread = currentThread.value;
   if (thread && tab !== 'terminal') {
-    updateProjectPathForMode(thread);
+    await updateProjectPathForMode(thread);
   }
 }
 
@@ -112,14 +141,22 @@ async function setProjectDir(): Promise<void> {
     const result = await window.api?.openDirectory();
     if (!result) return;
 
-    const success = await threadsStore.updateThread(thread.id, {
-      projectDir: result
+    // 更新 Agent 的 dataDirectory（而不是 Thread 的 projectDir）
+    const agent = await agentsStore.getAgentDetail(thread.agentId);
+    if (!agent) return;
+
+    const success = await agentsStore.modifyAgent(agent.id, {
+      metadata: {
+        ...agent.metadata,
+        dataDirectory: result
+      }
     });
 
     if (success) {
       projectPath.value = result;
       rightTab.value = 'project';
       rightDrawerOpen.value = true;
+      console.log('[ThreadViewDual] Data directory updated to:', result);
     }
   } catch (err) {
     console.warn('[ThreadViewDual] setProjectDir failed:', err);
@@ -144,10 +181,10 @@ watch(threadId, (newId) => {
 
 watch(
   () => rightTab.value,
-  (tab) => {
+  async (tab) => {
     const thread = currentThread.value;
     if (!thread || tab === 'terminal') return;
-    updateProjectPathForMode(thread);
+    await updateProjectPathForMode(thread);
   }
 );
 </script>
@@ -228,7 +265,7 @@ watch(
           <div class="flex h-11 shrink-0 items-center gap-0.5 border-b border-border/40 px-1.5">
             <button
               type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
               :class="
                 rightTab === 'agent-home'
                   ? 'bg-primary/12 text-primary'
@@ -240,7 +277,7 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
               :class="
                 rightTab === 'workspace'
                   ? 'bg-primary/12 text-primary'
@@ -252,7 +289,7 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
               :class="
                 rightTab === 'project'
                   ? 'bg-primary/12 text-primary'
@@ -260,11 +297,11 @@ watch(
               "
               @click="openRightPanel('project')">
               <span class="i-carbon-folder-details mr-1 inline-block h-3.5 w-3.5 align-middle" />
-              工程目录
+              数据目录
             </button>
             <button
               type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
               :class="
                 rightTab === 'terminal'
                   ? 'bg-primary/12 text-primary'
@@ -303,6 +340,13 @@ watch(
       </Transition>
     </div>
   </div>
+
+  <!-- 文件预览弹窗 -->
+  <FilePreviewModal
+    v-model:visible="filePreviewVisible"
+    :file-path="previewFilePath"
+    :file-name="previewFileName"
+    @close="filePreviewVisible = false" />
 </template>
 
 <style scoped>

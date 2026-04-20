@@ -98,9 +98,7 @@ const addNewTab = async (): Promise<void> => {
     <div v-if="isMacOS" class="h-full w-20 shrink-0"></div>
 
     <!-- Tabs Container -->
-    <div
-      ref="tabsContainer"
-      class="flex h-full shrink min-w-0 items-end overflow-hidden pt-[4px]">
+    <div ref="tabsContainer" class="flex h-full shrink min-w-0 items-end overflow-hidden pt-[4px]">
       <TabItem
         v-for="tab in tabStore.tabs"
         :key="tab.id"

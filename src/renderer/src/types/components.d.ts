@@ -33,6 +33,7 @@ declare module 'vue' {
     ContextMenuItem: typeof import('./../components/common/ContextMenuItem.vue')['default']
     DangerButton: typeof import('./../components/Form/DangerButton.vue')['default']
     ErrorDisplay: typeof import('./../components/common/ErrorDisplay.vue')['default']
+    FilePreviewModal: typeof import('./../components/common/FilePreviewModal.vue')['default']
     FileTreeNode: typeof import('./../components/agent/FileTreeNode.vue')['default']
     GhostButton: typeof import('./../components/Form/GhostButton.vue')['default']
     HitlApprovalCard: typeof import('./../components/chat/HitlApprovalCard.vue')['default']

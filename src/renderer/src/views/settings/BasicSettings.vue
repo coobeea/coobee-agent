@@ -40,7 +40,7 @@ onMounted(() => {
 // 保存默认模型
 async function saveDefaultModel(): Promise<void> {
   if (!defaultModel.value) return;
-  
+
   saving.value = true;
   try {
     const result = await updateDefaultModel(defaultModel.value);
@@ -88,7 +88,8 @@ async function resetOnboarding(): Promise<void> {
                 <p class="font-medium text-foreground text-base">开机自启动</p>
                 <p class="text-sm text-muted-foreground mt-1">登录系统时自动启动应用服务</p>
               </div>
-              <div class="h-6 w-11 rounded-full bg-muted cursor-not-allowed flex items-center p-0.5 border border-border opacity-50">
+              <div
+                class="h-6 w-11 rounded-full bg-muted cursor-not-allowed flex items-center p-0.5 border border-border opacity-50">
                 <div class="h-5 w-5 rounded-full bg-background shadow-sm"></div>
               </div>
             </div>
@@ -105,7 +106,7 @@ async function resetOnboarding(): Promise<void> {
                   保存中...
                 </span>
               </div>
-              
+
               <div class="flex items-center gap-2">
                 <div class="w-full max-w-md">
                   <ModelSelector
@@ -114,8 +115,7 @@ async function resetOnboarding(): Promise<void> {
                     :show-details="true"
                     :show-capabilities="true"
                     :disabled="loading || saving"
-                    @change="saveDefaultModel"
-                  />
+                    @change="saveDefaultModel" />
                 </div>
               </div>
             </div>

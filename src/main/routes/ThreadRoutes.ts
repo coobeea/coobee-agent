@@ -24,26 +24,53 @@ export function registerThreadRoutes(router: Router): void {
    *
    * Query 参数：
    *   - agentId: 可选，按 Agent 过滤
+   *   - offset: 可选，分页偏移量，默认 0
+   *   - limit: 可选，每页数量，默认 50
    *
    * 返回格式：
    * {
    *   threads: [
    *     { id, title, agentId, status, runStatus, ... },
    *     ...
-   *   ]
+   *   ],
+   *   pagination: {
+   *     offset: 0,
+   *     limit: 50,
+   *     total: 123
+   *   }
    * }
    */
   router.get('/threads', async (ctx) => {
     try {
-      const { agentId } = ctx.query;
+      const { agentId, offset, limit } = ctx.query;
       const store = await ThreadStore.getInstance();
 
-      const threads = await store.list({
+      // 解析分页参数
+      const offsetNum = offset ? parseInt(offset as string, 10) : 0;
+      const limitNum = limit ? parseInt(limit as string, 10) : 50;
+
+      // 获取总数（用于返回分页信息）
+      const allThreads = await store.list({
         agentId: agentId as string | undefined
       });
+      const total = allThreads.length;
 
-      ctx.body = { threads };
-      log.debug(`[GET /threads] 返回 ${threads.length} 个任务`);
+      // 获取当前页数据
+      const threads = await store.list({
+        agentId: agentId as string | undefined,
+        offset: offsetNum,
+        limit: limitNum
+      });
+
+      ctx.body = {
+        threads,
+        pagination: {
+          offset: offsetNum,
+          limit: limitNum,
+          total
+        }
+      };
+      log.debug(`[GET /threads] 返回 ${threads.length} 个任务 (总数: ${total})`);
     } catch (error) {
       log.error('[GET /threads] 错误:', error);
       ctx.status = 500;

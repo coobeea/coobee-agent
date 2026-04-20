@@ -5,9 +5,26 @@
  */
 
 // ==================== 通道常量 ====================
-export { IPC_EVENT_CHANNEL, ShellChannels, WindowChannels, TabChannels, AppChannels, EventChannels, AgentChannels, OnboardingChannels } from './channels';
+export {
+  IPC_EVENT_CHANNEL,
+  ShellChannels,
+  WindowChannels,
+  TabChannels,
+  AppChannels,
+  EventChannels,
+  AgentChannels,
+  OnboardingChannels
+} from './channels';
 
-export type { ShellChannel, WindowChannel, TabChannel, AppChannel, EventChannel, AgentChannel, OnboardingChannel } from './channels';
+export type {
+  ShellChannel,
+  WindowChannel,
+  TabChannel,
+  AppChannel,
+  EventChannel,
+  AgentChannel,
+  OnboardingChannel
+} from './channels';
 
 // ==================== 事件类型 ====================
 export type { EventType, EventPayloads, EventHandler, GenericEventHandler, IpcEventMessage } from './events';

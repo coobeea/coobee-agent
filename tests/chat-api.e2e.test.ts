@@ -99,7 +99,7 @@ describe('Chat API E2E', () => {
     it('should send message and receive SSE stream', async () => {
       return new Promise<void>((resolve, reject) => {
         const testMessage = '请用一句话介绍你自己';
-        let receivedChunks: any[] = [];
+        const receivedChunks: any[] = [];
         let textContent = '';
 
         console.log(`\n📤 发送消息: "${testMessage}"`);

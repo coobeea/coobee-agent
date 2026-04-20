@@ -346,4 +346,3 @@ export function createFallbackToolContext(opts: { workspaceRoot: string; session
     agentMode: 'agent'
   };
 }
-

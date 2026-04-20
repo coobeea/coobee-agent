@@ -10,7 +10,11 @@ export const processTool: ToolDefinition = {
   parameters: z.object({
     action: z.string().describe('Action to perform: list, read, write, kill')
   }),
-  async *execute(_params: Record<string, unknown>, _signal?: AbortSignal, _context?: ToolExecutionContext): AsyncGenerator<ToolStreamUpdate, ToolResult, unknown> {
+  async *execute(
+    _params: Record<string, unknown>,
+    _signal?: AbortSignal,
+    _context?: ToolExecutionContext
+  ): AsyncGenerator<ToolStreamUpdate, ToolResult, unknown> {
     return { success: true, llmContent: 'Process tool is disabled in minimal mode.' };
   }
 };

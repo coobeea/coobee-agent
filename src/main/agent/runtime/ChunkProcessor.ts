@@ -21,13 +21,12 @@ export interface ChunkProcessorTurnState {
   getTurnToolCallCount: () => number;
 }
 
-
 // ==================== 指标采集 ====================
 
 /**
  * 从 stream chunk 中提取 token 用量和压缩事件，写入 MetricsCollector
  * fire-and-forget，不影响流式响应
- * 
+ *
  * 最小化模式：禁用指标采集
  */
 export function recordMetrics(_chunk: StreamChunk, _sessionId: string): void {
@@ -117,4 +116,3 @@ export function fireHooks(
     log.warn(`[ChunkProcessor] Chunk hook failed for ${chunk.type}:`, err);
   });
 }
-

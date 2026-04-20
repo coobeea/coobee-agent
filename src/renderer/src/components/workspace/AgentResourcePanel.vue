@@ -23,8 +23,14 @@ const personalityFiles = ref<Record<string, string>>({});
 const loadingFiles = ref(false);
 
 // 当前选中的资源
-const selectedResource = inject<Ref<{ type: 'personality' | 'skill' | null; name: string | null }>>('selectedResource', ref({ type: null, name: null }));
-const setSelectedResource = inject<(type: 'personality' | 'skill', name: string) => void>('setSelectedResource', () => {});
+const selectedResource = inject<Ref<{ type: 'personality' | 'skill' | null; name: string | null }>>(
+  'selectedResource',
+  ref({ type: null, name: null })
+);
+const setSelectedResource = inject<(type: 'personality' | 'skill', name: string) => void>(
+  'setSelectedResource',
+  () => {}
+);
 
 // 人格文件配置
 const personalityFilesList = [
@@ -38,7 +44,7 @@ const personalityFilesList = [
 
 // 获取当前智能体
 const currentAgent = computed(() => {
-  return agentsStore.agents.find(a => a.id === props.agentId);
+  return agentsStore.agents.find((a) => a.id === props.agentId);
 });
 
 // 技能列表
@@ -73,17 +79,17 @@ function handleSkillClick(skillName: string): void {
 function isFileEmpty(fileName: string): boolean {
   const content = personalityFiles.value[fileName];
   if (!content || content.trim().length === 0) return true;
-  
+
   // 检查是否只包含注释（模板）
   const stripped = content
     .split('\n')
-    .filter(line => {
+    .filter((line) => {
       const trimmed = line.trim();
       return trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('<!--') && !trimmed.endsWith('-->');
     })
     .join('')
     .trim();
-  
+
   return stripped.length === 0;
 }
 
@@ -93,9 +99,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <aside
-    v-show="!isCollapsed"
-    class="resource-panel">
+  <aside v-show="!isCollapsed" class="resource-panel">
     <!-- 面板标题 -->
     <div class="panel-header">
       <div class="header-left">
@@ -103,16 +107,10 @@ onMounted(() => {
         <span class="header-title">资源</span>
       </div>
       <div class="header-right">
-        <button
-          class="header-btn"
-          title="刷新"
-          @click="loadPersonalityFiles">
+        <button class="header-btn" title="刷新" @click="loadPersonalityFiles">
           <span class="i-carbon-renew inline-block h-3.5 w-3.5" :class="{ 'animate-spin': loadingFiles }"></span>
         </button>
-        <button
-          class="header-btn"
-          title="折叠面板"
-          @click="isCollapsed = true">
+        <button class="header-btn" title="折叠面板" @click="isCollapsed = true">
           <span class="i-carbon-chevron-left inline-block h-3 w-3"></span>
         </button>
       </div>
@@ -131,7 +129,7 @@ onMounted(() => {
             v-for="file in personalityFilesList"
             :key="file.key"
             class="resource-item"
-            :class="{ 
+            :class="{
               active: selectedResource.type === 'personality' && selectedResource.name === file.key,
               empty: isFileEmpty(file.key)
             }"
@@ -165,7 +163,7 @@ onMounted(() => {
               <span class="resource-name">{{ skill }}</span>
             </div>
           </div>
-          
+
           <!-- 技能为空 -->
           <div v-if="skills.length === 0" class="resource-empty">
             <span class="i-carbon-cube inline-block h-5 w-5 opacity-10" />

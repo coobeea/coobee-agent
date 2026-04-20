@@ -166,7 +166,8 @@ describe('Agent 工具和技能加载 E2E 测试', () => {
 
   describe('4. 工具调用测试（read + glob）', () => {
     it('应该能通过 Agent 调用 read 和 glob 工具', async () => {
-      const message = '请先使用 glob 工具找出 src/main/lifecycle 目录下所有的 .ts 文件，然后使用 read 工具读取 src/main/lifecycle/ReadyAgentSystemHook.ts 文件的前20行内容并告诉我文件的主要功能';
+      const message =
+        '请先使用 glob 工具找出 src/main/lifecycle 目录下所有的 .ts 文件，然后使用 read 工具读取 src/main/lifecycle/ReadyAgentSystemHook.ts 文件的前20行内容并告诉我文件的主要功能';
 
       // 发送消息
       const sendResult = await client.request('chat.sendMessage', {

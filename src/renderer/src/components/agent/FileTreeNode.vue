@@ -67,12 +67,21 @@ function addToTask(): void {
   menuVisible.value = false;
 }
 
+// 复制成功提示
+const copySuccess = ref(false);
+
 // 复制文件路径
 async function copyPath(): Promise<void> {
   if (contextNode.value) {
     try {
       await navigator.clipboard.writeText(contextNode.value.path);
+      copySuccess.value = true;
       console.log('[FileTreeNode] 已复制路径:', contextNode.value.path);
+
+      // 2秒后隐藏提示
+      setTimeout(() => {
+        copySuccess.value = false;
+      }, 2000);
     } catch (err) {
       console.error('[FileTreeNode] 复制失败:', err);
     }
@@ -82,9 +91,19 @@ async function copyPath(): Promise<void> {
 
 // 删除文件/目录
 async function deleteNode(): Promise<void> {
-  if (contextNode.value && onDeleteNode) {
+  if (!contextNode.value || !onDeleteNode) {
+    menuVisible.value = false;
+    return;
+  }
+
+  const nodeName = contextNode.value.name;
+  const nodeType = contextNode.value.type === 'directory' ? '目录' : '文件';
+
+  // 确认删除
+  if (confirm(`确定要删除${nodeType} "${nodeName}" 吗？\n\n此操作无法撤销！`)) {
     await onDeleteNode(contextNode.value.path);
   }
+
   menuVisible.value = false;
 }
 
@@ -213,7 +232,7 @@ function getFileIcon(name: string): string {
   <div>
     <!-- 行 -->
     <div
-      class="file-tree-node flex cursor-pointer items-center gap-1 py-[3px] pr-2 text-[11px] transition-all"
+      class="file-tree-node flex cursor-pointer items-center gap-1.5 py-1 pr-2 text-sm transition-all"
       :class="{
         'font-medium': node.type === 'directory',
         'file-tree-node-selected': isSelected(node.path),
@@ -237,7 +256,7 @@ function getFileIcon(name: string): string {
 
       <!-- 图标 -->
       <span
-        class="inline-block h-3.5 w-3.5 shrink-0"
+        class="inline-block h-4 w-4 shrink-0"
         :class="[
           node.type === 'directory'
             ? isExpanded(node.path)
@@ -274,6 +293,16 @@ function getFileIcon(name: string): string {
         <span class="text-red-500">删除</span>
       </ContextMenuItem>
     </ContextMenu>
+
+    <!-- 复制成功提示 -->
+    <Transition name="toast-fade">
+      <div
+        v-if="copySuccess"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-xl flex items-center gap-2">
+        <span class="i-carbon-checkmark-filled inline-block h-4 w-4" />
+        <span>路径已复制</span>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -315,5 +344,21 @@ function getFileIcon(name: string): string {
 .file-tree-node > * {
   position: relative;
   z-index: 1;
+}
+
+/* Toast 动画 */
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-fade-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 10px);
+}
+
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
 }
 </style>

@@ -103,9 +103,7 @@ export async function getAgent(agentId: string): Promise<ApiResponse<GetAgentRes
 /**
  * 创建智能体
  */
-export async function createAgent(
-  params: CreateAgentParams
-): Promise<ApiResponse<CreateAgentResponse>> {
+export async function createAgent(params: CreateAgentParams): Promise<ApiResponse<CreateAgentResponse>> {
   return apiClient.post<CreateAgentResponse>('/gateway/agents', params);
 }
 
@@ -132,9 +130,7 @@ export interface GetPersonalityFilesResponse {
   files: Record<string, string>;
 }
 
-export async function getPersonalityFiles(
-  agentId: string
-): Promise<ApiResponse<GetPersonalityFilesResponse>> {
+export async function getPersonalityFiles(agentId: string): Promise<ApiResponse<GetPersonalityFilesResponse>> {
   return apiClient.get<GetPersonalityFilesResponse>(`/gateway/agents/${agentId}/personality`);
 }
 
@@ -143,10 +139,7 @@ export async function updatePersonalityFile(
   fileName: string,
   content: string
 ): Promise<ApiResponse<{ success: boolean }>> {
-  return apiClient.put<{ success: boolean }>(
-    `/gateway/agents/${agentId}/personality/${fileName}`,
-    { content }
-  );
+  return apiClient.put<{ success: boolean }>(`/gateway/agents/${agentId}/personality/${fileName}`, { content });
 }
 
 // ==================== Import / Export ====================
@@ -182,10 +175,10 @@ export async function importAgent(file: File): Promise<ApiResponse<ImportResult>
  */
 export async function exportAgent(agentId: string): Promise<Blob> {
   const response = await fetch(`http://localhost:8765/gateway/agents/${agentId}/export`);
-  
+
   if (!response.ok) {
     throw new Error(`导出失败: ${response.statusText}`);
   }
-  
+
   return response.blob();
 }

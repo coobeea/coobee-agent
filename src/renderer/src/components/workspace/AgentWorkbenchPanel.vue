@@ -34,7 +34,7 @@ const currentFileContent = ref('');
 
 // 获取当前智能体
 const currentAgent = computed(() => {
-  return agentsStore.agents.find(a => a.id === props.agentId);
+  return agentsStore.agents.find((a) => a.id === props.agentId);
 });
 
 // 加载人格文件
@@ -43,7 +43,7 @@ async function loadPersonalityFiles(): Promise<void> {
   try {
     const files = await agentsStore.getPersonalityFiles(props.agentId);
     personalityFiles.value = files;
-    
+
     // 如果当前选中的是人格文件，更新内容
     if (selectedResource.value.type === 'personality' && selectedResource.value.name) {
       currentFileContent.value = files[selectedResource.value.name] || '';
@@ -58,15 +58,11 @@ async function loadPersonalityFiles(): Promise<void> {
 // 保存人格文件
 async function saveCurrentFile(): Promise<void> {
   if (selectedResource.value.type !== 'personality' || !selectedResource.value.name) return;
-  
+
   savingFile.value = true;
   try {
-    await agentsStore.updatePersonalityFile(
-      props.agentId,
-      selectedResource.value.name,
-      currentFileContent.value
-    );
-    
+    await agentsStore.updatePersonalityFile(props.agentId, selectedResource.value.name, currentFileContent.value);
+
     // 更新本地缓存
     personalityFiles.value[selectedResource.value.name] = currentFileContent.value;
   } catch (err) {
@@ -77,20 +73,24 @@ async function saveCurrentFile(): Promise<void> {
 }
 
 // 监听选中资源变化
-watch(selectedResource, async (newResource) => {
-  if (newResource.type === 'personality' && newResource.name) {
-    // 切换文件前先保存当前文件
-    if (currentFileContent.value !== personalityFiles.value[newResource.name]) {
-      await saveCurrentFile();
+watch(
+  selectedResource,
+  async (newResource) => {
+    if (newResource.type === 'personality' && newResource.name) {
+      // 切换文件前先保存当前文件
+      if (currentFileContent.value !== personalityFiles.value[newResource.name]) {
+        await saveCurrentFile();
+      }
+
+      // 加载新文件内容
+      if (!personalityFiles.value[newResource.name]) {
+        await loadPersonalityFiles();
+      }
+      currentFileContent.value = personalityFiles.value[newResource.name] || '';
     }
-    
-    // 加载新文件内容
-    if (!personalityFiles.value[newResource.name]) {
-      await loadPersonalityFiles();
-    }
-    currentFileContent.value = personalityFiles.value[newResource.name] || '';
-  }
-}, { deep: true });
+  },
+  { deep: true }
+);
 
 // 监听内容变化，自动保存（防抖）
 let saveTimer: number | null = null;

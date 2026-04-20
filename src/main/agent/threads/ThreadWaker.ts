@@ -120,7 +120,6 @@ export class ThreadWaker {
     await threadStore.update(threadId, { runStatus: 'running' });
   }
 
-
   /**
    * 系统重启后恢复
    *
@@ -180,7 +179,7 @@ export class ThreadWaker {
       const builder = agentExecutor.piMono();
       const result = agentExecutor.submit({ sessionId: threadId, message, builder });
 
-      if (result.status === "busy") {
+      if (result.status === 'busy') {
         log.error(`[ThreadWaker] Thread ${threadId} is busy`);
         return;
       }

@@ -17,12 +17,7 @@ import path from 'node:path';
 import { createLogger } from '@main/common/logger';
 import { Env } from '@main/common/env';
 import { AgentHomeManager } from './AgentHomeManager';
-import type {
-  AgentDefinition,
-  AgentIndexEntry,
-  CreateAgentParams,
-  UpdateAgentParams
-} from './types';
+import type { AgentDefinition, AgentIndexEntry, CreateAgentParams, UpdateAgentParams } from './types';
 
 const log = createLogger('agent-store');
 
@@ -30,7 +25,7 @@ const log = createLogger('agent-store');
 function toIndexEntry(def: AgentDefinition, homeManager: AgentHomeManager): AgentIndexEntry {
   const agentHomePath = homeManager.getHomePath(def.id);
   const workspacePath = path.join(agentHomePath, 'workspace');
-  
+
   return {
     id: def.id,
     name: def.name,
@@ -114,7 +109,7 @@ export class AgentStore {
         const filePath = path.join(builtinAgentsDir, file);
         const raw = fs.readFileSync(filePath, 'utf-8');
         const def = JSON.parse(raw) as AgentDefinition;
-        
+
         if (!this.index.has(def.id)) {
           // 转换为 CreateAgentParams
           const params: CreateAgentParams = {
@@ -128,7 +123,7 @@ export class AgentStore {
             createdBy: 'system',
             metadata: def.metadata
           };
-          
+
           await this.create(params);
           log.info(`[AgentStore] Seeded builtin agent: ${def.id}`);
         }

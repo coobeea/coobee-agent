@@ -272,7 +272,7 @@ export class AgentImportExport {
     return new Promise((resolve, reject) => {
       try {
         const zip = new AdmZip();
-        
+
         // 递归添加目录中的所有文件
         const addDirectory = (dir: string, zipDir: string = '') => {
           const files = fs.readdirSync(dir);
@@ -280,7 +280,7 @@ export class AgentImportExport {
             const fullPath = path.join(dir, file);
             const zipPath = zipDir ? path.join(zipDir, file) : file;
             const stat = fs.statSync(fullPath);
-            
+
             if (stat.isDirectory()) {
               zip.addLocalFolder(fullPath, zipPath);
             } else {

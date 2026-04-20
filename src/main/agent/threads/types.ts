@@ -127,4 +127,3 @@ export interface UpdateThreadParams {
   overrideModel?: string;
   metadata?: Record<string, unknown>;
 }
-

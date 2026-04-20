@@ -66,12 +66,12 @@ function handleCardClick(agentId: string, event: MouseEvent): void {
 async function startNewTask(agentId: string, event: MouseEvent): Promise<void> {
   event.stopPropagation();
   if (creatingTask.value) return;
-  
+
   creatingTask.value = agentId;
   try {
-    const res = await request('chat.createThread', { 
-      title: '新任务', 
-      agentId 
+    const res = await request('chat.createThread', {
+      title: '新任务',
+      agentId
     });
     if (res && (res as any).id) {
       threadsStore.fetchThreads(); // 刷新列表
@@ -88,12 +88,12 @@ async function startNewTask(agentId: string, event: MouseEvent): Promise<void> {
 /** 删除智能体 */
 async function handleDelete(agentId: string, event: MouseEvent): Promise<void> {
   event.stopPropagation();
-  
+
   if (confirmDeleteId.value !== agentId) {
     confirmDeleteId.value = agentId;
     return;
   }
-  
+
   confirmDeleteId.value = null;
   await agentsStore.removeAgent(agentId);
 }
@@ -129,31 +129,31 @@ function openFileSelector(): void {
 async function handleFileSelect(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
-  
+
   if (!file) return;
-  
+
   // 验证文件类型
   if (!file.name.endsWith('.zip')) {
     toast.error('请选择 ZIP 文件');
     input.value = '';
     return;
   }
-  
+
   importing.value = true;
-  
+
   try {
     const result = await importAgent(file);
-    
+
     if (result.success && result.data) {
       toast.success(`成功导入智能体: ${result.data.agentName || result.data.agentId}`);
-      
+
       // 显示警告信息
       if (result.data.warnings && result.data.warnings.length > 0) {
         result.data.warnings.forEach((warning) => {
           toast.warning(warning);
         });
       }
-      
+
       // 刷新列表
       await agentsStore.fetchAgents();
     } else {
@@ -171,11 +171,11 @@ async function handleFileSelect(event: Event): Promise<void> {
 /** 导出智能体 */
 async function handleExport(agentId: string, agentName: string, event: MouseEvent): Promise<void> {
   event.stopPropagation();
-  
+
   try {
     toast.loading('正在导出...');
     const blob = await exportAgent(agentId);
-    
+
     // 创建下载链接
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -185,7 +185,7 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     toast.success('导出成功');
   } catch (err) {
     console.error('[AgentView] Export error:', err);
@@ -197,78 +197,76 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
 <template>
   <div class="flex h-full flex-col bg-background text-foreground">
     <!-- 顶栏 -->
-    <header class="flex h-14 shrink-0 items-center justify-between border-b border-border/40 bg-surface/60 px-6 backdrop-blur">
+    <header
+      class="flex h-14 shrink-0 items-center justify-between border-b border-border/40 bg-surface/60 px-6 backdrop-blur">
       <div class="flex items-center gap-3">
         <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <span class="i-carbon-bot text-lg"></span>
         </div>
         <h1 class="text-base font-semibold tracking-tight">智能体</h1>
-        <span v-if="agentsStore.agentCount > 0" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        <span
+          v-if="agentsStore.agentCount > 0"
+          class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           {{ agentsStore.agentCount }}
         </span>
       </div>
-      
+
       <div class="flex items-center gap-2">
-        <button 
-          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" 
-          title="刷新" 
-          @click="agentsStore.fetchAgents()"
-        >
+        <button
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          title="刷新"
+          @click="agentsStore.fetchAgents()">
           <span class="i-carbon-renew" :class="{ 'animate-spin': agentsStore.loading }"></span>
         </button>
-        <button 
-          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50" 
-          title="导入智能体" 
-          :disabled="importing" 
-          @click="openFileSelector"
-        >
+        <button
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          title="导入智能体"
+          :disabled="importing"
+          @click="openFileSelector">
           <span class="i-carbon-upload" :class="{ 'animate-pulse': importing }"></span>
         </button>
-        <button 
-          class="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20" 
-          @click="openCreatePage"
-        >
+        <button
+          class="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+          @click="openCreatePage">
           <span class="i-carbon-add"></span>
           <span>新建</span>
         </button>
         <!-- 隐藏的文件输入框 -->
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".zip"
-          style="display: none"
-          @change="handleFileSelect"
-        />
+        <input ref="fileInputRef" type="file" accept=".zip" style="display: none" @change="handleFileSelect" />
       </div>
     </header>
 
     <!-- 内容区域 -->
     <div class="flex-1 overflow-y-auto p-6">
-      
       <!-- 错误 -->
-      <div v-if="agentsStore.error" class="mx-auto max-w-5xl mb-6 flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+      <div
+        v-if="agentsStore.error"
+        class="mx-auto max-w-5xl mb-6 flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         <span class="i-carbon-warning-alt shrink-0"></span>
         <span class="flex-1 truncate">{{ agentsStore.error }}</span>
         <button class="font-medium hover:underline" @click="agentsStore.fetchAgents()">重试</button>
       </div>
 
       <!-- 加载中 -->
-      <div v-if="agentsStore.loading && agentsStore.agents.length === 0" class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <div
+        v-if="agentsStore.loading && agentsStore.agents.length === 0"
+        class="flex flex-col items-center justify-center py-20 text-muted-foreground">
         <span class="i-carbon-renew animate-spin text-3xl mb-4 opacity-50"></span>
         <p class="text-sm">加载中...</p>
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="agentsStore.agents.length === 0 && !agentsStore.loading" class="mx-auto max-w-md flex flex-col items-center justify-center py-20 text-center">
+      <div
+        v-else-if="agentsStore.agents.length === 0 && !agentsStore.loading"
+        class="mx-auto max-w-md flex flex-col items-center justify-center py-20 text-center">
         <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mb-6">
           <span class="i-carbon-bot text-3xl"></span>
         </div>
         <h3 class="text-lg font-medium mb-2">创建你的第一个智能体</h3>
         <p class="text-sm text-muted-foreground mb-6">智能体可以帮助你完成各种任务，定制专属的工作流程</p>
-        <button 
-          class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90" 
-          @click="openCreatePage"
-        >
+        <button
+          class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          @click="openCreatePage">
           <span class="i-carbon-add"></span>
           开始创建
         </button>
@@ -280,50 +278,57 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
           v-for="agent in sortedAgents"
           :key="agent.id"
           class="group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-md cursor-pointer"
-          @click="handleCardClick(agent.id, $event)"
-        >
+          @click="handleCardClick(agent.id, $event)">
           <!-- 头部 -->
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
                 <span class="i-carbon-bot text-xl"></span>
               </div>
               <div class="flex flex-col min-w-0">
-                <h3 class="truncate text-base font-medium text-foreground group-hover:text-primary transition-colors" :title="agent.name">
+                <h3
+                  class="truncate text-base font-medium text-foreground group-hover:text-primary transition-colors"
+                  :title="agent.name">
                   {{ agent.name }}
                 </h3>
                 <span class="text-xs text-muted-foreground">{{ formatTime(agent.updatedAt) }}</span>
               </div>
             </div>
-            
+
             <!-- 快捷操作按钮 (Hover显示) -->
             <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
               <template v-if="confirmDeleteId !== agent.id">
-                <button 
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" 
-                  title="导出" 
-                  @click="handleExport(agent.id, agent.name, $event)"
-                >
+                <button
+                  class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title="导出"
+                  @click="handleExport(agent.id, agent.name, $event)">
                   <span class="i-carbon-download"></span>
                 </button>
-                <button 
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" 
-                  title="编辑" 
-                  @click="openEditPage(agent.id)"
-                >
+                <button
+                  class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title="编辑"
+                  @click="openEditPage(agent.id)">
                   <span class="i-carbon-edit"></span>
                 </button>
-                <button 
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" 
-                  title="删除" 
-                  @click="handleDelete(agent.id, $event)"
-                >
+                <button
+                  class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                  title="删除"
+                  @click="handleDelete(agent.id, $event)">
                   <span class="i-carbon-trash-can"></span>
                 </button>
               </template>
               <template v-else>
-                <button class="rounded bg-destructive px-2 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90" @click="handleDelete(agent.id, $event)">确认</button>
-                <button class="rounded bg-muted px-2 py-1 text-xs font-medium hover:bg-muted/80" @click="cancelDelete($event)">取消</button>
+                <button
+                  class="rounded bg-destructive px-2 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+                  @click="handleDelete(agent.id, $event)"
+                  >确认</button
+                >
+                <button
+                  class="rounded bg-muted px-2 py-1 text-xs font-medium hover:bg-muted/80"
+                  @click="cancelDelete($event)"
+                  >取消</button
+                >
               </template>
             </div>
           </div>
@@ -337,35 +342,43 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
           <div class="flex items-center justify-between mt-auto pt-4 border-t border-border/40">
             <div class="flex flex-col gap-2 min-w-0">
               <!-- 模型标签 -->
-              <div v-if="agent.model" class="flex items-center gap-1.5 text-xs text-muted-foreground truncate" :title="agent.model">
+              <div
+                v-if="agent.model"
+                class="flex items-center gap-1.5 text-xs text-muted-foreground truncate"
+                :title="agent.model">
                 <span class="i-carbon-machine-learning-model shrink-0"></span>
-                <span class="truncate">{{ agent.model.startsWith('@group:') ? agent.model.slice(7) : agent.model.split('/').pop() }}</span>
+                <span class="truncate">{{
+                  agent.model.startsWith('@group:') ? agent.model.slice(7) : agent.model.split('/').pop()
+                }}</span>
               </div>
-              
+
               <!-- 技能标签 -->
               <div v-if="agent.skills && agent.skills.length > 0" class="flex items-center gap-1 flex-wrap">
                 <span class="i-carbon-tool text-xs text-muted-foreground shrink-0"></span>
-                <span v-for="skill in agent.skills.slice(0, 2)" :key="skill" class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                <span
+                  v-for="skill in agent.skills.slice(0, 2)"
+                  :key="skill"
+                  class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
                   {{ skill }}
                 </span>
-                <span v-if="agent.skills.length > 2" class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                <span
+                  v-if="agent.skills.length > 2"
+                  class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
                   +{{ agent.skills.length - 2 }}
                 </span>
               </div>
             </div>
-            
+
             <!-- 开始任务按钮 -->
-            <button 
+            <button
               class="shrink-0 flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-all hover:bg-primary/90 shadow-sm hover:shadow"
-              @click="startNewTask(agent.id, $event)"
               :disabled="creatingTask === agent.id"
-            >
+              @click="startNewTask(agent.id, $event)">
               <span v-if="creatingTask === agent.id" class="i-carbon-renew animate-spin"></span>
               <span v-else class="i-carbon-chat"></span>
               对话
             </button>
           </div>
-          
         </div>
       </div>
     </div>

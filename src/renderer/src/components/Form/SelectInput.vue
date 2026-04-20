@@ -5,7 +5,7 @@
       <span v-if="required" class="text-red-500 ml-1">*</span>
     </label>
 
-    <div class="relative" ref="selectContainer">
+    <div ref="selectContainer" class="relative">
       <!-- 输入框 -->
       <div class="relative">
         <input
@@ -45,30 +45,71 @@
           v-if="isOpen"
           :style="dropdownStyle"
           class="fixed z-[9999] bg-background border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
-        <!-- 无选项提示 -->
-        <div v-if="filteredOptions.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
-          {{ searchValue ? '无匹配选项' : '暂无选项' }}
-        </div>
+          <!-- 无选项提示 -->
+          <div v-if="filteredOptions.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
+            {{ searchValue ? '无匹配选项' : '暂无选项' }}
+          </div>
 
-        <!-- 分组模式 -->
-        <template v-if="grouped && filteredOptions.length > 0 && 'options' in filteredOptions[0]">
-          <div v-for="group in filteredOptions" :key="group.label" class="group-container">
-            <!-- 分组标题 -->
-            <div class="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/50 border-b border-border">
-              {{ group.label }}
+          <!-- 分组模式 -->
+          <template v-if="grouped && filteredOptions.length > 0 && 'options' in filteredOptions[0]">
+            <div v-for="group in filteredOptions" :key="group.label" class="group-container">
+              <!-- 分组标题 -->
+              <div class="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/50 border-b border-border">
+                {{ group.label }}
+              </div>
+
+              <!-- 分组选项 -->
+              <div
+                v-for="option in group.options"
+                :key="option.value"
+                :class="[
+                  'px-3 py-2 cursor-pointer transition-colors flex items-center justify-between group',
+                  'hover:bg-muted',
+                  option.disabled ? 'opacity-50 cursor-not-allowed' : '',
+                  isSelected(option.value) ? 'bg-primary/5 text-primary' : 'text-foreground'
+                ]"
+                @click="!option.disabled && selectOption(option)">
+                <div class="flex items-center flex-1">
+                  <!-- 选项图标 -->
+                  <i v-if="option.icon" :class="[option.icon, 'w-4 h-4 mr-2 text-muted-foreground']" />
+
+                  <div class="flex-1">
+                    <div class="text-sm font-medium">{{ option.label }}</div>
+                    <div v-if="option.description" class="text-xs text-muted-foreground">{{ option.description }}</div>
+                  </div>
+                </div>
+
+                <!-- 删除按钮 -->
+                <button
+                  v-if="allowDelete && !option.disabled"
+                  class="opacity-0 group-hover:opacity-100 ml-2 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-500 transition-opacity"
+                  @click.stop="deleteOption(option)"
+                  @mousedown.prevent>
+                  <i class="i-carbon-close w-4 h-4" />
+                </button>
+
+                <!-- 选中图标 -->
+                <i
+                  v-if="isSelected(option.value)"
+                  class="i-carbon-checkmark w-4 h-4 text-primary ml-2"
+                  :class="{ 'mr-8': allowDelete }" />
+              </div>
             </div>
+          </template>
 
-            <!-- 分组选项 -->
+          <!-- 非分组模式 -->
+          <template v-else>
             <div
-              v-for="option in group.options"
+              v-for="(option, index) in filteredOptions as SelectOption[]"
               :key="option.value"
               :class="[
                 'px-3 py-2 cursor-pointer transition-colors flex items-center justify-between group',
-                'hover:bg-muted',
+                highlightedIndex === index ? 'bg-primary/10' : 'hover:bg-muted',
                 option.disabled ? 'opacity-50 cursor-not-allowed' : '',
                 isSelected(option.value) ? 'bg-primary/5 text-primary' : 'text-foreground'
               ]"
-              @click="!option.disabled && selectOption(option)">
+              @click="!option.disabled && selectOption(option)"
+              @mouseenter="highlightedIndex = index">
               <div class="flex items-center flex-1">
                 <!-- 选项图标 -->
                 <i v-if="option.icon" :class="[option.icon, 'w-4 h-4 mr-2 text-muted-foreground']" />
@@ -94,48 +135,7 @@
                 class="i-carbon-checkmark w-4 h-4 text-primary ml-2"
                 :class="{ 'mr-8': allowDelete }" />
             </div>
-          </div>
-        </template>
-
-        <!-- 非分组模式 -->
-        <template v-else>
-          <div
-            v-for="(option, index) in filteredOptions as SelectOption[]"
-            :key="option.value"
-            :class="[
-              'px-3 py-2 cursor-pointer transition-colors flex items-center justify-between group',
-              highlightedIndex === index ? 'bg-primary/10' : 'hover:bg-muted',
-              option.disabled ? 'opacity-50 cursor-not-allowed' : '',
-              isSelected(option.value) ? 'bg-primary/5 text-primary' : 'text-foreground'
-            ]"
-            @click="!option.disabled && selectOption(option)"
-            @mouseenter="highlightedIndex = index">
-            <div class="flex items-center flex-1">
-              <!-- 选项图标 -->
-              <i v-if="option.icon" :class="[option.icon, 'w-4 h-4 mr-2 text-muted-foreground']" />
-
-              <div class="flex-1">
-                <div class="text-sm font-medium">{{ option.label }}</div>
-                <div v-if="option.description" class="text-xs text-muted-foreground">{{ option.description }}</div>
-              </div>
-            </div>
-
-            <!-- 删除按钮 -->
-            <button
-              v-if="allowDelete && !option.disabled"
-              class="opacity-0 group-hover:opacity-100 ml-2 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-500 transition-opacity"
-              @click.stop="deleteOption(option)"
-              @mousedown.prevent>
-              <i class="i-carbon-close w-4 h-4" />
-            </button>
-
-            <!-- 选中图标 -->
-            <i
-              v-if="isSelected(option.value)"
-              class="i-carbon-checkmark w-4 h-4 text-primary ml-2"
-              :class="{ 'mr-8': allowDelete }" />
-          </div>
-        </template>
+          </template>
         </div>
       </Teleport>
     </div>

@@ -62,7 +62,7 @@ describe('工具加载快速验证', () => {
 
     // 2. 发送使用 glob 工具的消息
     const message = '请使用 glob 工具找出 src/main/lifecycle 目录下所有的文件，列出文件名即可';
-    
+
     await client.request('chat.sendMessage', {
       threadId,
       message
@@ -90,7 +90,7 @@ describe('工具加载快速验证', () => {
     const eventsFile = path.join(workspaceDir, '.runtime', 'events', 'events.jsonl');
 
     console.log('[Check] Events file:', eventsFile);
-    
+
     if (!fs.existsSync(eventsFile)) {
       console.log('❌ Events file not found');
       expect(completed).toBe(true); // 至少流应该完成
@@ -115,14 +115,14 @@ describe('工具加载快速验证', () => {
     // 统计工具调用
     const toolCalls = events.filter((e) => e.type === 'tool:start');
     const toolNames = toolCalls.map((e) => e.data?.toolName);
-    
+
     console.log(`[Stats] Tool calls: ${toolCalls.length}`);
     console.log(`[Stats] Tools used: ${[...new Set(toolNames)].join(', ')}`);
 
     // 验证：至少调用了 glob 工具
     expect(toolNames).toContain('glob');
     expect(toolCalls.length).toBeGreaterThan(0);
-    
+
     console.log('✅ 工具加载验证成功！');
 
     console.log('✅ Test passed: glob tool was called successfully');

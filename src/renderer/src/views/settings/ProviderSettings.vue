@@ -9,13 +9,7 @@
 
 import { ref, computed, onMounted } from 'vue';
 import { useMessageStore } from '@/components/Message';
-import { 
-  getProviders, 
-  saveProviderKey, 
-  updateProviderBaseUrl, 
-  toggleProvider,
-  testProvider
-} from '@/api/config';
+import { getProviders, saveProviderKey, updateProviderBaseUrl, toggleProvider, testProvider } from '@/api/config';
 import type { ProviderConfig } from '@shared/api/config-types';
 
 const message = useMessageStore();
@@ -58,15 +52,15 @@ const sortedProviders = computed(() => {
 async function loadData(): Promise<void> {
   loading.value = true;
   error.value = null;
-  
+
   try {
     const result = await getProviders();
-    
+
     if (result.success && result.data) {
       // 将对象转换为数组并排序
       const providersList = Object.values(result.data.providers);
       providers.value = providersList;
-      
+
       // 如果没有选中项，默认选中第一个
       if (providers.value.length > 0 && !selectedProviderId.value) {
         selectProvider(sortedProviders.value[0].id);
@@ -93,17 +87,17 @@ const selectedProviderInfo = computed(() => {
 function selectProvider(id: string): void {
   selectedProviderId.value = id;
   const provider = providers.value.find((p) => p.id === id);
-  
+
   if (provider) {
     config.value = {
       // API Key 是敏感信息，后端返回的是脱敏的，所以这里清空，让用户重新输入
       // 如果 provider._hasApiKey 为 true，前端可以显示占位符
-      apiKey: '', 
+      apiKey: '',
       baseUrl: provider.baseUrl || '',
       enabled: provider.enabled
     };
   }
-  
+
   // 重置状态
   testStatus.value = 'idle';
   testErrorMsg.value = '';
@@ -138,12 +132,11 @@ async function handleSave(): Promise<void> {
 
     // 重新加载数据以更新列表状态
     await loadData();
-    
+
     // 恢复状态提示
     setTimeout(() => {
       saveStatus.value = 'idle';
     }, 2000);
-    
   } catch (err) {
     saveStatus.value = 'error';
     console.error('保存配置失败:', err);
@@ -155,13 +148,13 @@ async function handleSave(): Promise<void> {
 
 async function handleToggleEnabled(): Promise<void> {
   if (!selectedProviderId.value) return;
-  
+
   // 乐观更新 UI
   config.value.enabled = !config.value.enabled;
-  
+
   try {
     const result = await toggleProvider(selectedProviderId.value, config.value.enabled);
-    
+
     if (result.success) {
       // 更新本地列表数据
       const provider = providers.value.find((p) => p.id === selectedProviderId.value);
@@ -185,14 +178,14 @@ async function handleToggleEnabled(): Promise<void> {
 
 async function handleTestConnection(): Promise<void> {
   if (!selectedProviderId.value) return;
-  
+
   testing.value = true;
   testStatus.value = 'idle';
   testErrorMsg.value = '';
 
   try {
     const result = await testProvider(selectedProviderId.value);
-    
+
     if (result.success) {
       testStatus.value = 'success';
       message.success('连接测试成功');
@@ -207,7 +200,7 @@ async function handleTestConnection(): Promise<void> {
     message.error(testErrorMsg.value);
   } finally {
     testing.value = false;
-    
+
     // 如果成功，3秒后恢复状态
     if (testStatus.value === 'success') {
       setTimeout(() => {
@@ -240,11 +233,15 @@ onMounted(() => {
           <span class="i-carbon-circle-dash mb-3 inline-block h-8 w-8 animate-spin text-primary/70"></span>
           <p class="text-sm font-medium">加载中...</p>
         </div>
-        
+
         <!-- 错误提示 -->
         <div v-else-if="error" class="p-4 text-sm text-red-500 text-center bg-red-500/10 rounded-xl mx-1 mt-2">
           {{ error }}
-          <button @click="loadData" class="mt-3 block w-full rounded-lg bg-red-500/20 py-2 text-red-600 hover:bg-red-500/30 transition-colors font-medium">重试</button>
+          <button
+            class="mt-3 block w-full rounded-lg bg-red-500/20 py-2 text-red-600 hover:bg-red-500/30 transition-colors font-medium"
+            @click="loadData"
+            >重试</button
+          >
         </div>
 
         <!-- Provider 列表 -->
@@ -299,31 +296,43 @@ onMounted(() => {
           <div>
             <h1 class="text-3xl font-bold tracking-tight text-foreground">{{ selectedProviderInfo.name }}</h1>
             <p class="mt-2 text-sm text-muted-foreground">{{ selectedProviderInfo.description || '无描述' }}</p>
-            
+
             <!-- 网站链接 -->
             <div v-if="selectedProviderInfo.websites" class="mt-4 flex flex-wrap gap-4 text-xs font-medium">
-              <a v-if="selectedProviderInfo.websites.official" :href="selectedProviderInfo.websites.official" target="_blank" class="flex items-center text-primary hover:text-primary/80 transition-colors">
+              <a
+                v-if="selectedProviderInfo.websites.official"
+                :href="selectedProviderInfo.websites.official"
+                target="_blank"
+                class="flex items-center text-primary hover:text-primary/80 transition-colors">
                 <span class="i-carbon-home mr-1.5 h-4 w-4"></span> 官网
               </a>
-              <a v-if="selectedProviderInfo.websites.apiKey" :href="selectedProviderInfo.websites.apiKey" target="_blank" class="flex items-center text-primary hover:text-primary/80 transition-colors">
+              <a
+                v-if="selectedProviderInfo.websites.apiKey"
+                :href="selectedProviderInfo.websites.apiKey"
+                target="_blank"
+                class="flex items-center text-primary hover:text-primary/80 transition-colors">
                 <span class="i-carbon-key mr-1.5 h-4 w-4"></span> 获取 API Key
               </a>
-              <a v-if="selectedProviderInfo.websites.docs" :href="selectedProviderInfo.websites.docs" target="_blank" class="flex items-center text-primary hover:text-primary/80 transition-colors">
+              <a
+                v-if="selectedProviderInfo.websites.docs"
+                :href="selectedProviderInfo.websites.docs"
+                target="_blank"
+                class="flex items-center text-primary hover:text-primary/80 transition-colors">
                 <span class="i-carbon-document mr-1.5 h-4 w-4"></span> 文档
               </a>
             </div>
           </div>
-          
+
           <div class="flex items-center gap-3 bg-card px-4 py-2.5 rounded-xl border border-border shadow-sm">
             <span class="text-sm font-medium text-foreground">启用服务</span>
             <button
-              @click="handleToggleEnabled"
               :class="[
                 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background',
                 config.enabled ? 'bg-primary' : 'bg-muted'
               ]"
               role="switch"
-              :aria-checked="config.enabled">
+              :aria-checked="config.enabled"
+              @click="handleToggleEnabled">
               <span
                 aria-hidden="true"
                 :class="[
@@ -337,11 +346,12 @@ onMounted(() => {
         <!-- 配置表单 -->
         <div class="space-y-8 rounded-xl border border-border bg-card p-8 shadow-sm">
           <h3 class="text-lg font-semibold tracking-tight text-foreground border-b border-border pb-4">连接配置</h3>
-          
+
           <!-- API 类型标识 -->
           <div class="flex items-center gap-2">
             <span class="text-xs font-medium text-muted-foreground w-20">API 类型:</span>
-            <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+            <span
+              class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
               {{ selectedProviderInfo.api }}
             </span>
           </div>
@@ -361,10 +371,14 @@ onMounted(() => {
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-foreground flex justify-between">
               <span>API Key</span>
-              <span v-if="selectedProviderInfo.requiresApiKey === false" class="text-blue-600 dark:text-blue-500 text-xs flex items-center bg-blue-500/10 px-2 py-0.5 rounded-md">
+              <span
+                v-if="selectedProviderInfo.requiresApiKey === false"
+                class="text-blue-600 dark:text-blue-500 text-xs flex items-center bg-blue-500/10 px-2 py-0.5 rounded-md">
                 <span class="i-carbon-information mr-1"></span> 无需凭证
               </span>
-              <span v-else-if="selectedProviderInfo._hasApiKey" class="text-green-600 text-xs flex items-center bg-green-500/10 px-2 py-0.5 rounded-md">
+              <span
+                v-else-if="selectedProviderInfo._hasApiKey"
+                class="text-green-600 text-xs flex items-center bg-green-500/10 px-2 py-0.5 rounded-md">
                 <span class="i-carbon-checkmark-outline mr-1"></span> 已配置
               </span>
             </label>
@@ -373,7 +387,13 @@ onMounted(() => {
                 v-model="config.apiKey"
                 type="password"
                 class="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                :placeholder="selectedProviderInfo.requiresApiKey === false ? '本地服务无需配置 API Key' : (selectedProviderInfo._hasApiKey ? '•••••••••••••••• (输入新值以覆盖)' : 'sk-...')"
+                :placeholder="
+                  selectedProviderInfo.requiresApiKey === false
+                    ? '本地服务无需配置 API Key'
+                    : selectedProviderInfo._hasApiKey
+                      ? '•••••••••••••••• (输入新值以覆盖)'
+                      : 'sk-...'
+                "
                 :disabled="selectedProviderInfo.requiresApiKey === false" />
             </div>
             <p class="text-xs text-muted-foreground">API Key 保存在本地安全的 secrets.json5 文件中，不会随配置导出。</p>
@@ -384,18 +404,26 @@ onMounted(() => {
             <!-- 测试连接 -->
             <div class="flex items-center gap-3">
               <button
-                @click="handleTestConnection"
-                :disabled="testing || (selectedProviderInfo.requiresApiKey !== false && !config.apiKey && !selectedProviderInfo._hasApiKey)"
-                class="flex items-center gap-2 rounded-lg border border-input bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors shrink-0 whitespace-nowrap">
+                :disabled="
+                  testing ||
+                  (selectedProviderInfo.requiresApiKey !== false && !config.apiKey && !selectedProviderInfo._hasApiKey)
+                "
+                class="flex items-center gap-2 rounded-lg border border-input bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors shrink-0 whitespace-nowrap"
+                @click="handleTestConnection">
                 <span v-if="testing" class="i-carbon-circle-dash animate-spin text-primary shrink-0"></span>
                 <span v-else class="i-carbon-connection-signal shrink-0"></span>
                 {{ testing ? '测试中...' : '测试连接' }}
               </button>
-              
-              <span v-if="testStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center bg-green-500/10 px-3 py-1.5 rounded-md border border-green-500/20 shrink-0 whitespace-nowrap">
+
+              <span
+                v-if="testStatus === 'success'"
+                class="text-sm font-medium text-green-600 flex items-center bg-green-500/10 px-3 py-1.5 rounded-md border border-green-500/20 shrink-0 whitespace-nowrap">
                 <span class="i-carbon-checkmark-filled mr-1.5 shrink-0"></span> 连接成功
               </span>
-              <span v-else-if="testStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center bg-red-500/10 px-3 py-1.5 rounded-md border border-red-500/20 max-w-[220px] sm:max-w-[300px]" :title="testErrorMsg">
+              <span
+                v-else-if="testStatus === 'error'"
+                class="text-sm font-medium text-red-500 flex items-center bg-red-500/10 px-3 py-1.5 rounded-md border border-red-500/20 max-w-[220px] sm:max-w-[300px]"
+                :title="testErrorMsg">
                 <span class="i-carbon-warning-filled mr-1.5 shrink-0"></span>
                 <span class="truncate">{{ testErrorMsg }}</span>
               </span>
@@ -403,17 +431,21 @@ onMounted(() => {
 
             <!-- 保存配置 -->
             <div class="flex items-center gap-4 shrink-0">
-              <span v-if="saveStatus === 'success'" class="text-sm font-medium text-green-600 flex items-center shrink-0 whitespace-nowrap">
+              <span
+                v-if="saveStatus === 'success'"
+                class="text-sm font-medium text-green-600 flex items-center shrink-0 whitespace-nowrap">
                 <span class="i-carbon-checkmark mr-1.5 shrink-0"></span> 已保存
               </span>
-              <span v-else-if="saveStatus === 'error'" class="text-sm font-medium text-red-500 flex items-center shrink-0 whitespace-nowrap">
+              <span
+                v-else-if="saveStatus === 'error'"
+                class="text-sm font-medium text-red-500 flex items-center shrink-0 whitespace-nowrap">
                 <span class="i-carbon-warning mr-1.5 shrink-0"></span> 保存失败
               </span>
-              
+
               <button
-                @click="handleSave"
                 :disabled="saving"
-                class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm shrink-0 whitespace-nowrap">
+                class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm shrink-0 whitespace-nowrap"
+                @click="handleSave">
                 <span v-if="saving" class="i-carbon-circle-dash animate-spin shrink-0"></span>
                 <span v-else class="i-carbon-save shrink-0"></span>
                 {{ saving ? '保存中...' : '保存配置' }}
@@ -421,26 +453,43 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        
+
         <!-- 模型列表预览 -->
         <div class="mt-10">
           <h3 class="text-base font-semibold tracking-tight text-foreground mb-4 flex items-center justify-between">
             <span>支持的模型 ({{ selectedProviderInfo.models.length }})</span>
           </h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div 
-              v-for="model in selectedProviderInfo.models" 
+            <div
+              v-for="model in selectedProviderInfo.models"
               :key="model.id"
-              class="border border-border rounded-xl p-4 bg-card text-sm flex flex-col shadow-sm hover:shadow-md transition-shadow hover:border-primary/30"
-            >
+              class="border border-border rounded-xl p-4 bg-card text-sm flex flex-col shadow-sm hover:shadow-md transition-shadow hover:border-primary/30">
               <div class="font-semibold text-foreground mb-1.5">{{ model.name }}</div>
-              <div class="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded-md w-fit">{{ model.id }}</div>
-              
+              <div class="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded-md w-fit">{{
+                model.id
+              }}</div>
+
               <div class="mt-3 flex flex-wrap gap-1.5">
-                <span v-if="model.reasoning" class="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[10px] font-medium text-purple-700 dark:text-purple-400 ring-1 ring-inset ring-purple-500/20">推理</span>
-                <span v-if="model.vision" class="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20">视觉</span>
-                <span v-if="model.functionCalling" class="inline-flex items-center rounded-md bg-green-500/10 px-2 py-1 text-[10px] font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-500/20">函数调用</span>
-                <span v-if="model.contextWindow" class="inline-flex items-center rounded-md bg-gray-500/10 px-2 py-1 text-[10px] font-medium text-gray-700 dark:text-gray-400 ring-1 ring-inset ring-gray-500/20">{{ Math.round(model.contextWindow / 1000) }}K ctx</span>
+                <span
+                  v-if="model.reasoning"
+                  class="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[10px] font-medium text-purple-700 dark:text-purple-400 ring-1 ring-inset ring-purple-500/20"
+                  >推理</span
+                >
+                <span
+                  v-if="model.vision"
+                  class="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-700 dark:text-blue-400 ring-1 ring-inset ring-blue-500/20"
+                  >视觉</span
+                >
+                <span
+                  v-if="model.functionCalling"
+                  class="inline-flex items-center rounded-md bg-green-500/10 px-2 py-1 text-[10px] font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-500/20"
+                  >函数调用</span
+                >
+                <span
+                  v-if="model.contextWindow"
+                  class="inline-flex items-center rounded-md bg-gray-500/10 px-2 py-1 text-[10px] font-medium text-gray-700 dark:text-gray-400 ring-1 ring-inset ring-gray-500/20"
+                  >{{ Math.round(model.contextWindow / 1000) }}K ctx</span
+                >
               </div>
             </div>
           </div>

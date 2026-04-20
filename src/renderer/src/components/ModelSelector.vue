@@ -61,7 +61,7 @@ async function loadProviders(): Promise<void> {
   try {
     const result = await getProviders();
     if (result.success && result.data?.providers) {
-      providers.value = Object.values(result.data.providers).filter(p => p.enabled);
+      providers.value = Object.values(result.data.providers).filter((p) => p.enabled);
     }
   } catch (err: unknown) {
     console.error('[ModelSelector] Failed to load providers:', err);
@@ -184,7 +184,10 @@ onMounted(() => {
     <div v-if="showDetails && selectedModel" class="mt-3 p-4 bg-card rounded-xl border border-border shadow-sm">
       <div class="flex items-center gap-2 mb-3">
         <span class="text-sm font-semibold text-foreground">{{ selectedModel.name }}</span>
-        <span class="text-xs text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded-md border border-border/50">{{ selectedModel.id }}</span>
+        <span
+          class="text-xs text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded-md border border-border/50"
+          >{{ selectedModel.id }}</span
+        >
         <span class="text-xs text-muted-foreground ml-auto">{{ selectedModel.providerName }}</span>
       </div>
 

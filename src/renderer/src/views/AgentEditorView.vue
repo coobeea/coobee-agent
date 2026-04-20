@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
 import type { CreateAgentParams } from '@/api/agents';
@@ -35,18 +35,145 @@ const form = ref<CreateAgentParams>({
 // 快捷问题管理
 const starterPrompts = ref<string[]>([]);
 const newPrompt = ref('');
+const starterPromptsLoaded = ref(false);
+const starterPromptsSaving = ref(false);
+const starterPromptsDirty = ref(false);
+let starterPromptsSaveTimer: number | null = null;
+
+function syncStarterPromptsToMetadata(): void {
+  form.value.metadata = {
+    ...(form.value.metadata || {}),
+    greeting: form.value.metadata?.greeting || '',
+    starterPrompts: [...starterPrompts.value]
+  };
+}
+
+function clearStarterPromptsSaveTimer(): void {
+  if (starterPromptsSaveTimer !== null) {
+    window.clearTimeout(starterPromptsSaveTimer);
+    starterPromptsSaveTimer = null;
+  }
+}
+
+function scheduleStarterPromptsSave(): void {
+  if (!isEdit.value || !agentId.value || !starterPromptsLoaded.value) return;
+
+  clearStarterPromptsSaveTimer();
+  starterPromptsSaveTimer = window.setTimeout(() => {
+    void saveStarterPrompts();
+  }, 300);
+}
+
+async function saveStarterPrompts(): Promise<void> {
+  console.log('[AgentEditorView] saveStarterPrompts called:', {
+    isEdit: isEdit.value,
+    agentId: agentId.value,
+    starterPromptsLoaded: starterPromptsLoaded.value,
+    starterPromptsSaving: starterPromptsSaving.value,
+    starterPromptsDirty: starterPromptsDirty.value,
+    promptsCount: starterPrompts.value.length,
+    allPrompts: [...starterPrompts.value]
+  });
+
+  if (!isEdit.value || !agentId.value || !starterPromptsLoaded.value) {
+    console.warn('[AgentEditorView] Save skipped: conditions not met');
+    return;
+  }
+  if (starterPromptsSaving.value) {
+    console.log('[AgentEditorView] Already saving, rescheduling...');
+    scheduleStarterPromptsSave();
+    return;
+  }
+  if (!starterPromptsDirty.value) {
+    console.log('[AgentEditorView] No changes to save');
+    return;
+  }
+
+  // 拍快照，避免保存过程中 starterPrompts 被修改
+  const snapshot = [...starterPrompts.value];
+  const currentGreeting = form.value.metadata?.greeting || '';
+
+  console.log('[AgentEditorView] Saving starterPrompts:', {
+    snapshot,
+    greeting: currentGreeting,
+    fullMetadata: { greeting: currentGreeting, starterPrompts: snapshot }
+  });
+
+  starterPromptsSaving.value = true;
+  try {
+    // 构造完整的 metadata 对象（基于快照，不依赖 form.value.metadata 当前状态）
+    const metadataToSave = {
+      greeting: currentGreeting,
+      starterPrompts: snapshot
+    };
+
+    const success = await agentsStore.modifyAgent(agentId.value, {
+      metadata: metadataToSave
+    });
+
+    console.log('[AgentEditorView] Save result:', {
+      success,
+      error: agentsStore.error,
+      sentData: metadataToSave
+    });
+
+    if (success) {
+      // 保存成功后，同步到 form.value.metadata
+      syncStarterPromptsToMetadata();
+      // 检查是否在保存期间又有新的修改
+      starterPromptsDirty.value = JSON.stringify(starterPrompts.value) !== JSON.stringify(snapshot);
+    } else {
+      console.warn('[AgentEditorView] Auto save starterPrompts failed:', agentsStore.error);
+      starterPromptsDirty.value = true; // 保存失败，标记为脏数据
+    }
+  } finally {
+    starterPromptsSaving.value = false;
+    if (starterPromptsDirty.value) {
+      console.log('[AgentEditorView] Still dirty after save, rescheduling...');
+      scheduleStarterPromptsSave();
+    } else {
+      console.log('[AgentEditorView] Save completed successfully');
+    }
+  }
+}
 
 const addStarterPrompt = () => {
   const prompt = newPrompt.value.trim();
   if (prompt && !starterPrompts.value.includes(prompt)) {
     starterPrompts.value.push(prompt);
+    syncStarterPromptsToMetadata();
+    starterPromptsDirty.value = true;
+    console.log('[AgentEditorView] Added starter prompt:', {
+      prompt,
+      totalPrompts: starterPrompts.value.length,
+      allPrompts: [...starterPrompts.value],
+      isEdit: isEdit.value,
+      agentId: agentId.value,
+      starterPromptsLoaded: starterPromptsLoaded.value
+    });
+    scheduleStarterPromptsSave();
     newPrompt.value = '';
   }
 };
 
 const removeStarterPrompt = (index: number) => {
   starterPrompts.value.splice(index, 1);
+  syncStarterPromptsToMetadata();
+  starterPromptsDirty.value = true;
+  scheduleStarterPromptsSave();
 };
+
+// 选择数据目录
+async function selectDataDirectory(): Promise<void> {
+  try {
+    const result = await window.api?.openDirectory();
+    if (result && form.value.metadata) {
+      form.value.metadata.dataDirectory = result;
+    }
+  } catch (err) {
+    console.error('[AgentEditorView] selectDataDirectory error:', err);
+  }
+}
 
 // 第2步：人格文件
 type PersonalityFile = 'IDENTITY.md' | 'SOUL.md' | 'USER.md' | 'NOTES.md' | 'HEARTBEAT.md' | 'AGENTS.md';
@@ -93,7 +220,8 @@ const personalityTabs: PersonalityTab[] = [
     key: 'AGENTS.md',
     label: 'AGENTS.md',
     description: 'Agent 规则与技能配置',
-    placeholder: '# Agent Rules\n\n<!-- Agent 级规则 -->\n\n\n<skills_system priority="1">\n## Available Skills\n\n<available_skills>\n<!-- 技能配置 -->\n</available_skills>\n\n</skills_system>'
+    placeholder:
+      '# Agent Rules\n\n<!-- Agent 级规则 -->\n\n\n<skills_system priority="1">\n## Available Skills\n\n<available_skills>\n<!-- 技能配置 -->\n</available_skills>\n\n</skills_system>'
   }
 ];
 
@@ -119,7 +247,7 @@ const toggleSkill = (skillId: string) => {
   const skills = form.value.skills || [];
   const index = skills.indexOf(skillId);
   if (index > -1) {
-    form.value.skills = skills.filter(id => id !== skillId);
+    form.value.skills = skills.filter((id) => id !== skillId);
   } else {
     form.value.skills = [...skills, skillId];
   }
@@ -127,20 +255,26 @@ const toggleSkill = (skillId: string) => {
 
 // 自动生成 ID (仅在创建模式下，且用户没有手动修改过 ID 时)
 const idManuallyEdited = ref(false);
-watch(() => form.value.name, (newName) => {
-  if (!isEdit.value && !idManuallyEdited.value) {
-    if (!newName) {
-      form.value.id = '';
-    } else {
-      const slug = newName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      if (slug.length > 0) {
-        form.value.id = `${slug}-${Math.floor(Math.random() * 1000)}`;
+watch(
+  () => form.value.name,
+  (newName) => {
+    if (!isEdit.value && !idManuallyEdited.value) {
+      if (!newName) {
+        form.value.id = '';
       } else {
-        form.value.id = `agent-${Date.now().toString(36)}`;
+        const slug = newName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        if (slug.length > 0) {
+          form.value.id = `${slug}-${Math.floor(Math.random() * 1000)}`;
+        } else {
+          form.value.id = `agent-${Date.now().toString(36)}`;
+        }
       }
     }
   }
-});
+);
 
 const handleIdInput = () => {
   idManuallyEdited.value = true;
@@ -152,7 +286,7 @@ onMounted(async () => {
     if (agentsStore.agents.length === 0) {
       await agentsStore.fetchAgents();
     }
-    const agent = agentsStore.agents.find(a => a.id === agentId.value);
+    const agent = agentsStore.agents.find((a) => a.id === agentId.value);
     if (agent) {
       // 获取基本信息
       const res = await agentsStore.getAgentDetail(agent.id);
@@ -164,13 +298,22 @@ onMounted(async () => {
           instructions: res.instructions || '',
           skills: res.skills || [],
           model: res.model || '',
-          metadata: res.metadata || { greeting: '', starterPrompts: [] }
+          metadata: {
+            greeting: (res.metadata?.greeting as string) || '',
+            starterPrompts: Array.isArray(res.metadata?.starterPrompts) ? res.metadata.starterPrompts : [],
+            dataDirectory: (res.metadata?.dataDirectory as string) || ''
+          }
         };
-        
+
         // 初始化快捷问题列表
         if (res.metadata && Array.isArray(res.metadata.starterPrompts)) {
           starterPrompts.value = [...res.metadata.starterPrompts];
+        } else {
+          starterPrompts.value = [];
         }
+        syncStarterPromptsToMetadata();
+        starterPromptsDirty.value = false;
+        starterPromptsLoaded.value = true;
       } else {
         form.value = {
           id: agent.id,
@@ -179,8 +322,11 @@ onMounted(async () => {
           instructions: '',
           skills: agent.skills || [],
           model: agent.model || '',
-          metadata: { greeting: '', starterPrompts: [] }
+          metadata: { greeting: '', starterPrompts: [], dataDirectory: '' }
         };
+        starterPrompts.value = [];
+        starterPromptsDirty.value = false;
+        starterPromptsLoaded.value = true;
       }
 
       // 加载人格文件
@@ -237,7 +383,8 @@ const submitting = ref(false);
 
 const handleSubmit = async () => {
   if (submitting.value) return;
-  
+  clearStarterPromptsSaveTimer();
+
   // 最终提交前的完整校验
   if (!form.value.name) {
     messageStore.error('请输入智能体名称');
@@ -259,10 +406,13 @@ const handleSubmit = async () => {
     id: form.value.id,
     name: form.value.name,
     description: form.value.description,
-    personalityFiles: Object.keys(personalityFiles.value).reduce((acc, key) => {
-      acc[key] = personalityFiles.value[key as PersonalityFile].length;
-      return acc;
-    }, {} as Record<string, number>),
+    personalityFiles: Object.keys(personalityFiles.value).reduce(
+      (acc, key) => {
+        acc[key] = personalityFiles.value[key as PersonalityFile].length;
+        return acc;
+      },
+      {} as Record<string, number>
+    ),
     skills: form.value.skills,
     model: form.value.model
   });
@@ -281,18 +431,15 @@ const handleSubmit = async () => {
         metadata: {
           ...form.value.metadata,
           greeting: form.value.metadata?.greeting || '',
-          starterPrompts: starterPrompts.value
+          starterPrompts: [...starterPrompts.value],
+          dataDirectory: form.value.metadata?.dataDirectory || ''
         }
       });
 
       // 更新人格文件
       if (success) {
         for (const file of personalityTabs) {
-          await agentsStore.updatePersonalityFile(
-            agentId.value,
-            file.key,
-            personalityFiles.value[file.key]
-          );
+          await agentsStore.updatePersonalityFile(agentId.value, file.key, personalityFiles.value[file.key]);
         }
       }
     } else {
@@ -303,18 +450,15 @@ const handleSubmit = async () => {
         metadata: {
           ...form.value.metadata,
           greeting: form.value.metadata?.greeting || '',
-          starterPrompts: starterPrompts.value
+          starterPrompts: [...starterPrompts.value],
+          dataDirectory: form.value.metadata?.dataDirectory || ''
         }
       });
 
       // 创建后更新人格文件
       if (success) {
         for (const file of personalityTabs) {
-          await agentsStore.updatePersonalityFile(
-            form.value.id,
-            file.key,
-            personalityFiles.value[file.key]
-          );
+          await agentsStore.updatePersonalityFile(form.value.id, file.key, personalityFiles.value[file.key]);
         }
       }
     }
@@ -336,43 +480,57 @@ const handleSubmit = async () => {
 };
 
 const handleCancel = () => {
+  clearStarterPromptsSaveTimer();
   router.push('/agents');
 };
+
+onUnmounted(() => {
+  clearStarterPromptsSaveTimer();
+});
 </script>
 
 <template>
   <div class="agent-editor-view flex h-full flex-col bg-background text-foreground">
     <!-- 顶栏 -->
-    <header class="flex h-14 shrink-0 items-center justify-between border-b border-border/40 bg-surface/60 px-6 backdrop-blur">
+    <header
+      class="flex h-14 shrink-0 items-center justify-between border-b border-border/40 bg-surface/60 px-6 backdrop-blur">
       <div class="flex items-center gap-3">
-        <button 
+        <button
           class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="handleCancel"
-        >
+          @click="handleCancel">
           <span class="i-carbon-arrow-left text-lg"></span>
         </button>
         <h1 class="text-base font-semibold tracking-tight">
           {{ isEdit ? '编辑智能体' : '自定义智能体' }}
         </h1>
       </div>
-      
+
       <!-- 步骤指示器 -->
       <div class="flex items-center gap-2 text-sm font-medium">
         <div class="flex items-center gap-2" :class="currentStep >= 1 ? 'text-primary' : 'text-muted-foreground'">
-          <div class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-               :class="currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">1</div>
+          <div
+            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+            :class="currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
+            >1</div
+          >
           <span>基本信息</span>
         </div>
         <div class="h-px w-8 bg-border"></div>
         <div class="flex items-center gap-2" :class="currentStep >= 2 ? 'text-primary' : 'text-muted-foreground'">
-          <div class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-               :class="currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">2</div>
+          <div
+            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+            :class="currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
+            >2</div
+          >
           <span>人格设置</span>
         </div>
         <div class="h-px w-8 bg-border"></div>
         <div class="flex items-center gap-2" :class="currentStep >= 3 ? 'text-primary' : 'text-muted-foreground'">
-          <div class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-               :class="currentStep >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">3</div>
+          <div
+            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+            :class="currentStep >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
+            >3</div
+          >
           <span>技能设置</span>
         </div>
       </div>
@@ -381,103 +539,123 @@ const handleCancel = () => {
     <!-- 内容区 -->
     <div class="flex-1 overflow-y-auto p-8">
       <div class="mx-auto max-w-5xl">
-        
         <!-- Step 1: 基本信息 -->
         <div v-show="currentStep === 1" class="space-y-6">
           <div class="space-y-1">
             <h2 class="text-xl font-semibold tracking-tight">基本信息</h2>
             <p class="text-sm text-muted-foreground">定义智能体的名称、标识和使用的模型。</p>
           </div>
-          
+
           <div class="space-y-4 rounded-xl border border-border/40 bg-card p-6 shadow-sm">
             <div class="space-y-2">
               <label class="text-sm font-medium">名称 <span class="text-red-500">*</span></label>
-              <input 
-                v-model="form.name" 
-                type="text" 
-                placeholder="例如：前端开发专家" 
-                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
+              <input
+                v-model="form.name"
+                type="text"
+                placeholder="例如：前端开发专家"
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
-            
+
             <div class="space-y-2">
               <label class="text-sm font-medium">唯一标识 (ID) <span class="text-red-500">*</span></label>
-              <input 
-                v-model="form.id" 
-                type="text" 
+              <input
+                v-model="form.id"
+                type="text"
                 :disabled="isEdit"
-                @input="handleIdInput"
-                placeholder="例如：frontend-expert" 
+                placeholder="例如：frontend-expert"
                 class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-              />
+                @input="handleIdInput" />
               <p class="text-xs text-muted-foreground">将作为智能体的唯一 ID，创建后不可修改。</p>
             </div>
-            
+
             <div class="space-y-2">
               <label class="text-sm font-medium">描述 <span class="text-red-500">*</span></label>
-              <textarea 
-                v-model="form.description" 
+              <textarea
+                v-model="form.description"
                 rows="3"
-                placeholder="简短描述该智能体的用途..." 
-                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              ></textarea>
+                placeholder="简短描述该智能体的用途..."
+                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"></textarea>
             </div>
-            
+
             <div class="space-y-2">
               <label class="text-sm font-medium">默认模型</label>
               <ModelSelector v-model="form.model" />
               <p class="text-xs text-muted-foreground">留空则使用系统默认模型。</p>
             </div>
-            
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium flex items-center gap-2">
+                <span class="i-carbon-folder-details text-primary"></span>
+                数据目录
+              </label>
+              <div class="flex gap-2">
+                <input
+                  v-if="form.metadata"
+                  v-model="form.metadata.dataDirectory"
+                  type="text"
+                  placeholder="/path/to/data"
+                  class="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                <button
+                  type="button"
+                  class="shrink-0 flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+                  @click="selectDataDirectory">
+                  <span class="i-carbon-folder-open"></span>
+                  选择
+                </button>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                智能体的固定数据存储目录。所有任务产生的文件、中间结果都会保存在这里。
+              </p>
+            </div>
+
             <div class="border-t border-border/40 pt-4 mt-2"></div>
-            
+
             <div class="space-y-2">
               <label class="text-sm font-medium">开场白 (Greeting)</label>
-              <textarea 
+              <textarea
                 v-if="form.metadata"
-                v-model="form.metadata.greeting" 
+                v-model="form.metadata.greeting"
                 rows="2"
-                placeholder="例如：你好！我是你的专属助手，今天想聊点什么？" 
-                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              ></textarea>
+                placeholder="例如：你好！我是你的专属助手，今天想聊点什么？"
+                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"></textarea>
               <p class="text-xs text-muted-foreground">智能体在新对话开始时发送的第一句话。</p>
             </div>
-            
+
             <div class="space-y-2">
               <label class="text-sm font-medium">快捷问题 (Starter Prompts)</label>
-              
+
               <!-- 已添加的问题列表 -->
               <div v-if="starterPrompts.length > 0" class="flex flex-col gap-2 mb-3">
-                <div 
-                  v-for="(prompt, index) in starterPrompts" 
-                  :key="index"
-                  class="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
-                >
+                <div
+                  v-for="(prompt, index) in starterPrompts"
+                  :key="`${index}-${prompt}`"
+                  class="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
                   <span class="flex-1 truncate">{{ prompt }}</span>
-                  <button 
-                    @click="removeStarterPrompt(index)"
+                  <button
+                    type="button"
                     class="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                     title="移除"
-                  >
+                    @click="removeStarterPrompt(index)">
                     <span class="i-carbon-close"></span>
                   </button>
                 </div>
               </div>
-              
+
               <!-- 添加新问题输入框 -->
               <div class="flex gap-2">
-                <input 
-                  v-model="newPrompt" 
-                  @keydown.enter.prevent="addStarterPrompt"
-                  type="text" 
-                  placeholder="输入快捷问题，按回车添加..." 
+                <input
+                  v-model="newPrompt"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="输入快捷问题，按回车添加..."
                   class="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <button 
-                  @click="addStarterPrompt"
+                  @keydown.enter.prevent="addStarterPrompt" />
+                <button
+                  type="button"
                   :disabled="!newPrompt.trim()"
                   class="shrink-0 rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                  @click="addStarterPrompt">
                   添加
                 </button>
               </div>
@@ -492,23 +670,21 @@ const handleCancel = () => {
             <h2 class="text-xl font-semibold tracking-tight">人格设置</h2>
             <p class="text-sm text-muted-foreground">通过人格文件定义智能体的身份、核心灵魂和行为准则。</p>
           </div>
-          
+
           <!-- Tab Navigation -->
           <div class="flex gap-2 border-b border-border">
             <button
               v-for="tab in personalityTabs"
               :key="tab.key"
               class="px-4 py-2.5 text-sm font-medium transition-colors relative"
-              :class="currentPersonalityTab === tab.key 
-                ? 'text-primary' 
-                : 'text-muted-foreground hover:text-foreground'"
-              @click="currentPersonalityTab = tab.key"
-            >
+              :class="
+                currentPersonalityTab === tab.key ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              "
+              @click="currentPersonalityTab = tab.key">
               {{ tab.label }}
-              <div 
+              <div
                 v-if="currentPersonalityTab === tab.key"
-                class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-              ></div>
+                class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
             </button>
           </div>
 
@@ -517,16 +693,19 @@ const handleCancel = () => {
             <div class="space-y-3">
               <div class="flex items-start justify-between">
                 <div>
-                  <h3 class="text-base font-medium">{{ personalityTabs.find(t => t.key === currentPersonalityTab)?.label }}</h3>
-                  <p class="text-sm text-muted-foreground mt-1">{{ personalityTabs.find(t => t.key === currentPersonalityTab)?.description }}</p>
+                  <h3 class="text-base font-medium">{{
+                    personalityTabs.find((t) => t.key === currentPersonalityTab)?.label
+                  }}</h3>
+                  <p class="text-sm text-muted-foreground mt-1">{{
+                    personalityTabs.find((t) => t.key === currentPersonalityTab)?.description
+                  }}</p>
                 </div>
               </div>
               <MarkdownEditor
-                v-model="personalityFiles[currentPersonalityTab]"
-                :placeholder="personalityTabs.find(t => t.key === currentPersonalityTab)?.placeholder || ''"
                 :key="currentPersonalityTab"
-                min-height="300px"
-              />
+                v-model="personalityFiles[currentPersonalityTab]"
+                :placeholder="personalityTabs.find((t) => t.key === currentPersonalityTab)?.placeholder || ''"
+                min-height="300px" />
             </div>
           </div>
         </div>
@@ -537,25 +716,31 @@ const handleCancel = () => {
             <h2 class="text-xl font-semibold tracking-tight">技能设置</h2>
             <p class="text-sm text-muted-foreground">为智能体配备外部工具和技能，扩展其能力边界。</p>
           </div>
-          
+
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div 
-              v-for="skill in availableSkills" 
+            <div
+              v-for="skill in availableSkills"
               :key="skill.id"
               class="relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all"
-              :class="(form.skills || []).includes(skill.id) ? 'border-primary bg-primary/5 shadow-sm' : 'border-border/40 bg-card hover:border-border hover:bg-card/80'"
-              @click="toggleSkill(skill.id)"
-            >
+              :class="
+                (form.skills || []).includes(skill.id)
+                  ? 'border-primary bg-primary/5 shadow-sm'
+                  : 'border-border/40 bg-card hover:border-border hover:bg-card/80'
+              "
+              @click="toggleSkill(skill.id)">
               <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <span :class="skill.icon" class="text-xl"></span>
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center justify-between">
                   <h3 class="text-sm font-medium text-foreground">{{ skill.name }}</h3>
-                  <div 
+                  <div
                     class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors"
-                    :class="(form.skills || []).includes(skill.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background'"
-                  >
+                    :class="
+                      (form.skills || []).includes(skill.id)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input bg-background'
+                    ">
                     <span v-if="(form.skills || []).includes(skill.id)" class="i-carbon-checkmark text-xs"></span>
                   </div>
                 </div>
@@ -568,37 +753,34 @@ const handleCancel = () => {
     </div>
 
     <!-- 底部操作栏 -->
-    <footer class="flex h-16 shrink-0 items-center justify-between border-t border-border/40 bg-surface/60 px-8 backdrop-blur">
-      <button 
+    <footer
+      class="flex h-16 shrink-0 items-center justify-between border-t border-border/40 bg-surface/60 px-8 backdrop-blur">
+      <button
         class="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        @click="handleCancel"
-      >
+        @click="handleCancel">
         取消
       </button>
-      
+
       <div class="flex items-center gap-3">
-        <button 
+        <button
           v-if="currentStep > 1"
           class="rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          @click="prevStep"
-        >
+          @click="prevStep">
           上一步
         </button>
-        
-        <button 
+
+        <button
           v-if="currentStep < totalSteps"
           class="rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          @click="nextStep"
-        >
+          @click="nextStep">
           下一步
         </button>
-        
-        <button 
+
+        <button
           v-if="currentStep === totalSteps"
           class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="submitting"
-          @click="handleSubmit"
-        >
+          @click="handleSubmit">
           <span v-if="submitting" class="i-carbon-progress-bar animate-spin"></span>
           {{ isEdit ? '保存修改' : '完成创建' }}
         </button>

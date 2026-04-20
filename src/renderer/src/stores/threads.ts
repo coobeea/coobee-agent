@@ -43,18 +43,33 @@ export const useThreadsStore = defineStore('threads', () => {
   const error = ref<string | null>(null);
   const activeThreadId = ref<string | null>(null);
 
+  // 分页状态
+  const hasMore = ref(true);
+  const currentOffset = ref(0);
+  const pageSize = 50;
+  const total = ref(0);
+
   const threadCount = computed(() => threads.value.length);
 
   /**
-   * 从后端获取 Thread 列表
+   * 从后端获取 Thread 列表（首次加载，重置数据）
    */
   async function fetchThreads(agentId?: string): Promise<void> {
     loading.value = true;
     error.value = null;
+    currentOffset.value = 0;
+    threads.value = [];
 
     try {
       const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
-      const url = agentId ? `${baseUrl}/threads?agentId=${agentId}` : `${baseUrl}/threads`;
+      const params = new URLSearchParams({
+        offset: '0',
+        limit: String(pageSize)
+      });
+      if (agentId) {
+        params.append('agentId', agentId);
+      }
+      const url = `${baseUrl}/threads?${params}`;
 
       const res = await fetch(url);
 
@@ -65,11 +80,67 @@ export const useThreadsStore = defineStore('threads', () => {
       const data = await res.json();
       threads.value = data.threads || [];
 
-      console.log(`[ThreadsStore] 已加载 ${threads.value.length} 个任务`);
+      if (data.pagination) {
+        total.value = data.pagination.total;
+        hasMore.value = threads.value.length < total.value;
+        currentOffset.value = pageSize;
+      }
+
+      console.log(`[ThreadsStore] 已加载 ${threads.value.length} 个任务 (总数: ${total.value})`);
     } catch (err) {
       error.value = err instanceof Error ? err.message : '加载任务列表失败';
       console.error('[ThreadsStore] 加载失败:', err);
       threads.value = [];
+      hasMore.value = false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /**
+   * 加载更多任务（追加到现有列表）
+   */
+  async function loadMoreThreads(agentId?: string): Promise<void> {
+    if (loading.value || !hasMore.value) return;
+
+    loading.value = true;
+    error.value = null;
+
+    try {
+      const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
+      const params = new URLSearchParams({
+        offset: String(currentOffset.value),
+        limit: String(pageSize)
+      });
+      if (agentId) {
+        params.append('agentId', agentId);
+      }
+      const url = `${baseUrl}/threads?${params}`;
+
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch threads: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      const newThreads = data.threads || [];
+
+      // 追加到现有列表
+      threads.value = [...threads.value, ...newThreads];
+
+      if (data.pagination) {
+        total.value = data.pagination.total;
+        hasMore.value = threads.value.length < total.value;
+        currentOffset.value += newThreads.length;
+      }
+
+      console.log(
+        `[ThreadsStore] 加载更多: +${newThreads.length} 个任务 (当前: ${threads.value.length}/${total.value})`
+      );
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载更多任务失败';
+      console.error('[ThreadsStore] 加载更多失败:', err);
     } finally {
       loading.value = false;
     }
@@ -139,7 +210,10 @@ export const useThreadsStore = defineStore('threads', () => {
     error,
     activeThreadId,
     threadCount,
+    hasMore,
+    total,
     fetchThreads,
+    loadMoreThreads,
     selectThread,
     clearSelection,
     updateThread

@@ -34,9 +34,7 @@ export const useAgentsStore = defineStore('agents', () => {
 
   const agentCount = computed(() => agents.value.length);
 
-  const selectedAgent = computed(() =>
-    agents.value.find((a) => a.id === selectedAgentId.value) ?? null
-  );
+  const selectedAgent = computed(() => agents.value.find((a) => a.id === selectedAgentId.value) ?? null);
 
   // ==================== Actions ====================
 
@@ -71,14 +69,14 @@ export const useAgentsStore = defineStore('agents', () => {
         skills: params.skills,
         model: params.model
       });
-      
+
       const result = await createAgent(params);
-      
+
       console.log('[AgentsStore] Create result:', {
         success: result.success,
         error: result.error
       });
-      
+
       if (result.success) {
         await fetchAgents();
         return true;
@@ -118,7 +116,14 @@ export const useAgentsStore = defineStore('agents', () => {
   /** 更新 Agent（部分更新） */
   async function modifyAgent(
     agentId: string,
-    params: { skills?: string[]; model?: string; name?: string; description?: string; instructions?: string }
+    params: {
+      skills?: string[];
+      model?: string;
+      name?: string;
+      description?: string;
+      instructions?: string;
+      metadata?: Record<string, unknown>;
+    }
   ): Promise<boolean> {
     try {
       const result = await updateAgent(agentId, params);
@@ -175,11 +180,7 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   /** 更新智能体的人格文件 */
-  async function updatePersonalityFile(
-    agentId: string,
-    fileName: string,
-    content: string
-  ): Promise<boolean> {
+  async function updatePersonalityFile(agentId: string, fileName: string, content: string): Promise<boolean> {
     try {
       const result = await savePersonalityFile(agentId, fileName, content);
       if (result.success) {

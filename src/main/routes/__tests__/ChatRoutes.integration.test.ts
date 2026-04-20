@@ -15,11 +15,11 @@ vi.mock('@main/common/env', () => {
         userHome: path.join(process.cwd(), '.test-home'),
         secretsDir: path.join(process.cwd(), '.test-home/secrets'),
         threadsDir: path.join(process.cwd(), '.test-home/threads'),
-        workspacesDir: path.join(process.cwd(), '.test-home/workspaces'),
+        workspacesDir: path.join(process.cwd(), '.test-home/workspaces')
       },
       getAgentWorkspaceDir: async () => path.join(process.cwd(), '.test-home/workspace'),
       getAgentHomeDir: async (id: string) => path.join(process.cwd(), '.test-home/homes', id),
-      getSkillSearchPaths: async () => [path.join(process.cwd(), 'resources/skills')],
+      getSkillSearchPaths: async () => [path.join(process.cwd(), 'resources/skills')]
     }
   };
 });
@@ -29,13 +29,13 @@ vi.mock('@main/common/logger', () => ({
     info: console.log,
     warn: console.warn,
     error: console.error,
-    debug: console.log,
+    debug: console.log
   }),
   log: {
     info: console.log,
     warn: console.warn,
     error: console.error,
-    debug: console.log,
+    debug: console.log
   }
 }));
 
@@ -73,7 +73,7 @@ describe('ChatRoutes Integration', () => {
     // Initialize stores
     const agentStore = AgentStore.getInstance();
     await agentStore.init();
-    
+
     const threadStore = await ThreadStore.getInstance();
     await threadStore.init();
 
@@ -88,7 +88,7 @@ describe('ChatRoutes Integration', () => {
     registerChatRoutes(router);
     app.use(router.routes());
     app.use(router.allowedMethods());
-    
+
     server = http.createServer(app.callback());
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
@@ -109,7 +109,7 @@ describe('ChatRoutes Integration', () => {
         overrideModel: 'qwen3.5:9b'
       })
     });
-    
+
     expect(createRes.status).toBe(200);
     const createData = await createRes.json();
     expect(createData.success).toBe(true);
@@ -126,45 +126,48 @@ describe('ChatRoutes Integration', () => {
     // 3. Send a message (SSE)
     return new Promise<void>((resolve, reject) => {
       let output = '';
-      
-      const req = http.request({
-        hostname: '127.0.0.1',
-        port,
-        path: `/gateway/chat/threads/${threadId}/messages`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }, (res) => {
-        expect(res.statusCode).toBe(200);
-        expect(res.headers['content-type']).toBe('text/event-stream');
-        
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-              try {
-                const data = JSON.parse(line.substring(6));
-                if (data.type === 'text:delta' && data.content) {
-                  output += data.content;
+
+      const req = http.request(
+        {
+          hostname: '127.0.0.1',
+          port,
+          path: `/gateway/chat/threads/${threadId}/messages`,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        },
+        (res) => {
+          expect(res.statusCode).toBe(200);
+          expect(res.headers['content-type']).toBe('text/event-stream');
+
+          res.setEncoding('utf8');
+          res.on('data', (chunk) => {
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                try {
+                  const data = JSON.parse(line.substring(6));
+                  if (data.type === 'text:delta' && data.content) {
+                    output += data.content;
+                  }
+                } catch (e) {
+                  // ignore
                 }
-              } catch (e) {
-                // ignore
               }
             }
-          }
-        });
-        
-        res.on('end', () => {
-          console.log('SSE Output:', output);
-          expect(output.length).toBeGreaterThan(0);
-          resolve();
-        });
-        
-        res.on('error', reject);
-      });
-      
+          });
+
+          res.on('end', () => {
+            console.log('SSE Output:', output);
+            expect(output.length).toBeGreaterThan(0);
+            resolve();
+          });
+
+          res.on('error', reject);
+        }
+      );
+
       req.on('error', reject);
       req.write(JSON.stringify({ message: '你好，请说“测试成功”' }));
       req.end();

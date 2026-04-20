@@ -20,12 +20,7 @@ import { app } from 'electron';
 import { createLogger } from '@main/common/logger';
 import { AgentStore } from '@main/agent/agents/AgentStore';
 import { AgentImportExport } from '@main/agent/agents/AgentImportExport';
-import type {
-  AgentDefinition,
-  AgentIndexEntry,
-  CreateAgentParams,
-  UpdateAgentParams
-} from '@main/agent/agents/types';
+import type { AgentDefinition, AgentIndexEntry, CreateAgentParams, UpdateAgentParams } from '@main/agent/agents/types';
 import type { ApiResponse } from '@shared/api';
 
 const log = createLogger('gateway-http-agents');
@@ -63,7 +58,7 @@ export function registerAgentRoutes(router: Router): void {
     try {
       const store = AgentStore.getInstance();
       const agents = await store.list();
-      
+
       // 系统内置 Agent 排在最前
       agents.sort((a, b) => {
         if (a.createdBy === 'system' && b.createdBy !== 'system') return -1;
@@ -176,8 +171,7 @@ export function registerAgentRoutes(router: Router): void {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('[agents.create] Error:', err);
       // ID 重复或格式错误 → 400，其他 → 500
-      ctx.status =
-        msg.includes('already exists') || msg.includes('Invalid agent ID') ? 400 : 500;
+      ctx.status = msg.includes('already exists') || msg.includes('Invalid agent ID') ? 400 : 500;
       const response: ApiResponse = {
         success: false,
         error: msg
@@ -392,11 +386,7 @@ export function registerAgentRoutes(router: Router): void {
         return;
       }
 
-      const importExport = new AgentImportExport(
-        store,
-        store.getHomeManager(),
-        app.getVersion()
-      );
+      const importExport = new AgentImportExport(store, store.getHomeManager(), app.getVersion());
 
       const zipPath = await importExport.exportAgent(agentId, {
         includeSkills: true
@@ -406,7 +396,7 @@ export function registerAgentRoutes(router: Router): void {
       const fileName = path.basename(zipPath);
       ctx.set('Content-Type', 'application/zip');
       ctx.set('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
-      
+
       // 读取文件并返回
       ctx.body = fs.createReadStream(zipPath);
 
@@ -458,11 +448,7 @@ export function registerAgentRoutes(router: Router): void {
       fs.writeFileSync(tempZipPath, buffer);
 
       const store = AgentStore.getInstance();
-      const importExport = new AgentImportExport(
-        store,
-        store.getHomeManager(),
-        app.getVersion()
-      );
+      const importExport = new AgentImportExport(store, store.getHomeManager(), app.getVersion());
 
       const result = await importExport.importAgent(tempZipPath);
 

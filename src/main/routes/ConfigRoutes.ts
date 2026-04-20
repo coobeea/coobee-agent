@@ -48,7 +48,7 @@ const secretsDir = configDir;
 
 /**
  * 脱敏 API Key
- * 
+ *
  * @param key API Key
  * @returns 脱敏信息 { hasKey, masked }
  */
@@ -65,10 +65,10 @@ function maskApiKey(key: string | undefined): SecretStatus {
  */
 function maskProviderApiKeys(config: ProvidersConfig): ProvidersConfig {
   const masked: ProvidersConfig = {};
-  
+
   for (const providerId in config) {
     masked[providerId] = { ...config[providerId] };
-    
+
     if (masked[providerId].apiKey) {
       const { hasKey, masked: maskedKey } = maskApiKey(masked[providerId].apiKey);
       if (hasKey) {
@@ -80,7 +80,7 @@ function maskProviderApiKeys(config: ProvidersConfig): ProvidersConfig {
       }
     }
   }
-  
+
   return masked;
 }
 
@@ -95,22 +95,22 @@ export function registerConfigRoutes(router: Router): void {
     try {
       const providers = Providers.load(configDir, secretsDir);
       const masked = maskProviderApiKeys(providers);
-      
+
       const response: ApiResponse<GetProvidersRespVO> = {
         success: true,
         data: { providers: masked }
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error('[ConfigRoutes] Failed to get providers:', error);
       ctx.status = 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
-      
+
       ctx.body = response;
     }
   });
@@ -134,17 +134,17 @@ export function registerConfigRoutes(router: Router): void {
         success: true,
         data: { secrets: status }
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error('[ConfigRoutes] Failed to get secrets status:', error);
       ctx.status = 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
-      
+
       ctx.body = response;
     }
   });
@@ -154,7 +154,7 @@ export function registerConfigRoutes(router: Router): void {
   /**
    * POST /gateway/config/providers/:id/key
    * 保存供应商 API Key
-   * 
+   *
    * Body: { apiKey: string }
    */
   router.post('/config/providers/:id/key', async (ctx) => {
@@ -163,12 +163,12 @@ export function registerConfigRoutes(router: Router): void {
 
     if (!body.apiKey || typeof body.apiKey !== 'string') {
       ctx.status = 400;
-      
+
       const response: ApiResponse = {
         success: false,
         error: 'apiKey is required and must be a string'
       };
-      
+
       ctx.body = response;
       return;
     }
@@ -181,21 +181,21 @@ export function registerConfigRoutes(router: Router): void {
       Providers.clearCache();
 
       log.info(`[ConfigRoutes] Saved API key for provider: ${providerId}`);
-      
+
       const response: ApiResponse = {
         success: true
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error(`[ConfigRoutes] Failed to save API key for ${providerId}:`, error);
       ctx.status = 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
-      
+
       ctx.body = response;
     }
   });
@@ -205,7 +205,7 @@ export function registerConfigRoutes(router: Router): void {
   /**
    * PATCH /gateway/config/providers/:id
    * 更新供应商配置（除了 API Key）
-   * 
+   *
    * Body: { baseUrl?, enabled?, description?, ... }
    */
   router.patch('/config/providers/:id', async (ctx) => {
@@ -215,12 +215,12 @@ export function registerConfigRoutes(router: Router): void {
     // 禁止通过此接口更新 apiKey（应使用专门的 key 接口）
     if ('apiKey' in body) {
       ctx.status = 400;
-      
+
       const response: ApiResponse = {
         success: false,
         error: 'Cannot update apiKey through this endpoint. Use POST /config/providers/:id/key instead'
       };
-      
+
       ctx.body = response;
       return;
     }
@@ -239,22 +239,22 @@ export function registerConfigRoutes(router: Router): void {
       loader.updateProvider(providerId, updates);
 
       log.info(`[ConfigRoutes] Updated provider: ${providerId}`, updates);
-      
+
       const response: ApiResponse = {
         success: true
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error(`[ConfigRoutes] Failed to update provider ${providerId}:`, error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       ctx.status = errorMessage.includes('not found') ? 404 : 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: errorMessage
       };
-      
+
       ctx.body = response;
     }
   });
@@ -264,7 +264,7 @@ export function registerConfigRoutes(router: Router): void {
   /**
    * PUT /gateway/config/providers/:id/enabled
    * 切换供应商启用状态
-   * 
+   *
    * Body: { enabled: boolean }
    */
   router.put('/config/providers/:id/enabled', async (ctx) => {
@@ -273,12 +273,12 @@ export function registerConfigRoutes(router: Router): void {
 
     if (typeof body.enabled !== 'boolean') {
       ctx.status = 400;
-      
+
       const response: ApiResponse = {
         success: false,
         error: 'enabled must be a boolean'
       };
-      
+
       ctx.body = response;
       return;
     }
@@ -288,22 +288,22 @@ export function registerConfigRoutes(router: Router): void {
       loader.toggleProvider(providerId, body.enabled);
 
       log.info(`[ConfigRoutes] Toggled provider ${providerId}: ${body.enabled ? 'enabled' : 'disabled'}`);
-      
+
       const response: ApiResponse = {
         success: true
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error(`[ConfigRoutes] Failed to toggle provider ${providerId}:`, error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       ctx.status = errorMessage.includes('not found') ? 404 : 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: errorMessage
       };
-      
+
       ctx.body = response;
     }
   });
@@ -313,7 +313,7 @@ export function registerConfigRoutes(router: Router): void {
   /**
    * POST /gateway/config/providers/:id/test
    * 测试供应商连接
-   * 
+   *
    * TODO: 实现实际的连接测试逻辑
    */
   router.post('/config/providers/:id/test', async (ctx) => {
@@ -324,7 +324,7 @@ export function registerConfigRoutes(router: Router): void {
 
       const providers = Providers.load(configDir, secretsDir);
       const provider = providers[providerId];
-      
+
       if (!provider) {
         ctx.status = 404;
         ctx.body = { success: false, error: `Provider "${providerId}" not found` };
@@ -347,11 +347,11 @@ export function registerConfigRoutes(router: Router): void {
         // 对于 Anthropic 或 Google，可能需要不同的测试端点，这里先统一使用 /models 尝试
         // 也可以发送一个简单的对话请求来测试
         const testUrl = provider.baseUrl.replace(/\/$/, '') + '/models';
-        
+
         const headers: Record<string, string> = {
           'Content-Type': 'application/json'
         };
-        
+
         if (provider.requiresApiKey !== false && provider.apiKey) {
           headers['Authorization'] = `Bearer ${provider.apiKey}`;
           // 兼容部分需要 api-key header 的平台
@@ -396,23 +396,23 @@ export function registerConfigRoutes(router: Router): void {
         connected: true,
         latency
       };
-      
+
       const response: ApiResponse<TestProviderRespVO> = {
         success: true,
         message: 'Connection test passed',
         data: testResult
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error(`[ConfigRoutes] Failed to test provider ${providerId}:`, error);
       ctx.status = 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
-      
+
       ctx.body = response;
     }
   });
@@ -436,17 +436,17 @@ export function registerConfigRoutes(router: Router): void {
         success: true,
         data: { modelId }
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error('[ConfigRoutes] Failed to get default model:', error);
       ctx.status = 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
-      
+
       ctx.body = response;
     }
   });
@@ -483,17 +483,17 @@ export function registerConfigRoutes(router: Router): void {
         success: true,
         message: 'Default model updated successfully'
       };
-      
+
       ctx.body = response;
     } catch (error) {
       log.error('[ConfigRoutes] Failed to update default model:', error);
       ctx.status = 500;
-      
+
       const response: ApiResponse = {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };
-      
+
       ctx.body = response;
     }
   });

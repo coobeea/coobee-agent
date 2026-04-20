@@ -257,7 +257,6 @@ ${sections.join('\n\n---\n\n')}
   }
 }
 
-
 // ==================== AGENTS.md 协议文件读取 ====================
 
 /**
@@ -338,8 +337,6 @@ function isOnlyComments(content: string): boolean {
     .trim();
   return stripped.length === 0;
 }
-
-
 
 // ==================== Skill 上下文环境变量 ====================
 

@@ -182,10 +182,15 @@ export class ThreadStore {
   /**
    * 列出所有 Thread（轻量索引）
    *
-   * 默认按 ID 降序（Snowflake ID 天然有序 → 最新在前）。
-   * 可选按 agentId 过滤。
+   * 默认按 updatedAt 降序（最近更新的在前）。
+   * 支持分页、按 agentId 过滤。
    */
-  async list(options?: { agentId?: string; status?: string }): Promise<ThreadIndexEntry[]> {
+  async list(options?: {
+    agentId?: string;
+    status?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<ThreadIndexEntry[]> {
     await this.init();
 
     let entries = Array.from(this.index.values());
@@ -197,13 +202,17 @@ export class ThreadStore {
       entries = entries.filter((e) => e.status === options.status);
     }
 
-    // 按 Snowflake ID 降序（最新在前）
+    // 按 updatedAt 降序（最近更新的在前）
     entries.sort((a, b) => {
-      if (a.id === b.id) return 0;
-      return BigInt(b.id) > BigInt(a.id) ? 1 : -1;
+      const timeA = new Date(a.updatedAt).getTime();
+      const timeB = new Date(b.updatedAt).getTime();
+      return timeB - timeA;
     });
 
-    return entries;
+    // 分页
+    const offset = options?.offset ?? 0;
+    const limit = options?.limit ?? entries.length;
+    return entries.slice(offset, offset + limit);
   }
 
   /** 更新 Thread（部分更新） */

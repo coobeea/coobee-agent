@@ -103,9 +103,7 @@ export class ProviderConfigManager {
           id: m.id,
           name: m.name,
           reasoning: m.reasoning ?? false,
-          input: m.input?.filter((type): type is 'text' | 'image' => 
-            type === 'text' || type === 'image'
-          ) ?? ['text'],
+          input: m.input?.filter((type): type is 'text' | 'image' => type === 'text' || type === 'image') ?? ['text'],
           contextWindow: m.contextWindow,
           maxTokens: m.maxOutputTokens,
           cost: m.cost

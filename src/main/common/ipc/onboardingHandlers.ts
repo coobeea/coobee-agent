@@ -1,6 +1,6 @@
 /**
  * Onboarding IPC Handlers
- * 
+ *
  * 处理用户首次引导相关的 IPC 请求
  */
 

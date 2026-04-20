@@ -8,8 +8,9 @@
  */
 
 import type { ApiResponse } from '@shared/api';
+import configManager from '@/config';
 
-const BASE_URL = 'http://localhost:8765';
+const BASE_URL = configManager.getBaseUrl();
 
 class ApiClient {
   private baseUrl: string;

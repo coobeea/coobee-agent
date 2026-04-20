@@ -123,8 +123,8 @@ export const execTool: ToolDefinition = {
     if (terminal) {
       yield { type: 'progress', content: `[terminal] $ ${command}`, percentage: 0 };
 
-      const llmContent = "[Terminal] Terminal mode is disabled in minimal mode. Use foreground mode instead.";
-      
+      const llmContent = '[Terminal] Terminal mode is disabled in minimal mode. Use foreground mode instead.';
+
       yield {
         type: 'output',
         content: llmContent
@@ -148,7 +148,7 @@ export const execTool: ToolDefinition = {
     if (background) {
       yield { type: 'progress', content: `[background] $ ${command}`, percentage: 0 };
 
-      const llmContent = "[Background] Process started, but background process management is disabled in minimal mode.";
+      const llmContent = '[Background] Process started, but background process management is disabled in minimal mode.';
 
       yield {
         type: 'output',

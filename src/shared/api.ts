@@ -24,18 +24,18 @@ export interface UnifiedRequest {
 
 /**
  * 标准 API 响应格式
- * 
+ *
  * 前后端统一的响应格式，用于所有 HTTP REST API 和 RPC 调用
- * 
+ *
  * @template T 响应数据类型
- * 
+ *
  * @example
  * // 成功响应
  * const response: ApiResponse<UserVO> = {
  *   success: true,
  *   data: { id: '1', name: '张三' }
  * };
- * 
+ *
  * // 错误响应
  * const response: ApiResponse = {
  *   success: false,

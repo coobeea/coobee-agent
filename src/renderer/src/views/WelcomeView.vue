@@ -76,11 +76,9 @@ async function loadProviders(): Promise<void> {
     const result = await getProviders();
     if (result.success && result.data) {
       allProviders.value = Object.values(result.data.providers);
-      
+
       // 标记已经启用的供应商为已配置
-      configuredProviderIds.value = allProviders.value
-        .filter((p) => p.enabled)
-        .map((p) => p.id);
+      configuredProviderIds.value = allProviders.value.filter((p) => p.enabled).map((p) => p.id);
     } else {
       message.error(result.error || '加载供应商列表失败');
     }
@@ -174,7 +172,7 @@ async function handleTestProvider(): Promise<void> {
 function handleNextProvider(): void {
   if (currentConfigIndex.value < selectedProviderIds.value.length - 1) {
     currentConfigIndex.value++;
-    
+
     // 初始化下一个供应商的配置表单（读取已有配置）
     if (currentProvider.value) {
       initConfigForm(currentProvider.value);
@@ -210,7 +208,7 @@ function handleNext(): void {
     if (selectedProviderIds.value.length > 0) {
       currentConfigIndex.value = 0;
       currentStep.value = 3;
-      
+
       // 初始化第一个供应商的配置表单
       if (currentProvider.value) {
         initConfigForm(currentProvider.value);
@@ -288,193 +286,190 @@ const configProgressText = computed(() => {
         <div class="flex-1 overflow-y-auto min-h-0">
           <!-- 步骤 1: 欢迎介绍 -->
           <div v-if="currentStep === 1" class="space-y-6">
-          <div class="flex flex-col items-center text-center">
-            <div
-              class="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/10 text-primary ring-1 ring-primary/20">
-              <span class="i-carbon-rocket text-5xl"></span>
-            </div>
-
-            <h1 class="text-3xl font-bold tracking-tight text-foreground">欢迎使用 Coobee Agent</h1>
-            <p class="mt-3 text-lg text-muted-foreground">强大的 AI 智能体管理平台</p>
-
-            <div class="mt-8 space-y-3 text-left text-muted-foreground">
-              <div class="flex items-start gap-3">
-                <span class="i-carbon-checkmark-filled mt-1 text-success"></span>
-                <span>管理和运行多种 AI 智能体</span>
+            <div class="flex flex-col items-center text-center">
+              <div
+                class="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                <span class="i-carbon-rocket text-5xl"></span>
               </div>
-              <div class="flex items-start gap-3">
-                <span class="i-carbon-checkmark-filled mt-1 text-success"></span>
-                <span>支持多种模型供应商（OpenAI、Anthropic、本地模型等）</span>
-              </div>
-              <div class="flex items-start gap-3">
-                <span class="i-carbon-checkmark-filled mt-1 text-success"></span>
-                <span>强大的对话和任务管理功能</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- 步骤 2: 选择供应商 -->
-        <div v-if="currentStep === 2" class="space-y-6">
-          <div class="text-center">
-            <div
-              class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <span class="i-carbon-machine-learning-model text-4xl"></span>
-            </div>
-            <h2 class="text-2xl font-bold text-foreground">选择模型供应商</h2>
-            <p class="mt-2 text-sm text-muted-foreground">选择您想要使用的模型供应商（可多选）</p>
-          </div>
+              <h1 class="text-3xl font-bold tracking-tight text-foreground">欢迎使用 Coobee Agent</h1>
+              <p class="mt-3 text-lg text-muted-foreground">强大的 AI 智能体管理平台</p>
 
-          <!-- 加载中 -->
-          <div v-if="loading" class="flex items-center justify-center py-12">
-            <span class="i-carbon-renew inline-block h-8 w-8 animate-spin text-primary"></span>
-          </div>
-
-          <!-- 供应商列表 -->
-          <div v-else class="grid grid-cols-1 gap-3">
-            <button
-              v-for="provider in allProviders"
-              :key="provider.id"
-              class="group flex items-center justify-between rounded-xl border p-4 text-left transition-all"
-              :class="
-                isProviderSelected(provider.id)
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border bg-background hover:border-primary/50 hover:bg-muted/30'
-              "
-              @click="toggleProviderSelection(provider.id)">
-              <div class="flex items-center gap-3 flex-1 min-w-0">
-                <div
-                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors"
-                  :class="
-                    isProviderSelected(provider.id)
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-                  ">
-                  <span class="i-carbon-machine-learning-model text-xl"></span>
+              <div class="mt-8 space-y-3 text-left text-muted-foreground">
+                <div class="flex items-start gap-3">
+                  <span class="i-carbon-checkmark-filled mt-1 text-success"></span>
+                  <span>管理和运行多种 AI 智能体</span>
                 </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <p class="font-semibold text-foreground">{{ provider.name }}</p>
-                    <span
-                      v-if="provider.enabled"
-                      class="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-                      已配置
-                    </span>
-                  </div>
-                  <p class="text-xs text-muted-foreground">{{ provider.id }}</p>
+                <div class="flex items-start gap-3">
+                  <span class="i-carbon-checkmark-filled mt-1 text-success"></span>
+                  <span>支持多种模型供应商（OpenAI、Anthropic、本地模型等）</span>
+                </div>
+                <div class="flex items-start gap-3">
+                  <span class="i-carbon-checkmark-filled mt-1 text-success"></span>
+                  <span>强大的对话和任务管理功能</span>
                 </div>
               </div>
+            </div>
+          </div>
 
+          <!-- 步骤 2: 选择供应商 -->
+          <div v-if="currentStep === 2" class="space-y-6">
+            <div class="text-center">
               <div
-                v-if="isProviderSelected(provider.id)"
-                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <span class="i-carbon-checkmark text-sm"></span>
+                class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <span class="i-carbon-machine-learning-model text-4xl"></span>
               </div>
-              <div
-                v-else
-                class="h-6 w-6 shrink-0 rounded-full border-2 border-muted transition-colors group-hover:border-primary"></div>
-            </button>
-          </div>
-
-          <!-- 提示信息 -->
-          <div
-            v-if="!canProceed"
-            class="flex items-start gap-3 rounded-lg bg-warning/10 p-4 text-sm text-warning">
-            <span class="i-carbon-warning-alt mt-0.5 shrink-0"></span>
-            <span>请至少选择一个供应商</span>
-          </div>
-        </div>
-
-        <!-- 步骤 3: 配置供应商 -->
-        <div v-if="currentStep === 3 && currentProvider" class="space-y-6">
-          <div class="text-center">
-            <div
-              class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <span class="i-carbon-settings text-4xl"></span>
-            </div>
-            <h2 class="text-2xl font-bold text-foreground">配置 {{ currentProvider.name }}</h2>
-            <p class="mt-2 text-sm text-muted-foreground">
-              配置进度: {{ configProgressText }}
-            </p>
-          </div>
-
-          <div class="space-y-4">
-            <!-- API Key 输入（Ollama 不需要） -->
-            <div v-if="currentProvider.id !== 'ollama'">
-              <label class="mb-1.5 block text-sm font-medium text-foreground"> API Key * </label>
-              <input
-                v-model="configForm.apiKey"
-                type="password"
-                placeholder="sk-..."
-                class="w-full rounded-lg border border-border bg-input-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              <h2 class="text-2xl font-bold text-foreground">选择模型供应商</h2>
+              <p class="mt-2 text-sm text-muted-foreground">选择您想要使用的模型供应商（可多选）</p>
             </div>
 
-            <!-- Base URL 输入（可选） -->
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-foreground"> Base URL (可选) </label>
-              <input
-                v-model="configForm.baseUrl"
-                type="text"
-                :placeholder="currentProvider.id === 'ollama' ? 'http://localhost:11434' : '留空使用默认'"
-                class="w-full rounded-lg border border-border bg-input-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            <!-- 加载中 -->
+            <div v-if="loading" class="flex items-center justify-center py-12">
+              <span class="i-carbon-renew inline-block h-8 w-8 animate-spin text-primary"></span>
             </div>
 
-            <!-- 测试按钮和结果 -->
-            <div class="space-y-3">
+            <!-- 供应商列表 -->
+            <div v-else class="grid grid-cols-1 gap-3">
               <button
-                class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="configForm.testing || (currentProvider.id !== 'ollama' && !configForm.apiKey)"
-                @click="handleTestProvider">
-                <span v-if="configForm.testing" class="i-carbon-renew animate-spin"></span>
-                <span v-else class="i-carbon-play-filled"></span>
-                {{ configForm.testing ? '测试中...' : '测试连接' }}
+                v-for="provider in allProviders"
+                :key="provider.id"
+                class="group flex items-center justify-between rounded-xl border p-4 text-left transition-all"
+                :class="
+                  isProviderSelected(provider.id)
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border bg-background hover:border-primary/50 hover:bg-muted/30'
+                "
+                @click="toggleProviderSelection(provider.id)">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <div
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors"
+                    :class="
+                      isProviderSelected(provider.id)
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+                    ">
+                    <span class="i-carbon-machine-learning-model text-xl"></span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <p class="font-semibold text-foreground">{{ provider.name }}</p>
+                      <span
+                        v-if="provider.enabled"
+                        class="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                        已配置
+                      </span>
+                    </div>
+                    <p class="text-xs text-muted-foreground">{{ provider.id }}</p>
+                  </div>
+                </div>
+
+                <div
+                  v-if="isProviderSelected(provider.id)"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <span class="i-carbon-checkmark text-sm"></span>
+                </div>
+                <div
+                  v-else
+                  class="h-6 w-6 shrink-0 rounded-full border-2 border-muted transition-colors group-hover:border-primary"></div>
+              </button>
+            </div>
+
+            <!-- 提示信息 -->
+            <div v-if="!canProceed" class="flex items-start gap-3 rounded-lg bg-warning/10 p-4 text-sm text-warning">
+              <span class="i-carbon-warning-alt mt-0.5 shrink-0"></span>
+              <span>请至少选择一个供应商</span>
+            </div>
+          </div>
+
+          <!-- 步骤 3: 配置供应商 -->
+          <div v-if="currentStep === 3 && currentProvider" class="space-y-6">
+            <div class="text-center">
+              <div
+                class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <span class="i-carbon-settings text-4xl"></span>
+              </div>
+              <h2 class="text-2xl font-bold text-foreground">配置 {{ currentProvider.name }}</h2>
+              <p class="mt-2 text-sm text-muted-foreground"> 配置进度: {{ configProgressText }} </p>
+            </div>
+
+            <div class="space-y-4">
+              <!-- API Key 输入（Ollama 不需要） -->
+              <div v-if="currentProvider.id !== 'ollama'">
+                <label class="mb-1.5 block text-sm font-medium text-foreground"> API Key * </label>
+                <input
+                  v-model="configForm.apiKey"
+                  type="password"
+                  placeholder="sk-..."
+                  class="w-full rounded-lg border border-border bg-input-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+
+              <!-- Base URL 输入（可选） -->
+              <div>
+                <label class="mb-1.5 block text-sm font-medium text-foreground"> Base URL (可选) </label>
+                <input
+                  v-model="configForm.baseUrl"
+                  type="text"
+                  :placeholder="currentProvider.id === 'ollama' ? 'http://localhost:11434' : '留空使用默认'"
+                  class="w-full rounded-lg border border-border bg-input-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+
+              <!-- 测试按钮和结果 -->
+              <div class="space-y-3">
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="configForm.testing || (currentProvider.id !== 'ollama' && !configForm.apiKey)"
+                  @click="handleTestProvider">
+                  <span v-if="configForm.testing" class="i-carbon-renew animate-spin"></span>
+                  <span v-else class="i-carbon-play-filled"></span>
+                  {{ configForm.testing ? '测试中...' : '测试连接' }}
+                </button>
+
+                <!-- 测试结果 -->
+                <div
+                  v-if="configForm.testResult === 'success'"
+                  class="flex items-center gap-2 rounded-lg bg-success/10 p-3 text-sm text-success">
+                  <span class="i-carbon-checkmark-filled"></span>
+                  <span>{{ configForm.testMessage }}</span>
+                </div>
+                <div
+                  v-if="configForm.testResult === 'error'"
+                  class="flex items-center gap-2 rounded-lg bg-error/10 p-3 text-sm text-error">
+                  <span class="i-carbon-warning-alt"></span>
+                  <span>{{ configForm.testMessage }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex items-center justify-between border-t border-border pt-4">
+              <button
+                class="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                @click="handleSkipProvider">
+                跳过此供应商
               </button>
 
-              <!-- 测试结果 -->
-              <div
+              <button
                 v-if="configForm.testResult === 'success'"
-                class="flex items-center gap-2 rounded-lg bg-success/10 p-3 text-sm text-success">
-                <span class="i-carbon-checkmark-filled"></span>
-                <span>{{ configForm.testMessage }}</span>
-              </div>
-              <div
-                v-if="configForm.testResult === 'error'"
-                class="flex items-center gap-2 rounded-lg bg-error/10 p-3 text-sm text-error">
-                <span class="i-carbon-warning-alt"></span>
-                <span>{{ configForm.testMessage }}</span>
-              </div>
+                class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+                @click="handleNextProvider">
+                {{ currentConfigIndex < selectedProviderIds.length - 1 ? '下一个供应商' : '完成配置' }}
+                <span class="i-carbon-arrow-right"></span>
+              </button>
+            </div>
+
+            <div class="rounded-lg bg-muted/30 p-4 text-xs text-muted-foreground">
+              <p class="flex items-start gap-2">
+                <span class="i-carbon-information mt-0.5 shrink-0"></span>
+                <span>测试成功后，配置将自动保存。您可以稍后在"设置 → 模型控制"中修改配置</span>
+              </p>
             </div>
           </div>
-
-          <!-- 操作按钮 -->
-          <div class="flex items-center justify-between border-t border-border pt-4">
-            <button
-              class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              @click="handleSkipProvider">
-              跳过此供应商
-            </button>
-
-            <button
-              v-if="configForm.testResult === 'success'"
-              class="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
-              @click="handleNextProvider">
-              {{ currentConfigIndex < selectedProviderIds.length - 1 ? '下一个供应商' : '完成配置' }}
-              <span class="i-carbon-arrow-right"></span>
-            </button>
-          </div>
-
-          <div class="rounded-lg bg-muted/30 p-4 text-xs text-muted-foreground">
-            <p class="flex items-start gap-2">
-              <span class="i-carbon-information mt-0.5 shrink-0"></span>
-              <span>测试成功后，配置将自动保存。您可以稍后在"设置 → 模型控制"中修改配置</span>
-            </p>
-          </div>
-        </div>
-
         </div>
 
         <!-- 按钮区域（固定在底部） -->
-        <div v-if="currentStep !== 3" class="mt-8 flex items-center justify-between border-t border-border pt-6 shrink-0">
+        <div
+          v-if="currentStep !== 3"
+          class="mt-8 flex items-center justify-between border-t border-border pt-6 shrink-0">
           <button
             v-if="currentStep > 1 && currentStep !== 3"
             class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

@@ -8,6 +8,8 @@
 
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
+import { useThreadsStore } from '@/stores/threads';
+import { useAgentsStore } from '@/stores/agents';
 import type { StreamMessage } from '@shared/stream-protocol';
 import { useGateway } from '@/composables/useGateway';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
@@ -25,16 +27,33 @@ const props = withDefaults(
 
 // ==================== Store & Composables ====================
 const chatStore = useChatStore();
+const threadsStore = useThreadsStore();
+const agentsStore = useAgentsStore();
 const { request } = useGateway();
 
 // ==================== Refs ====================
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null);
 const chatComposerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 
+const agentGreeting = ref<string>('');
+const agentStarterPrompts = ref<string[]>([]);
+
 // ==================== Computed ====================
 // 直接从 store 读取消息（自动响应式）
 const messages = computed(() => chatStore.getThreadMessages(props.threadId));
 const isStreaming = computed(() => chatStore.getState(props.threadId).isStreaming);
+
+// 获取当前 thread 和 agent 信息
+const currentThread = computed(() => threadsStore.threads.find((t) => t.id === props.threadId));
+const currentAgent = computed(() => {
+  const thread = currentThread.value;
+  if (!thread) return null;
+  return agentsStore.agents.find((a) => a.id === thread.agentId);
+});
+
+// 从 agent metadata 中获取开场白和快捷问题
+const greeting = computed(() => agentGreeting.value);
+const starterPrompts = computed(() => agentStarterPrompts.value);
 
 // ==================== Methods ====================
 function scrollToBottom(force = false): void {
@@ -82,6 +101,12 @@ async function handleSend(data: { text: string; files?: { path: string; name: st
   }
 }
 
+// 点击快捷问题时发送
+function handleStarterPromptClick(prompt: string): void {
+  if (!prompt || isStreaming.value) return;
+  handleSend({ text: prompt });
+}
+
 async function handleStop(): Promise<void> {
   console.log('[ChatPanel] handleStop called for thread:', props.threadId);
   try {
@@ -94,6 +119,26 @@ async function handleStop(): Promise<void> {
 }
 
 // ==================== 历史加载 ====================
+
+async function loadAgentDetails(): Promise<void> {
+  const thread = currentThread.value;
+  if (!thread || !thread.agentId) return;
+
+  try {
+    const agentDetail = await agentsStore.getAgentDetail(thread.agentId);
+    if (agentDetail && agentDetail.metadata) {
+      agentGreeting.value = (agentDetail.metadata.greeting as string) || '';
+      agentStarterPrompts.value = Array.isArray(agentDetail.metadata.starterPrompts)
+        ? agentDetail.metadata.starterPrompts
+        : [];
+    } else {
+      agentGreeting.value = '';
+      agentStarterPrompts.value = [];
+    }
+  } catch (err) {
+    console.error('[ChatPanel] loadAgentDetails error:', err);
+  }
+}
 
 async function loadThreadHistory(): Promise<void> {
   // 如果 store 里已经有消息，说明是实时接收的，不需要再加载历史
@@ -154,6 +199,7 @@ async function loadThreadHistory(): Promise<void> {
 // ==================== 生命周期 ====================
 onMounted(async () => {
   scrollToBottom();
+  await loadAgentDetails();
   await loadThreadHistory();
 });
 
@@ -162,6 +208,7 @@ watch(
   () => props.threadId,
   async (newThreadId, oldThreadId) => {
     if (newThreadId !== oldThreadId) {
+      await loadAgentDetails();
       await loadThreadHistory();
     }
   }
@@ -175,7 +222,41 @@ defineExpose({
 <template>
   <aside class="chat-panel" :class="props.borderVariant === 'stacked' ? 'chat-panel--stacked' : ''">
     <!-- 消息区域 -->
-    <ChatMessages ref="chatMessagesRef" :messages="messages" :is-streaming="isStreaming" />
+    <ChatMessages ref="chatMessagesRef" :messages="messages" :is-streaming="isStreaming">
+      <template v-if="greeting || starterPrompts.length > 0" #empty>
+        <div class="flex flex-col items-center justify-center w-full max-w-2xl mx-auto px-6 py-12">
+          <!-- 图标 -->
+          <div class="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-6">
+            <span class="i-mdi-star-four-points inline-block h-7 w-7" />
+          </div>
+
+          <!-- 开场白 -->
+          <div v-if="greeting" class="text-center mb-8">
+            <p class="text-base text-foreground leading-relaxed">{{ greeting }}</p>
+          </div>
+
+          <!-- 快捷问题 -->
+          <div v-if="starterPrompts.length > 0" class="w-full flex flex-col gap-3">
+            <p class="text-xs text-muted-foreground text-center mb-2">试试这些问题</p>
+            <div class="grid grid-cols-1 gap-2">
+              <button
+                v-for="(prompt, index) in starterPrompts"
+                :key="index"
+                type="button"
+                class="group flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all text-left cursor-pointer"
+                :disabled="isStreaming"
+                @click="handleStarterPromptClick(prompt)">
+                <span
+                  class="i-carbon-chevron-right text-muted-foreground/60 group-hover:text-primary transition-colors shrink-0 text-base"></span>
+                <span class="text-sm text-foreground/85 group-hover:text-foreground transition-colors">{{
+                  prompt
+                }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </ChatMessages>
 
     <!-- 输入区：模型选择 + 富文本输入（可复用 ChatComposer） -->
     <ChatComposer

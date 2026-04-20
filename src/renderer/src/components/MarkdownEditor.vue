@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * MarkdownEditor — 基于 CodeMirror 6 的 Markdown 编辑器
- * 
+ *
  * 用于编辑智能体的人格文件（IDENTITY, SOUL, USER, NOTES, HEARTBEAT, AGENTS）
  */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
@@ -38,7 +38,7 @@ const editableCompartment = new Compartment();
 
 onMounted(async () => {
   await nextTick();
-  
+
   if (!editorContainer.value) return;
 
   // 配置 CodeMirror 扩展
@@ -80,7 +80,7 @@ watch(
   () => props.modelValue,
   (newValue) => {
     if (!editorView || isUpdatingFromProps) return;
-    
+
     const currentValue = editorView.state.doc.toString();
     if (currentValue !== newValue) {
       isUpdatingFromProps = true;
