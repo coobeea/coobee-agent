@@ -163,15 +163,15 @@ export interface ToolExecutionContext extends SandboxContext {
   /** 多 Agent 任务目录 — {workspace}/tasks/ */
   tasksDir: string;
 
-  // === 系统空间（.runtime/）===
+  // === 系统空间 ===
 
-  /** 会话存储目录 — {workspace}/.runtime/sessions/ */
+  /** 会话存储目录 — {workspace}/sessions/ */
   sessionsDir: string;
 
-  /** 上下文快照目录 — {workspace}/.runtime/contexts/ */
+  /** 上下文快照目录 — {workspace}/contexts/ */
   contextsDir: string;
 
-  /** 事件记录目录 — {workspace}/.runtime/events/ */
+  /** 事件记录目录 — {workspace}/events/ */
   eventsDir: string;
 
   // === 系统路径（必填，避免工具动态 import Env） ===

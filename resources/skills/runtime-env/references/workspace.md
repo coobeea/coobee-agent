@@ -16,10 +16,10 @@
 ├── sessions/                 # 会话持久化数据（系统自动管理）
 ├── contexts/                 # LLM 请求上下文快照（系统自动写入）
 ├── events/                   # 流式事件记录（系统自动写入）
+├── logs/                     # 运行日志（系统自动写入）
 ├── skills/                   # 你自己生成的 Skill
 ├── extensions/               # 你自己创建的 Extension
 ├── output/                   # 你的输出文件（报告、代码、文档等）
-├── logs/                     # 运行日志
 └── tasks/                    # [多 Agent] 委托任务目录
     └── {taskId}/             # 每个委托任务一个目录
         ├── plan.md           # 任务计划

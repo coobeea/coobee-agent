@@ -168,7 +168,7 @@ export abstract class BaseAgentBuilder {
    *
    * 设置后，Agent 的工作目录（cwd）指向此目录，
    * 中间产物、解析结果、输出文件均写入工程目录。
-   * 会话内部文件（.runtime/、.jsonl）仍存储在 workspace 目录。
+   * 会话内部文件（sessions/、contexts/、events/）仍存储在 workspace 目录。
    */
   projectDir(dir: string): this {
     this._projectDir = dir;

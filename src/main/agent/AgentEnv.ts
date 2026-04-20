@@ -284,7 +284,10 @@ ${dataDirectorySection}
 ${projectDirSection}
 ${agentHomeSection}
 **Current Task Workspace (Internal/Temporary)**: ${env.workspace}/
-  ├── .runtime/                             — System internal files (sessions, contexts, logs)
+  ├── sessions/                             — Session data
+  ├── contexts/                             — Context snapshots
+  ├── events/                               — Event logs
+  ├── logs/                                 — Runtime logs
   └── tasks/                                — Multi-agent collaboration area
 
   **PURPOSE**: This is the internal sandbox for the CURRENT task.
@@ -337,7 +340,9 @@ ${
     : ''
 }
 3. **System Files** (DO NOT manually modify)
-   - {workspace}/.runtime/         — Managed by system
+   - {workspace}/sessions/         — Session data (managed by system)
+   - {workspace}/contexts/         — Context snapshots (managed by system)
+   - {workspace}/events/           — Event logs (managed by system)
 ${
   env.projectDir
     ? `

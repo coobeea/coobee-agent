@@ -156,10 +156,10 @@ export class ThreadStore {
       const { Threads } = await import('@main/config/threads');
       // Threads.getWorkspaceDir 会自动创建完整的目录结构：
       // - workspaces/{threadId}/
-      // - workspaces/{threadId}/.runtime/sessions/
-      // - workspaces/{threadId}/.runtime/contexts/
-      // - workspaces/{threadId}/.runtime/events/
-      // - workspaces/{threadId}/.runtime/logs/
+      // - workspaces/{threadId}/sessions/
+      // - workspaces/{threadId}/contexts/
+      // - workspaces/{threadId}/events/
+      // - workspaces/{threadId}/logs/
       await Threads.getWorkspaceDir(threadId);
       log.debug(`[ThreadStore] Created workspace structure for thread ${threadId}`);
     } catch (err) {
@@ -185,7 +185,7 @@ export class ThreadStore {
       // 如果智能体没有配置数据目录，自动初始化一个默认的
       if (!dataDirectory) {
         dataDirectory = path.join(Env.paths.userHome, 'data', agentId);
-        
+
         // 更新 Agent 定义
         await store.modify(agentId, {
           metadata: {
@@ -193,7 +193,7 @@ export class ThreadStore {
             dataDirectory
           }
         });
-        
+
         log.info(`[ThreadStore] Auto-initialized dataDirectory for agent ${agentId}: ${dataDirectory}`);
       }
 

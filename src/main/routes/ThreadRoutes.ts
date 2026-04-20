@@ -117,7 +117,7 @@ export function registerThreadRoutes(router: Router): void {
 
       // 读取 events.jsonl
       const workspacePath = path.join(Env.paths.workspacesDir, threadId);
-      const eventsFile = path.join(workspacePath, '.runtime', 'events', 'events.jsonl');
+      const eventsFile = path.join(workspacePath, 'events', 'events.jsonl');
 
       let events: Record<string, unknown>[] = [];
 
@@ -201,14 +201,14 @@ export function registerThreadRoutes(router: Router): void {
 /**
  * 从 session 文件中提取用户消息
  *
- * session 文件格式：.runtime/sessions/{sessionId}/*.jsonl
+ * session 文件格式：sessions/{sessionId}/*.jsonl
  * 每行是一个事件，包含 type、content、timestamp 等字段
  */
 async function extractUserMessages(
   workspacePath: string,
   sessionId: string
 ): Promise<{ content: string; timestamp: number }[]> {
-  const sessionsDir = path.join(workspacePath, '.runtime', 'sessions', sessionId);
+  const sessionsDir = path.join(workspacePath, 'sessions', sessionId);
 
   log.debug(`[extractUserMessages] sessionsDir: ${sessionsDir}, exists: ${await fs.pathExists(sessionsDir)}`);
 

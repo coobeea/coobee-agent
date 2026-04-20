@@ -190,15 +190,15 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
 
     // ====== Chat & Agent 共享：基础环境设置 ======
 
-    // 9. 设置会话存储目录（指向 .runtime/ 系统空间，始终在 workspace 内）
-    builder.sessionDir(path.join(workspace, '.runtime', 'sessions'));
+    // 9. 设置会话存储目录
+    builder.sessionDir(path.join(workspace, 'sessions'));
 
     // 10. 工作目录：有工程目录时优先使用工程目录，否则用 workspace
     const effectiveCwdShared = builderProjectDir || workspace;
     builder.workspaceRoot(effectiveCwdShared);
 
-    // 11. 设置上下文快照目录（.runtime/ 系统空间，始终在 workspace 内）
-    builder.contextDir(path.join(workspace, '.runtime', 'contexts'));
+    // 11. 设置上下文快照目录
+    builder.contextDir(path.join(workspace, 'contexts'));
 
     if (builderProjectDir) {
       log.info(
@@ -474,10 +474,10 @@ async function buildToolExecutionContext(
     // 工作空间目录
     tasksDir: path.join(workspace, 'tasks'),
 
-    // 系统空间（.runtime/）
-    sessionsDir: path.join(workspace, '.runtime', 'sessions'),
-    contextsDir: path.join(workspace, '.runtime', 'contexts'),
-    eventsDir: path.join(workspace, '.runtime', 'events'),
+    // 系统空间
+    sessionsDir: path.join(workspace, 'sessions'),
+    contextsDir: path.join(workspace, 'contexts'),
+    eventsDir: path.join(workspace, 'events'),
 
     // 系统路径
     userHome,
