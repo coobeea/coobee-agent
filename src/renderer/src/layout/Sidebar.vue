@@ -19,7 +19,6 @@ import { ref, watch, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
 import { useThreadsStore } from '@/stores/threads';
-import { useChatStore } from '@/stores/chat';
 
 interface MenuItem {
   id: string;
@@ -32,7 +31,6 @@ const router = useRouter();
 const route = useRoute();
 const agentsStore = useAgentsStore();
 const threadsStore = useThreadsStore();
-const chatStore = useChatStore();
 
 const activeMenuId = ref('home');
 const activeThreadId = ref<string | null>(null);
@@ -84,7 +82,8 @@ const groupedThreads = computed<ThreadGroup[]>(() => {
 
 // 检查任务是否正在执行
 function isThreadStreaming(threadId: string): boolean {
-  return chatStore.getState(threadId).isStreaming;
+  const thread = threadsStore.threads.find((t) => t.id === threadId);
+  return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
 }
 
 // 格式化相对时间

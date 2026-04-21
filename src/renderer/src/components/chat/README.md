@@ -86,16 +86,21 @@ interface ToolCall {
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useChatStore } from '@/stores/chat';
+import { useThreadsStore } from '@/stores/threads';
 import { useGateway } from '@/composables/useGateway';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
 
 const props = defineProps<{ threadId: string }>();
 const chatStore = useChatStore();
+const threadsStore = useThreadsStore();
 const { request } = useGateway();
 
 // 从 store 读取消息（自动响应式）
 const messages = computed(() => chatStore.getThreadMessages(props.threadId));
-const isStreaming = computed(() => chatStore.getState(props.threadId).isStreaming);
+const isStreaming = computed(() => {
+  const thread = threadsStore.threads.find((t) => t.id === props.threadId);
+  return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
+});
 
 // 发送消息
 async function send(content: string): Promise<void> {
@@ -200,11 +205,17 @@ const html = computed(() => marked.parse(props.text));
 ## 🛡️ 状态管理
 
 ### useChatStore
-- **全局管理所有 thread 的消息和流状态**
+- **全局管理所有 thread 的消息**
 - 应用启动时自动监听流式消息（通过 gatewaySetup）
 - 自动聚合 StreamMessage → StreamChatMessage
 - 按 threadId 存储，支持多窗口共享状态
 - 自动限制每个 thread 最多 50 条消息
+
+### useThreadsStore
+- **管理 thread 列表和状态**
+- `thread.runStatus` 是执行状态的唯一真相源
+- 前端通过读取 `thread.runStatus` 判断是否正在执行（'running'、'tool-pending'）
+- 后端直接从文件读取，无内存缓存
 
 ## ⚡ 性能优化
 

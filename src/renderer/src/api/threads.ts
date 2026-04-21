@@ -1,0 +1,112 @@
+/**
+ * Threads API 客户端
+ *
+ * 封装任务会话相关的 HTTP API 调用
+ */
+
+import { apiClient } from './client';
+import type { ApiResponse } from '@shared/api';
+
+/** Thread 索引条目（轻量版） */
+export interface ThreadEntry {
+  id: string;
+  title: string;
+  agentId: string;
+  status: 'active' | 'archived' | 'deleted';
+  runStatus: 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
+  agentType: 'agent' | 'orchestrator' | 'swarm' | 'quality-loop' | 'discussion';
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+  workspacePath: string;
+  agentHomePath: string;
+  projectDir?: string;
+  overrideModel?: string | null;
+}
+
+/** Thread 列表响应 */
+export interface ListThreadsResponse {
+  threads: ThreadEntry[];
+  pagination?: {
+    total: number;
+    offset: number;
+    limit: number;
+  };
+}
+
+/** Thread 历史响应 */
+export interface ThreadHistoryResponse {
+  events: Array<{
+    ts: string;
+    seq: number;
+    type: string;
+    content: string;
+    data?: Record<string, unknown>;
+  }>;
+  userMessages: Array<{
+    content: string;
+    timestamp: number;
+  }>;
+}
+
+/** 更新 Thread 参数 */
+export interface UpdateThreadParams {
+  title?: string;
+  messageCount?: number;
+  status?: string;
+  projectDir?: string | null;
+  overrideModel?: string | null;
+  enableThinking?: boolean;
+}
+
+// ==================== API 方法 ====================
+
+/**
+ * 获取 Thread 列表
+ */
+export async function getThreads(params?: {
+  offset?: number;
+  limit?: number;
+  agentId?: string;
+}): Promise<ApiResponse<ListThreadsResponse>> {
+  const queryParams = new URLSearchParams();
+  if (params?.offset !== undefined) queryParams.append('offset', String(params.offset));
+  if (params?.limit !== undefined) queryParams.append('limit', String(params.limit));
+  if (params?.agentId) queryParams.append('agentId', params.agentId);
+
+  const query = queryParams.toString();
+  const path = query ? `/gateway/threads?${query}` : '/gateway/threads';
+
+  return apiClient.get<ListThreadsResponse>(path);
+}
+
+/**
+ * 获取单个 Thread 详情
+ */
+export async function getThread(threadId: string): Promise<ApiResponse<{ thread: ThreadEntry }>> {
+  return apiClient.get<{ thread: ThreadEntry }>(`/gateway/threads/${threadId}`);
+}
+
+/**
+ * 更新 Thread（部分更新）
+ */
+export async function updateThread(
+  threadId: string,
+  updates: UpdateThreadParams
+): Promise<ApiResponse<{ thread: ThreadEntry }>> {
+  return apiClient.patch<{ thread: ThreadEntry }>(`/gateway/threads/${threadId}`, updates);
+}
+
+/**
+ * 获取 Thread 历史消息
+ */
+export async function getThreadHistory(threadId: string): Promise<ApiResponse<ThreadHistoryResponse>> {
+  return apiClient.get<ThreadHistoryResponse>(`/gateway/threads/${threadId}/history`);
+}
+
+/**
+ * 删除 Thread
+ */
+export async function deleteThread(threadId: string): Promise<ApiResponse<{ deleted: boolean }>> {
+  return apiClient.delete<{ deleted: boolean }>(`/gateway/threads/${threadId}`);
+}

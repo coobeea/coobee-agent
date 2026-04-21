@@ -8,10 +8,16 @@
  * 支持切换显示"智能体目录"或"任务工作目录"。
  */
 import { ref, watch, provide, onUnmounted, inject, computed, type Ref } from 'vue';
-import configManager from '@/config';
 import { useOpenFiles } from '@/composables/useOpenFiles';
 import { watchThreadFiles, type WorkspaceFileChangedPayload } from '@/composables/useWorkspaceWatcher';
 import { useLogStore } from '@/stores/log';
+import {
+  getFileTree,
+  deleteNode as deleteNodeApi,
+  copyFileToWorkspace as copyFileApi,
+  uploadFile as uploadFileApi,
+  type FileNode
+} from '@/api/workspace';
 import FileTreeNodeVue from './FileTreeNode.vue';
 
 const logStore = useLogStore();
@@ -60,29 +66,15 @@ const showModeSwitcher = computed(() => props.showModeSwitcher);
 const projectPath = defineModel<string | null>('projectPath', { default: null });
 const isCollapsed = defineModel<boolean>('collapsed', { default: false });
 
-export interface FileNode {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
-}
-
 const tree = ref<FileNode[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const expandedDirs = ref<Set<string>>(new Set());
 const selectedPath = ref<string | null>(null);
 
-const BASE_URL = `${configManager.getBaseUrl()}/gateway/files`;
-
 async function fetchTree(dirPath: string, depth = 3): Promise<FileNode[]> {
-  const url = `${BASE_URL}/tree?path=${encodeURIComponent(dirPath)}&depth=${depth}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
-  }
-  return (data as { children: FileNode[] }).children;
+  const data = await getFileTree(dirPath, depth);
+  return data.children;
 }
 
 async function loadTree(clearExpanded = false): Promise<void> {
@@ -149,21 +141,8 @@ async function handleUploadFile(file: File, targetDir: string): Promise<void> {
 // 删除文件/目录
 async function handleDeleteNode(nodePath: string): Promise<void> {
   try {
-    const url = `${BASE_URL}/delete`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: nodePath })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      logStore.error('user', '文件/目录删除失败', { path: nodePath, error: (data as { error?: string }).error });
-      return;
-    }
-
-    logStore.info('user', '文件/目录删除成功', { path: nodePath, data });
+    await deleteNodeApi(nodePath);
+    logStore.info('user', '文件/目录删除成功', { path: nodePath });
     // 刷新文件树，保持展开状态
     await loadTree(false);
   } catch (err) {
@@ -292,21 +271,8 @@ onUnmounted(() => {
 
 async function copyFileToWorkspace(sourcePath: string, targetDir: string): Promise<void> {
   try {
-    const url = `${BASE_URL}/copy`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sourcePath, targetDir })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      logStore.error('user', '文件复制失败', { sourcePath, targetDir, error: (data as { error?: string }).error });
-      return;
-    }
-
-    logStore.info('user', '文件复制成功', { sourcePath, targetDir, data });
+    const result = await copyFileApi(sourcePath, targetDir);
+    logStore.info('user', '文件复制成功', { sourcePath, targetDir, targetPath: result.targetPath });
     // 刷新文件树，保持展开状态
     await loadTree(false);
   } catch (err) {
@@ -322,30 +288,14 @@ async function uploadFileToWorkspace(file: File, targetDir: string): Promise<voi
     const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
     const base64Content = btoa(binary);
 
-    const url = `${BASE_URL}/upload`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileName: file.name,
-        content: base64Content,
-        targetDir,
-        encoding: 'base64'
-      })
+    const result = await uploadFileApi({
+      fileName: file.name,
+      content: base64Content,
+      targetDir,
+      encoding: 'base64'
     });
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      logStore.error('user', '文件上传失败', {
-        fileName: file.name,
-        targetDir,
-        error: (data as { error?: string }).error
-      });
-      return;
-    }
-
-    logStore.info('user', '文件上传成功', { fileName: file.name, targetDir, data });
+    logStore.info('user', '文件上传成功', { fileName: file.name, targetDir, filePath: result.targetPath });
     // 刷新文件树，保持展开状态
     await loadTree(false);
   } catch (err) {

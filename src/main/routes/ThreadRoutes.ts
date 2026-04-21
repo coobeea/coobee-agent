@@ -63,18 +63,24 @@ export function registerThreadRoutes(router: Router): void {
       });
 
       ctx.body = {
-        threads,
-        pagination: {
-          offset: offsetNum,
-          limit: limitNum,
-          total
+        success: true,
+        data: {
+          threads,
+          pagination: {
+            offset: offsetNum,
+            limit: limitNum,
+            total
+          }
         }
       };
       log.debug(`[GET /threads] 返回 ${threads.length} 个任务 (总数: ${total})`);
     } catch (error) {
       log.error('[GET /threads] 错误:', error);
       ctx.status = 500;
-      ctx.body = { error: error instanceof Error ? error.message : 'Internal server error' };
+      ctx.body = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error'
+      };
     }
   });
 
@@ -142,15 +148,21 @@ export function registerThreadRoutes(router: Router): void {
       log.debug(`[GET /threads/${threadId}/history] extracted ${userMessages.length} user messages`);
 
       ctx.body = {
-        events,
-        userMessages
+        success: true,
+        data: {
+          events,
+          userMessages
+        }
       };
 
       log.debug(`[GET /threads/${threadId}/history] 返回 ${events.length} 条事件, ${userMessages.length} 条用户消息`);
     } catch (error) {
       log.error(`[GET /threads/${threadId}/history] 错误:`, error);
       ctx.status = 500;
-      ctx.body = { error: error instanceof Error ? error.message : 'Internal server error' };
+      ctx.body = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error'
+      };
     }
   });
 
@@ -186,12 +198,18 @@ export function registerThreadRoutes(router: Router): void {
       // 更新 Thread
       const updatedThread = await store.update(id, filteredUpdates);
 
-      ctx.body = { thread: updatedThread };
+      ctx.body = {
+        success: true,
+        data: { thread: updatedThread }
+      };
       log.debug(`[PATCH /threads/${id}] 更新成功`);
     } catch (error) {
       log.error(`[PATCH /threads/:id] 更新失败:`, error);
       ctx.status = 500;
-      ctx.body = { error: error instanceof Error ? error.message : 'Internal server error' };
+      ctx.body = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error'
+      };
     }
   });
 

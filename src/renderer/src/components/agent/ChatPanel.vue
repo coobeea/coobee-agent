@@ -12,6 +12,7 @@ import { useThreadsStore } from '@/stores/threads';
 import { useAgentsStore } from '@/stores/agents';
 import type { StreamMessage } from '@shared/stream-protocol';
 import { useGateway } from '@/composables/useGateway';
+import { getThreadHistory } from '@/api/threads';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
 import ChatComposer from '@/components/chat/ChatComposer.vue';
 
@@ -41,7 +42,10 @@ const agentStarterPrompts = ref<string[]>([]);
 // ==================== Computed ====================
 // 直接从 store 读取消息（自动响应式）
 const messages = computed(() => chatStore.getThreadMessages(props.threadId));
-const isStreaming = computed(() => chatStore.getState(props.threadId).isStreaming);
+const isStreaming = computed(() => {
+  const thread = threadsStore.threads.find((t) => t.id === props.threadId);
+  return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
+});
 
 // 获取当前 thread 和 agent 信息
 const currentThread = computed(() => threadsStore.threads.find((t) => t.id === props.threadId));
@@ -110,27 +114,11 @@ function handleStarterPromptClick(prompt: string): void {
 async function handleStop(): Promise<void> {
   console.log('[ChatPanel] handleStop called for thread:', props.threadId);
   try {
-    const result = await request('chat.abortMessage', {
+    await request('chat.abortMessage', {
       threadId: props.threadId
     });
-    
-    // 如果后端返回 aborted: false（说明 session 不存在或已结束）
-    // 主动清理前端的 streaming 状态
-    if (result && !result.aborted) {
-      console.warn('[ChatPanel] Session not found on backend, resetting frontend state');
-      chatStore.setState(props.threadId, false);
-      
-      // 如果有未完成的消息，标记为中断
-      const messages = chatStore.getThreadMessages(props.threadId);
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.status === 'streaming') {
-        lastMsg.status = 'interrupted';
-      }
-    }
   } catch (error) {
     console.error('[ChatPanel] abortMessage error:', error);
-    // 出错时也重置状态
-    chatStore.setState(props.threadId, false);
   }
 }
 
@@ -156,14 +144,6 @@ async function loadAgentDetails(): Promise<void> {
   }
 }
 
-/**
- * 同步后端状态
- * 修复服务器重启后前端状态不一致的问题
- */
-async function syncBackendState(): Promise<void> {
-  await chatStore.syncThreadRunStatus(props.threadId);
-}
-
 async function loadThreadHistory(): Promise<void> {
   // 如果 store 里已经有消息，说明是实时接收的，不需要再加载历史
   if (messages.value.length > 0) {
@@ -171,18 +151,14 @@ async function loadThreadHistory(): Promise<void> {
   }
 
   try {
-    const baseUrl = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://127.0.0.1:8765/gateway';
-    const res = await fetch(`${baseUrl}/threads/${props.threadId}/history`);
+    const result = await getThreadHistory(props.threadId);
 
-    if (!res.ok) {
-      console.warn('[ChatPanel] 历史加载失败:', res.statusText);
+    if (!result.success || !result.data) {
+      console.warn('[ChatPanel] 历史加载失败:', result.error);
       return;
     }
 
-    const history = (await res.json()) as {
-      events: Array<{ ts: string; seq: number; type: string; content: string; data?: Record<string, unknown> }>;
-      userMessages: Array<{ content: string; timestamp: number }>;
-    };
+    const history = result.data;
 
     if (history.events.length === 0 && history.userMessages.length === 0) {
       return;
@@ -223,9 +199,6 @@ async function loadThreadHistory(): Promise<void> {
 // ==================== 生命周期 ====================
 onMounted(async () => {
   scrollToBottom();
-  // 1. 同步后端状态（修复服务器重启后状态不一致）
-  await syncBackendState();
-  // 2. 加载 agent 详情和历史消息
   await loadAgentDetails();
   await loadThreadHistory();
 });

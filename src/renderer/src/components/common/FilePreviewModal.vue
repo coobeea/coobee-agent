@@ -10,7 +10,7 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import configManager from '@/config';
+import { getFileContent } from '@/api/workspace';
 
 interface Props {
   visible: boolean;
@@ -96,32 +96,17 @@ async function loadFileContent(): Promise<void> {
   error.value = null;
 
   try {
-    const baseUrl = configManager.getBaseUrl();
-    const url = `${baseUrl}/gateway/files/content?path=${encodeURIComponent(props.filePath)}`;
+    const result = await getFileContent(props.filePath);
+    fileContent.value = result.content;
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-
-    if (result.content !== undefined) {
-      fileContent.value = result.content;
-
-      // 使用返回的文件大小
-      if (result.size) {
-        const sizeInBytes = result.size;
-        if (sizeInBytes < 1024) {
-          fileSize.value = `${sizeInBytes} B`;
-        } else if (sizeInBytes < 1024 * 1024) {
-          fileSize.value = `${(sizeInBytes / 1024).toFixed(2)} KB`;
-        } else {
-          fileSize.value = `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
-        }
-      }
+    // 计算文件大小
+    const sizeInBytes = new Blob([result.content]).size;
+    if (sizeInBytes < 1024) {
+      fileSize.value = `${sizeInBytes} B`;
+    } else if (sizeInBytes < 1024 * 1024) {
+      fileSize.value = `${(sizeInBytes / 1024).toFixed(2)} KB`;
     } else {
-      error.value = result.error || '读取文件失败';
+      fileSize.value = `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : '读取文件失败';

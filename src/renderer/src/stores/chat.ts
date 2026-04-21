@@ -1,7 +1,7 @@
 /**
  * Chat Store
  *
- * 全局管理所有 thread 的消息和流状态。
+ * 全局管理所有 thread 的消息。
  * 应用启动时自动监听流式消息并聚合存储。
  */
 
@@ -10,14 +10,6 @@ import { ref } from 'vue';
 import type { StreamMessage } from '@shared/stream-protocol';
 import type { StreamChatMessage } from '@/types/chat';
 import { nanoid } from 'nanoid';
-
-/** 流状态 */
-interface StreamState {
-  /** 是否正在流式响应 */
-  isStreaming: boolean;
-  /** 当前消息序号 */
-  currentSequence: number;
-}
 
 /** Thread 消息状态 */
 interface ThreadMessageState {
@@ -32,9 +24,6 @@ const MAX_MESSAGES_PER_THREAD = 50;
 export const useChatStore = defineStore(
   'chat',
   () => {
-    /** 各 thread 的流状态 */
-    const streamStates = ref<Map<string, StreamState>>(new Map());
-
     /** 各 thread 的消息状态 */
     const threadMessageStates = ref<Map<string, ThreadMessageState>>(new Map());
 
@@ -49,34 +38,6 @@ export const useChatStore = defineStore(
         });
       }
       return threadMessageStates.value.get(threadId)!;
-    }
-
-    /**
-     * 获取 thread 的流状态
-     */
-    function getState(threadId: string): StreamState {
-      if (!streamStates.value.has(threadId)) {
-        streamStates.value.set(threadId, { isStreaming: false, currentSequence: 0 });
-      }
-      return streamStates.value.get(threadId)!;
-    }
-
-    /**
-     * 设置 thread 的流状态
-     */
-    function setState(threadId: string, isStreaming: boolean, sequence?: number): void {
-      const state = getState(threadId);
-      state.isStreaming = isStreaming;
-      if (sequence !== undefined) {
-        state.currentSequence = sequence;
-      }
-    }
-
-    /**
-     * 重置 thread 的流状态
-     */
-    function resetState(threadId: string): void {
-      streamStates.value.delete(threadId);
     }
 
     /**
@@ -125,7 +86,6 @@ export const useChatStore = defineStore(
             }
           };
           threadState.messages.push(threadState.currentAssistantMsg);
-          setState(sessionId, true, msg.sequence);
           break;
         }
 
@@ -347,7 +307,6 @@ export const useChatStore = defineStore(
             }
             threadState.currentAssistantMsg = null;
           }
-          setState(sessionId, false, msg.sequence);
           trimMessages(sessionId);
           break;
         }
@@ -359,7 +318,6 @@ export const useChatStore = defineStore(
             threadState.currentAssistantMsg.error = msg.content || '执行出错';
             threadState.currentAssistantMsg = null;
           }
-          setState(sessionId, false, msg.sequence);
           break;
 
         case 'run:interrupted':
@@ -367,7 +325,6 @@ export const useChatStore = defineStore(
           if (threadState.currentAssistantMsg) {
             threadState.currentAssistantMsg.status = 'interrupted';
           }
-          setState(sessionId, false);
           break;
 
         case 'run:resumed':
@@ -375,7 +332,6 @@ export const useChatStore = defineStore(
           if (threadState.currentAssistantMsg) {
             threadState.currentAssistantMsg.status = 'streaming';
           }
-          setState(sessionId, true);
           break;
 
         default:
@@ -408,15 +364,10 @@ export const useChatStore = defineStore(
      */
     function clearThreadMessages(threadId: string): void {
       threadMessageStates.value.delete(threadId);
-      resetState(threadId);
     }
 
     return {
-      streamStates,
       threadMessageStates,
-      getState,
-      setState,
-      resetState,
       addUserMessage,
       handleStreamMessage,
       getThreadMessages,

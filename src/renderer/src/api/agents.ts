@@ -6,6 +6,7 @@
 
 import { apiClient } from './client';
 import type { ApiResponse } from '@shared/api';
+import configManager from '@/config';
 
 /** Agent 创建来源 */
 export type AgentCreatedBy = 'user' | 'agent' | 'system';
@@ -174,7 +175,9 @@ export async function importAgent(file: File): Promise<ApiResponse<ImportResult>
  * @returns Blob 对象（ZIP 文件）
  */
 export async function exportAgent(agentId: string): Promise<Blob> {
-  const response = await fetch(`http://localhost:8765/gateway/agents/${agentId}/export`);
+  // 注意：导出需要直接使用 fetch 获取二进制数据，不能用 apiClient（返回 JSON）
+  const baseUrl = configManager.getBaseUrl();
+  const response = await fetch(`${baseUrl}/gateway/agents/${agentId}/export`);
 
   if (!response.ok) {
     throw new Error(`导出失败: ${response.statusText}`);

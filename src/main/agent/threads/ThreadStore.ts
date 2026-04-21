@@ -37,12 +37,6 @@ export class ThreadStore {
   private readonly threadsDir: string;
   private readonly workspacesDir: string;
 
-  /** 内存索引（启动时加载，运行时同步更新） */
-  private index = new Map<string, ThreadIndexEntry>();
-
-  /** 是否已初始化 */
-  private initialized = false;
-
   constructor(threadsDir: string, workspacesDir: string) {
     this.threadsDir = threadsDir;
     this.workspacesDir = workspacesDir;
@@ -65,58 +59,14 @@ export class ThreadStore {
 
   // ==================== 初始化 ====================
 
-  /** 确保目录存在并加载索引 */
+  /** 确保目录存在 */
   async init(): Promise<void> {
-    if (this.initialized) return;
-
     if (!fs.existsSync(this.threadsDir)) {
       fs.mkdirSync(this.threadsDir, { recursive: true });
     }
-
-    await this.rebuildIndex();
-    this.initialized = true;
-    log.info(`[ThreadStore] Initialized: ${this.index.size} threads loaded from ${this.threadsDir}`);
+    log.info(`[ThreadStore] Initialized: ${this.threadsDir}`);
   }
 
-  /** 扫描目录重建索引 */
-  private async rebuildIndex(): Promise<void> {
-    this.index.clear();
-    const files = fs.readdirSync(this.threadsDir).filter((f) => f.endsWith('.json'));
-
-    let fixedCount = 0;
-
-    for (const file of files) {
-      try {
-        const filePath = path.join(this.threadsDir, file);
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        const def = JSON.parse(raw) as ThreadDefinition;
-
-        // 🔧 自动修复：如果 runStatus 是执行中状态，说明服务器异常关闭
-        // 将状态修复为 'error'，避免前端显示不一致
-        if (def.runStatus === 'running' || def.runStatus === 'tool-pending') {
-          log.warn(
-            `[ThreadStore] Thread ${def.id} was interrupted (runStatus=${def.runStatus}), marking as error`
-          );
-          def.runStatus = 'error';
-          def.updatedAt = new Date().toISOString();
-
-          // 回写文件
-          fs.writeFileSync(filePath, JSON.stringify(def, null, 2), 'utf-8');
-          fixedCount++;
-        }
-
-        if (def.status !== 'deleted') {
-          this.index.set(def.id, toIndexEntry(def, this.workspacesDir));
-        }
-      } catch (err) {
-        log.warn(`[ThreadStore] Failed to load ${file}:`, err);
-      }
-    }
-
-    if (fixedCount > 0) {
-      log.info(`[ThreadStore] Fixed ${fixedCount} interrupted thread(s) on startup`);
-    }
-  }
 
   // ==================== CRUD ====================
 
@@ -151,8 +101,6 @@ export class ThreadStore {
     };
 
     await this.writeDefinition(definition);
-    const entry = toIndexEntry(definition, this.workspacesDir);
-    this.index.set(definition.id, entry);
 
     // 立即创建工作空间目录结构（sessions、contexts、events 等）
     await this.createWorkspaceDirectories(id);
@@ -167,7 +115,7 @@ export class ThreadStore {
     });
 
     log.info(`[ThreadStore] Created thread: ${definition.id} (agent: ${definition.agentId})`);
-    eventBus.emit(ThreadEventType.CREATED, { thread: entry });
+    eventBus.emit(ThreadEventType.CREATED, { thread: toIndexEntry(definition, this.workspacesDir) });
     return definition;
   }
 
@@ -232,11 +180,8 @@ export class ThreadStore {
   async get(threadId: string): Promise<ThreadDefinition | null> {
     await this.init();
 
-    if (!this.index.has(threadId)) return null;
-
     const filePath = this.getFilePath(threadId);
     if (!fs.existsSync(filePath)) {
-      this.index.delete(threadId);
       return null;
     }
 
@@ -250,7 +195,7 @@ export class ThreadStore {
   }
 
   /**
-   * 列出所有 Thread（轻量索引）
+   * 列出所有 Thread（实时读取文件）
    *
    * 默认按 updatedAt 降序（最近更新的在前）。
    * 支持分页、按 agentId 过滤。
@@ -263,13 +208,25 @@ export class ThreadStore {
   }): Promise<ThreadIndexEntry[]> {
     await this.init();
 
-    let entries = Array.from(this.index.values());
+    // 读取目录下所有 .json 文件
+    const files = fs.readdirSync(this.threadsDir).filter((f) => f.endsWith('.json'));
+    const entries: ThreadIndexEntry[] = [];
 
-    if (options?.agentId) {
-      entries = entries.filter((e) => e.agentId === options.agentId);
-    }
-    if (options?.status) {
-      entries = entries.filter((e) => e.status === options.status);
+    for (const file of files) {
+      try {
+        const filePath = path.join(this.threadsDir, file);
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const thread = JSON.parse(raw) as ThreadDefinition;
+
+        // 过滤
+        if (thread.status === 'deleted') continue;
+        if (options?.agentId && thread.agentId !== options.agentId) continue;
+        if (options?.status && thread.status !== options.status) continue;
+
+        entries.push(toIndexEntry(thread, this.workspacesDir));
+      } catch (err) {
+        log.warn(`[ThreadStore] Failed to read ${file}:`, err);
+      }
     }
 
     // 按 updatedAt 降序（最近更新的在前）
@@ -306,12 +263,6 @@ export class ThreadStore {
 
     const prevRunStatus = existing.runStatus;
 
-    if (updated.status === 'deleted') {
-      this.index.delete(threadId);
-    } else {
-      this.index.set(updated.id, toIndexEntry(updated, this.workspacesDir));
-    }
-
     log.info(`[ThreadStore] Updated thread: ${threadId}`);
 
     if (updated.runStatus !== prevRunStatus) {
@@ -328,18 +279,15 @@ export class ThreadStore {
     return updated;
   }
 
-  /** 删除 Thread（软删除：标记 status = deleted） */
+  /** 删除 Thread（物理删除文件） */
   async delete(threadId: string): Promise<boolean> {
     await this.init();
 
-    if (!this.index.has(threadId)) return false;
-
     const filePath = this.getFilePath(threadId);
+    if (!fs.existsSync(filePath)) return false;
+
     try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-      this.index.delete(threadId);
+      fs.unlinkSync(filePath);
       log.info(`[ThreadStore] Deleted thread: ${threadId}`);
       eventBus.emit(ThreadEventType.DELETED, { threadId });
       return true;
@@ -352,7 +300,8 @@ export class ThreadStore {
   /** 检查 Thread 是否存在 */
   async has(threadId: string): Promise<boolean> {
     await this.init();
-    return this.index.has(threadId);
+    const filePath = this.getFilePath(threadId);
+    return fs.existsSync(filePath);
   }
 
   // ==================== 内部方法 ====================

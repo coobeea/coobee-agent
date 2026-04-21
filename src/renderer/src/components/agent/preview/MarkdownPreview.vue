@@ -57,8 +57,7 @@ async function loadMarkdown(): Promise<void> {
     if (props.content !== undefined) {
       markdownContent.value = props.content;
     } else {
-      const response = await fetch(`file://${props.filePath}`);
-      markdownContent.value = await response.text();
+      markdownContent.value = await readLocalFile(props.filePath!);
     }
     loading.value = false;
   } catch (err) {
