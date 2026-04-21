@@ -110,11 +110,27 @@ function handleStarterPromptClick(prompt: string): void {
 async function handleStop(): Promise<void> {
   console.log('[ChatPanel] handleStop called for thread:', props.threadId);
   try {
-    await request('chat.abortMessage', {
+    const result = await request('chat.abortMessage', {
       threadId: props.threadId
     });
+    
+    // 如果后端返回 aborted: false（说明 session 不存在或已结束）
+    // 主动清理前端的 streaming 状态
+    if (result && !result.aborted) {
+      console.warn('[ChatPanel] Session not found on backend, resetting frontend state');
+      chatStore.setState(props.threadId, false);
+      
+      // 如果有未完成的消息，标记为中断
+      const messages = chatStore.getThreadMessages(props.threadId);
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.status === 'streaming') {
+        lastMsg.status = 'interrupted';
+      }
+    }
   } catch (error) {
     console.error('[ChatPanel] abortMessage error:', error);
+    // 出错时也重置状态
+    chatStore.setState(props.threadId, false);
   }
 }
 

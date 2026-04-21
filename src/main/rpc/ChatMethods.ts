@@ -183,6 +183,16 @@ export const chatMethods: MethodGroup = {
 
       const aborted = agentExecutor.abort(threadId as string);
 
+      // 如果 abort 失败（session 不存在或已结束），清理 Thread 的 runStatus
+      if (!aborted) {
+        log.warn(`[ChatMethods] Session not found, cleaning up thread status: ${threadId}`);
+        const store = await ThreadStore.getInstance();
+        const thread = await store.get(threadId as string);
+        if (thread && thread.runStatus !== 'idle') {
+          await store.update(threadId as string, { runStatus: 'idle' });
+        }
+      }
+
       return {
         success: true,
         aborted
