@@ -222,6 +222,8 @@ class AgentExecutor {
       return result;
     } finally {
       this.sessionStatus.unregister(sessionId);
+      // 清理 AbortController（在流式执行完全结束后）
+      this.abortControllers.delete(sessionId);
     }
   }
 
@@ -616,10 +618,8 @@ class AgentExecutor {
       await this.destroyRuntime(runtime);
       runtime = null;
 
-      // 清理 AbortController
-      if (internalController) {
-        this.abortControllers.delete(sessionId);
-      }
+      // 注意：AbortController 的清理已移到 stream() 的 finally 块中
+      // 这样可以确保在整个流式执行期间 AbortController 保持有效
     }
   }
 
