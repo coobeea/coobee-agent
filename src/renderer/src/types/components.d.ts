@@ -68,6 +68,7 @@ declare module 'vue' {
     TextButton: typeof import('./../components/Form/TextButton.vue')['default']
     TextInput: typeof import('./../components/Form/TextInput.vue')['default']
     ThinkingToggle: typeof import('./../components/chat/ThinkingToggle.vue')['default']
+    ThreadList: typeof import('./../components/thread/ThreadList.vue')['default']
     ToolTipContainer: typeof import('./../components/ToolTip/ToolTipContainer.vue')['default']
     Versions: typeof import('./../components/Versions.vue')['default']
     VideoPlayer: typeof import('./../components/agent/preview/VideoPlayer.vue')['default']
