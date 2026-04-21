@@ -83,17 +83,38 @@ export class ThreadStore {
     this.index.clear();
     const files = fs.readdirSync(this.threadsDir).filter((f) => f.endsWith('.json'));
 
+    let fixedCount = 0;
+
     for (const file of files) {
       try {
         const filePath = path.join(this.threadsDir, file);
         const raw = fs.readFileSync(filePath, 'utf-8');
         const def = JSON.parse(raw) as ThreadDefinition;
+
+        // 🔧 自动修复：如果 runStatus 是执行中状态，说明服务器异常关闭
+        // 将状态修复为 'error'，避免前端显示不一致
+        if (def.runStatus === 'running' || def.runStatus === 'tool-pending') {
+          log.warn(
+            `[ThreadStore] Thread ${def.id} was interrupted (runStatus=${def.runStatus}), marking as error`
+          );
+          def.runStatus = 'error';
+          def.updatedAt = new Date().toISOString();
+
+          // 回写文件
+          fs.writeFileSync(filePath, JSON.stringify(def, null, 2), 'utf-8');
+          fixedCount++;
+        }
+
         if (def.status !== 'deleted') {
           this.index.set(def.id, toIndexEntry(def, this.workspacesDir));
         }
       } catch (err) {
         log.warn(`[ThreadStore] Failed to load ${file}:`, err);
       }
+    }
+
+    if (fixedCount > 0) {
+      log.info(`[ThreadStore] Fixed ${fixedCount} interrupted thread(s) on startup`);
     }
   }
 

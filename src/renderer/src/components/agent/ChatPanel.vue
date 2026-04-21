@@ -156,6 +156,14 @@ async function loadAgentDetails(): Promise<void> {
   }
 }
 
+/**
+ * 同步后端状态
+ * 修复服务器重启后前端状态不一致的问题
+ */
+async function syncBackendState(): Promise<void> {
+  await chatStore.syncThreadRunStatus(props.threadId);
+}
+
 async function loadThreadHistory(): Promise<void> {
   // 如果 store 里已经有消息，说明是实时接收的，不需要再加载历史
   if (messages.value.length > 0) {
@@ -215,6 +223,9 @@ async function loadThreadHistory(): Promise<void> {
 // ==================== 生命周期 ====================
 onMounted(async () => {
   scrollToBottom();
+  // 1. 同步后端状态（修复服务器重启后状态不一致）
+  await syncBackendState();
+  // 2. 加载 agent 详情和历史消息
   await loadAgentDetails();
   await loadThreadHistory();
 });
