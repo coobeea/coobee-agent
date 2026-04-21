@@ -8,6 +8,7 @@ import BlockTool from '../blocks/BlockTool.vue';
 import BlockDelegate from '../blocks/BlockDelegate.vue';
 import BlockQuality from '../blocks/BlockQuality.vue';
 import BlockAudio from '../blocks/BlockAudio.vue';
+import BlockStats from '../blocks/BlockStats.vue';
 import HitlApprovalCard from '../HitlApprovalCard.vue';
 
 defineProps<{
@@ -65,6 +66,12 @@ const emit = defineEmits<{
         <span class="i-carbon-pause-filled inline-block h-2.5 w-2.5" />
         <span>已中断</span>
       </div>
+
+      <!-- 执行统计 -->
+      <BlockStats 
+        v-if="message.status === 'done' && message.stats" 
+        :stats="message.stats" 
+        :message-content="message.content" />
     </div>
   </div>
 </template>
@@ -73,11 +80,6 @@ const emit = defineEmits<{
 /* 消息块 */
 .msg-block {
   padding: 6px 16px;
-  transition: background-color 0.2s;
-}
-
-.msg-block:hover {
-  background-color: hsl(var(--foreground) / 0.02);
 }
 
 .msg-role-row {

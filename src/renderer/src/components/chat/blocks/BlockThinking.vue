@@ -1,48 +1,29 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import type { ContentBlock } from '@/types/chat';
 
 const props = defineProps<{
   block: ContentBlock & { type: 'thinking' };
 }>();
 
-const MAX_LINES = 8;
-const collapsed = ref(false);
-const userExpanded = ref(false);
+const collapsed = ref(true); // 默认折叠
 
 const lineCount = computed(() => {
   return props.block.text?.split('\n').length ?? 0;
 });
 
-const needsCollapse = computed(() => lineCount.value > MAX_LINES);
-
-watch(
-  () => lineCount.value,
-  (count) => {
-    if (count > MAX_LINES && !userExpanded.value) {
-      collapsed.value = true;
-    }
-  }
-);
-
 function toggleCollapse(): void {
-  if (collapsed.value) {
-    collapsed.value = false;
-    userExpanded.value = true;
-  } else {
-    collapsed.value = true;
-    userExpanded.value = false;
-  }
+  collapsed.value = !collapsed.value;
 }
 </script>
 
 <template>
   <div class="msg-thinking">
-    <div class="thinking-header" @click="needsCollapse ? toggleCollapse() : undefined">
+    <div class="thinking-header" @click="toggleCollapse">
       <span class="i-carbon-idea inline-block h-3 w-3 shrink-0" />
       <span class="thinking-label">思考</span>
-      <span v-if="needsCollapse" class="thinking-line-count">{{ lineCount }} 行</span>
-      <button v-if="needsCollapse" class="collapse-btn">
+      <span class="thinking-line-count">{{ lineCount }} 行</span>
+      <button class="collapse-btn">
         <span
           class="inline-block h-3 w-3 transition-transform duration-200"
           :class="collapsed ? 'i-carbon-chevron-right' : 'i-carbon-chevron-down'" />
@@ -53,7 +34,7 @@ function toggleCollapse(): void {
         {{ block.text }}
       </div>
     </div>
-    <div v-if="collapsed && needsCollapse" class="collapsed-preview" @click="toggleCollapse">
+    <div v-if="collapsed" class="collapsed-preview" @click="toggleCollapse">
       {{ block.text?.split('\n').slice(0, 2).join(' ').substring(0, 80) }}...
     </div>
   </div>

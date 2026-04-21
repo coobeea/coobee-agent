@@ -52,8 +52,9 @@ export class ProviderInjector {
       builder.fromProviderConfig(provider as any, resolved.model.id);
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
+      // 注意：只传递模型 ID，不包含 provider 前缀，因为 OpenAI 兼容 API 只接受模型 ID
       if (opts?.modelOverride) {
-        builder.model(`${resolved.provider.id}/${resolved.model.id}`);
+        builder.model(resolved.model.id);
       }
     } catch (err) {
       console.error('[ProviderInjector] applyProviderConfig 失败:', err);

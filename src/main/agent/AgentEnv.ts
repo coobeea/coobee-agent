@@ -85,6 +85,8 @@ export interface AgentEnv {
   // --- Agent Home ---
   /** Agent 定义 ID（关联了 AgentDefinition 时存在） */
   agentId?: string;
+  /** Agent 名称 */
+  agentName?: string;
   /** Agent Home 目录（homes/{agentId}/，跨会话持久化空间） */
   agentHome?: string;
 
@@ -210,6 +212,7 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
 
     // Agent Home（由 injectEnv 在获取到 agentId 后补充）
     agentId: undefined,
+    agentName: undefined,
     agentHome: undefined,
 
     // 能力清单
@@ -239,11 +242,14 @@ export function formatRuntimePaths(env: AgentEnv): string {
   const agentHomeSection = env.agentHome
     ? `
 **Agent Home (Your Root Directory)**: ${env.agentHome}/
-  ├── SOUL.md, USER.md, MEMORY.md           — Your identity and long-term memory
-  ├── AGENTS.md                             — Your skill and tool configuration
-  ├── output/                               — Your persistent output files (training results, data)
-  ├── skill-data/                           — Structured data from skills (survives across sessions)
-  └── memory/                               — Agent-level structured memory (by memory-agent extension)
+  ├── SOUL.md                               — 你的核心灵魂和行为原则
+  ├── USER.md                               — 用户偏好和使用习惯
+  ├── IDENTITY.md                           — 你的身份名片
+  ├── AGENTS.md                             — 技能和工具配置
+  ├── NOTES.md                              — 环境备注和特殊配置
+  ├── HEARTBEAT.md                          — 定期检查任务
+  ├── output/                               — 持久化输出文件（训练成果、知识积累）
+  └── skill-data/                           — Skill 结构化数据（跨会话保留）
 
   **PURPOSE**: This is YOUR permanent space. Store training results, accumulated knowledge,
   and any data you want to reuse in future tasks here.
@@ -252,10 +258,21 @@ export function formatRuntimePaths(env: AgentEnv): string {
 
   const dataDirectorySection = env.dataDirectory
     ? `
-📂 **数据目录 / Data Directory**: \`${env.dataDirectory}/\`
-  这是智能体的专属数据目录，用于持久化存储业务数据。
-  所有跨任务的数据（如客户信息、进销存记录、知识库等）都应保存到此目录。
-  这个目录在不同任务之间保持不变，智能体可以随时读取历史数据。
+📂 **数据目录 / Data Directory (IMPORTANT)**: \`${env.dataDirectory}/\`
+  
+  ⚠️ **这是你的专属数据存储区，非常重要！**
+  
+  **用途**：
+  - 持久化存储所有业务数据（客户信息、进销存记录、知识库、文档等）
+  - 跨任务、跨会话的数据共享（今天保存的数据，明天仍可访问）
+  - 这是固定的目录，不会因为任务结束而清理
+  
+  **何时使用**：
+  - 用户要求保存、记录、存储任何业务数据时 → 保存到数据目录
+  - 用户询问"之前的记录""历史数据""上次的文件"时 → 从数据目录读取
+  - 生成报表、分析结果、知识文档时 → 保存到数据目录
+  
+  **路径**: \`${env.dataDirectory}\`
 `
     : '';
 
@@ -270,6 +287,8 @@ export function formatRuntimePaths(env: AgentEnv): string {
 
   return `<runtime_environment>
 Your Runtime Environment:
+${env.agentId ? `- Agent ID: ${env.agentId}` : ''}
+${env.agentName ? `- Agent Name: ${env.agentName}` : ''}
 - Session: ${env.sessionId}
 ${env.dataDirectory ? `- 数据目录 (Data Dir): ${env.dataDirectory}` : ''}
 ${env.projectDir ? `- 工程目录 (Project Dir): ${env.projectDir}` : ''}
@@ -304,50 +323,53 @@ File Output Guidelines:
 ${
   env.dataDirectory
     ? `
-1. **数据目录（业务数据持久化）** → ${env.dataDirectory}/
-   - 客户信息、进销存记录、知识库等业务数据
+1. **数据目录（首选！业务数据持久化）** → ${env.dataDirectory}/
+   ⚠️ 优先级最高！所有业务数据都应保存到这里！
+   - 客户信息、进销存记录、知识库、分析报告、文档等
    - 跨任务的持久化数据，下次开启新任务时可以继续访问
    - 这是智能体专属的固定数据存储位置
+   - 用户要求"保存数据""记录信息""生成报告"时，默认使用此目录
 `
     : ''
 }
 ${
   env.projectDir
     ? `
-2. **工程目录（任务输出）** → ${env.projectDir}/
+${env.dataDirectory ? '2' : '1'}. **工程目录（任务输出）** → ${env.projectDir}/
    - 当前任务的输出、中间结果、解析数据、生成内容
    - 用户说"根目录""项目目录""工程目录"时，指的就是这个路径
    - 读取用户资料、浏览项目文件时，也应从此目录开始
 `
-    : `
-2. **Persistent Outputs (Training Results, Knowledge)** → Agent Home
-   - {agentHome}/output/           — General persistent files
-   - {agentHome}/skill-data/       — Structured data from skills
-   Example: Model checkpoints, curated datasets, configuration templates
-`
-}
-
-3. **Agent Home（配置和记忆）** → ${env.agentHome || '{agentHome}'}/
-   - output/           — 训练成果、知识积累
-   - skill-data/       — Skill 结构化数据
-${
-  !env.projectDir
-    ? `
-4. **Temporary Task Files** → Current Task Workspace
-   - {workspace}/                  — Task-specific temporary files
-   Example: Intermediate results, debug logs, scratch files
-`
     : ''
 }
-3. **System Files** (DO NOT manually modify)
+
+${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '3' : '2') : '1'}. **Agent Home（配置和记忆）** → ${env.agentHome || '{agentHome}'}/
+   - output/           — 训练成果、知识积累
+   - skill-data/       — Skill 结构化数据
+   - SOUL.md, USER.md  — 你的身份和记忆文件
+
+${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '4' : '3') : '2'}. **Temporary Task Files** → Current Task Workspace
+   - ${env.workspace}/  — 临时文件、中间结果
+   - 任务结束后可能被清理
+
+${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '5' : '4') : '3'}. **System Files** (DO NOT manually modify)
    - {workspace}/sessions/         — Session data (managed by system)
    - {workspace}/contexts/         — Context snapshots (managed by system)
    - {workspace}/events/           — Event logs (managed by system)
 ${
-  env.projectDir
+  env.dataDirectory && env.projectDir
     ? `
-**重要**：你的主要工作目录是工程目录 \`${env.projectDir}\`。当用户要求查看文件、列出目录内容、或保存输出时，默认使用此目录。`
-    : `
+**重要提示**：
+- 业务数据（客户信息、记录、报表）→ 数据目录 \`${env.dataDirectory}\`
+- 任务输出（代码、中间结果）→ 工程目录 \`${env.projectDir}\`
+- 当用户说"保存数据"时，优先使用数据目录；说"项目文件"时使用工程目录`
+    : env.dataDirectory
+      ? `
+**重要提示**：你有专属的数据目录 \`${env.dataDirectory}\`，所有业务数据都应保存到这里！`
+      : env.projectDir
+        ? `
+**重要提示**：你的主要工作目录是工程目录 \`${env.projectDir}\`。当用户要求查看文件、列出目录内容、或保存输出时，默认使用此目录。`
+        : `
 **IMPORTANT**: When user asks "check our root directory" or similar, they usually mean ${env.agentHome ? `Agent Home (${env.agentHome})` : 'the current workspace'}.`
 }
 </runtime_environment>`;

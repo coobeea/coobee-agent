@@ -161,6 +161,9 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   private readonly sessionId: string;
   private createdAt: number;
 
+  // 当前执行的 AbortSignal（用于工具执行）
+  private currentSignal?: AbortSignal;
+
   constructor(options: PiMonoAgentRuntimeOptions) {
     super();
     this.options = options;
@@ -265,7 +268,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       });
     const allSdkTools: PiToolDefinition[] = [
       ...((this.options.sdkTools as PiToolDefinition[]) || []),
-      ...convertTools(this.options.tools || [], { sandboxContext, log })
+      ...convertTools(this.options.tools || [], { sandboxContext, log, getSignal: () => this.currentSignal })
     ];
 
     // 7. 创建 AgentSession
@@ -340,10 +343,13 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
    */
   protected async *doStream(
     input: string,
-    _config?: ExecutionConfig
+    config?: ExecutionConfig
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const startTime = Date.now();
     const queue = new ChunkQueue<StreamChunk>();
+
+    // 保存当前的 AbortSignal，供工具执行使用
+    this.currentSignal = (config as Record<string, unknown>)?.signal as AbortSignal | undefined;
 
     log.info(`[PiMonoRuntime] Running stream: ${this.name}`);
 
@@ -374,10 +380,23 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         log
       );
 
+      // 2.5. 监听 AbortSignal，调用 Agent 的 abort() 方法
+      const abortListener = (): void => {
+        log.info(`[PiMonoRuntime] Aborting session via Agent.abort()`);
+        this.piSession.agent.abort();
+      };
+      if (this.currentSignal) {
+        this.currentSignal.addEventListener('abort', abortListener, { once: true });
+      }
+
       // 3. SDK 执行，完成后结束 queue
       this.piSession
         .prompt(input)
         .then(async () => {
+          // 清理 abort 监听器
+          if (this.currentSignal) {
+            this.currentSignal.removeEventListener('abort', abortListener);
+          }
           unsubscribe();
           // 等待一个微任务周期，确保 SDK 已排队的事件回调有机会执行完毕
           // （pi-SDK 内部可能通过 Promise/microtask 分发最后的 delta 事件）
@@ -396,6 +415,11 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           queue.end();
         })
         .catch(async (err: unknown) => {
+          // 清理 abort 监听器
+          if (this.currentSignal) {
+            this.currentSignal.removeEventListener('abort', abortListener);
+          }
+          
           unsubscribe();
           await Promise.resolve();
           queue.push({

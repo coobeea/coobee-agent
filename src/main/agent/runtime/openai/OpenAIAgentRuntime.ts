@@ -217,7 +217,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       const streamRunResult = await run(this.agent, input, {
         stream: true,
         session: this.session,
-        maxTurns
+        maxTurns,
+        signal: this.currentSignal
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const streamResult = streamRunResult as StreamedRunResult<unknown, any>;

@@ -34,6 +34,8 @@ interface ConvertToolsOptions {
   sandboxContext: ToolExecutionContext;
   /** 日志器 */
   log: RuntimeLogger;
+  /** 获取当前 AbortSignal 的函数（用于工具取消） */
+  getSignal?: () => AbortSignal | undefined;
 }
 
 // ========== Core API ==========
@@ -55,7 +57,7 @@ interface ConvertToolsOptions {
 export function convertTools(defs: ToolDefinition[], options: ConvertToolsOptions): PiToolDefinition[] {
   if (!defs.length) return [];
 
-  const { sandboxContext } = options;
+  const { sandboxContext, getSignal } = options;
 
   return defs.map(
     (def) =>
@@ -76,7 +78,7 @@ export function convertTools(defs: ToolDefinition[], options: ConvertToolsOption
           // 使用共享管线：hook + policy + execute + post-hooks
           const result = await executeToolPipeline(def, params, {
             sandboxContext,
-            signal,
+            signal: signal || (getSignal ? getSignal() : undefined),
             onUpdate: onUpdate
               ? (update) => {
                   // 桥接到 PiMono 的 onUpdate 回调（前端实时展示）

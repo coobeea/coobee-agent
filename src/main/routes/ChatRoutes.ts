@@ -169,10 +169,10 @@ export function registerChatRoutes(router: Router): void {
       //   // provider.baseUrl, model.maxOutputTokens 等完整信息
       const builder = agentExecutor.piMono().sessionMode('file').name(agent.id);
 
-      // 如果指定了模型，使用指定的模型；否则使用全局默认
+      // 如果指定了模型，通过 ProviderInjector 重新注入配置（会正确解析 providerId/modelId）
       const modelSpec = thread.overrideModel || agent.model;
       if (modelSpec) {
-        builder.model(modelSpec);
+        agentExecutor.applyProviderConfig(builder, { modelOverride: modelSpec });
       }
 
       if (agent.instructions) {

@@ -377,4 +377,96 @@
     --primary-hover: 346 70% 60%;
     --ring: 346 70% 55%;
   }
+
+  /* ================================================================
+     代码高亮主题 — Highlight.js
+     为 Markdown 代码块提供语法高亮
+     ================================================================ */
+  
+  /* 亮色模式代码高亮 */
+  :root {
+    --hljs-keyword: 207 61% 39%;
+    --hljs-string: 142 76% 36%;
+    --hljs-number: 25 95% 53%;
+    --hljs-comment: 0 0% 60%;
+    --hljs-function: 262 83% 58%;
+    --hljs-variable: 0 84% 60%;
+  }
+
+  /* 暗色模式代码高亮 */
+  .dark {
+    --hljs-keyword: 207 100% 75%;
+    --hljs-string: 142 70% 55%;
+    --hljs-number: 25 90% 65%;
+    --hljs-comment: 0 0% 55%;
+    --hljs-function: 262 80% 70%;
+    --hljs-variable: 0 75% 70%;
+  }
+
+  /* Highlight.js 样式覆盖 */
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: hsl(var(--hljs-keyword));
+    font-weight: 600;
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-built_in,
+  .hljs-addition,
+  .hljs-variable,
+  .hljs-template-tag,
+  .hljs-template-variable {
+    color: hsl(var(--hljs-string));
+  }
+
+  .hljs-number,
+  .hljs-regexp,
+  .hljs-meta {
+    color: hsl(var(--hljs-number));
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: hsl(var(--hljs-comment));
+    font-style: italic;
+  }
+
+  .hljs-function,
+  .hljs-class,
+  .hljs-title.function_,
+  .hljs-title.class_,
+  .hljs-title.class_.inherited__ {
+    color: hsl(var(--hljs-function));
+    font-weight: 600;
+  }
+
+  .hljs-params,
+  .hljs-attr {
+    color: hsl(var(--hljs-variable));
+  }
+
+  .hljs-tag {
+    color: hsl(var(--foreground));
+  }
+
+  .hljs-deletion {
+    color: hsl(var(--error));
+  }
+
+  .hljs-emphasis {
+    font-style: italic;
+  }
+
+  .hljs-strong {
+    font-weight: 700;
+  }
 }

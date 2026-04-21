@@ -8,8 +8,8 @@ import type { HitlApprovalDecision } from '@shared/stream-protocol';
  * 工具调用信息
  */
 export interface ToolCallInfo {
-  name?: string;
-  arguments?: string;
+  name: string;
+  arguments: string;
   result?: string;
   status: 'calling' | 'done' | 'error' | 'approval-pending';
 }
@@ -67,6 +67,30 @@ export type ContentBlock =
 export type MessageStatus = 'sending' | 'streaming' | 'done' | 'error' | 'interrupted';
 
 /**
+ * 执行统计信息（一轮对话的统计）
+ */
+export interface ExecutionStats {
+  /** 输入 token 总数 */
+  inputTokens: number;
+  /** 输出 token 总数 */
+  outputTokens: number;
+  /** 总 token 数 */
+  totalTokens: number;
+  /** 大模型调用次数 */
+  llmCalls: number;
+  /** 工具调用次数 */
+  toolCalls: number;
+  /** 开始时间戳 */
+  startTime: number;
+  /** 结束时间戳（完成时才有） */
+  endTime?: number;
+  /** 总耗时（毫秒） */
+  duration?: number;
+  /** 输出速率（tokens/秒） */
+  tokensPerSecond?: number;
+}
+
+/**
  * 流式聊天消息（UI 可渲染）
  */
 export interface StreamChatMessage {
@@ -78,6 +102,8 @@ export interface StreamChatMessage {
   status: MessageStatus;
   error?: string;
   timestamp: number;
+  /** 执行统计信息（仅 assistant 消息） */
+  stats?: ExecutionStats;
 }
 
 // 兼容旧的类型别名

@@ -251,6 +251,19 @@ class AgentExecutor {
       // 检测中止信号：提前退出循环，通知 generator 结束
       if (signal?.aborted) {
         log.info(`[AgentExecutor] Aborted: sessionId=${sessionId}`);
+        
+        // 发送 run:interrupted 事件
+        const interruptedChunk: StreamChunk = {
+          type: 'run:interrupted',
+          content: 'Execution cancelled by user'
+        };
+        
+        if (eventWriter) {
+          eventWriter.dispatch(interruptedChunk);
+        }
+        onChunk?.(interruptedChunk);
+        yield interruptedChunk;
+        
         await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
         this.updateSessionStatus(sessionId, 'idle');
         return { output: '', error: 'Aborted by user' };
@@ -322,6 +335,19 @@ class AgentExecutor {
         r = await abortPromise;
         if (signal.aborted && !r.done) {
           log.info(`[AgentExecutor] Aborted during gen.next(): sessionId=${sessionId}`);
+          
+          // 发送 run:interrupted 事件
+          const interruptedChunk: StreamChunk = {
+            type: 'run:interrupted',
+            content: 'Execution cancelled by user'
+          };
+          
+          if (eventWriter) {
+            eventWriter.dispatch(interruptedChunk);
+          }
+          onChunk?.(interruptedChunk);
+          yield interruptedChunk;
+          
           await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
           this.updateSessionStatus(sessionId, 'idle');
           return { output: '', error: 'Aborted by user' };

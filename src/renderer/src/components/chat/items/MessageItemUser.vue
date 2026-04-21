@@ -28,11 +28,6 @@ defineProps<{
 /* 消息块 */
 .msg-block {
   padding: 6px 16px;
-  transition: background-color 0.2s;
-}
-
-.msg-block:hover {
-  background-color: hsl(var(--foreground) / 0.02);
 }
 
 .msg-role-row {

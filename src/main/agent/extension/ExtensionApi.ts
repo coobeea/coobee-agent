@@ -194,7 +194,7 @@ function createExtensionServices(): ExtensionServices {
         }
 
         if (agentDef.model) {
-          builder.model(agentDef.model);
+          agentExecutor.applyProviderConfig(builder, { modelOverride: agentDef.model });
         }
 
         const builderAny = builder as Parameters<typeof agentExecutor.stream>[0]['builder'] & {

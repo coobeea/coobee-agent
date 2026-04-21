@@ -59,10 +59,15 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
     // 3. 构建 AgentEnv（传入 agentHome 用于加载 Agent 级 Skill）
     const agentEnv = await buildAgentEnv(sessionId, workspace, agentHome);
 
-    // 4. 设置 AgentEnv 的 agentId 和 agentHome
+    // 4. 设置 AgentEnv 的 agentId、agentName 和 agentHome
     if (agentId && agentHome) {
       agentEnv.agentId = agentId;
       agentEnv.agentHome = agentHome;
+      // 获取 Agent 名称
+      const agentName = builder.getName?.();
+      if (agentName) {
+        agentEnv.agentName = agentName;
+      }
     }
 
     // 5. 注入工程目录

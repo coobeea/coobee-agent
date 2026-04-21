@@ -10,6 +10,7 @@ import type { ContentBlock, PendingApproval } from '@/types/chat';
 import type { HitlApprovalDecision } from '@shared/stream-protocol';
 import MessageItemUser from './items/MessageItemUser.vue';
 import MessageItemAssistant from './items/MessageItemAssistant.vue';
+import MessageNavigator from './MessageNavigator.vue';
 
 export interface ChatMessage {
   id: string;
@@ -125,43 +126,57 @@ onMounted(() => {
 </script>
 
 <template>
-  <div ref="messageContainer" class="panel-messages selectable" @scroll="handleScroll">
-    <!-- 空状态 -->
-    <div v-if="messages.length === 0" class="panel-empty">
-      <slot name="empty">
-        <div class="panel-empty-icon">
-          <span class="i-mdi-star-four-points inline-block h-8 w-8" />
-        </div>
-        <p class="panel-empty-title">有什么可以帮您？</p>
-        <p class="panel-empty-sub">输入消息开始对话</p>
-      </slot>
+  <div class="messages-wrapper">
+    <div ref="messageContainer" class="panel-messages selectable" @scroll="handleScroll">
+      <!-- 空状态 -->
+      <div v-if="messages.length === 0" class="panel-empty">
+        <slot name="empty">
+          <div class="panel-empty-icon">
+            <span class="i-mdi-star-four-points inline-block h-8 w-8" />
+          </div>
+          <p class="panel-empty-title">有什么可以帮您？</p>
+          <p class="panel-empty-sub">输入消息开始对话</p>
+        </slot>
+      </div>
+
+      <!-- 消息列表 -->
+      <template v-for="msg in messages" :key="msg.id">
+        <MessageItemUser v-if="msg.role === 'user'" :message="msg" />
+        <MessageItemAssistant
+          v-else
+          :message="msg"
+          @decide="(approval, decision) => emit('decide', approval, decision)" />
+      </template>
+
+      <div v-if="isStreaming" class="stream-indicator">
+        <span class="relative flex h-2 w-2">
+          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60"></span>
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+        </span>
+        <span class="ml-1.5 text-xs font-medium text-muted-foreground">{{ currentActivity }}</span>
+      </div>
     </div>
 
-    <!-- 消息列表 -->
-    <template v-for="msg in messages" :key="msg.id">
-      <MessageItemUser v-if="msg.role === 'user'" :message="msg" />
-      <MessageItemAssistant
-        v-else
-        :message="msg"
-        @decide="(approval, decision) => emit('decide', approval, decision)" />
-    </template>
-
-    <div v-if="isStreaming" class="stream-indicator">
-      <span class="relative flex h-2 w-2">
-        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60"></span>
-        <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
-      </span>
-      <span class="ml-1.5 text-xs font-medium text-muted-foreground">{{ currentActivity }}</span>
-    </div>
+    <!-- 消息导航条 -->
+    <MessageNavigator v-if="messages.length > 0" :messages="messages" :container-ref="messageContainer" />
   </div>
 </template>
 
 <style scoped>
+/* ====== 消息容器 ====== */
+.messages-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
 /* ====== 消息区域样式 ====== */
 .panel-messages {
   flex: 1;
   overflow-y: auto;
   padding: 16px 0;
+  padding-right: 24px;
   display: flex;
   flex-direction: column;
 }

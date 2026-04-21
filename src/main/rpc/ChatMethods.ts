@@ -130,9 +130,10 @@ export const chatMethods: MethodGroup = {
       const builder = agentExecutor.piMono().sessionMode('file').name(agent.id);
 
       // 应用 Agent 配置
+      // 如果指定了模型，通过 ProviderInjector 重新注入配置（会正确解析 providerId/modelId）
       const modelSpec = thread.overrideModel || agent.model;
       if (modelSpec) {
-        builder.model(modelSpec);
+        agentExecutor.applyProviderConfig(builder, { modelOverride: modelSpec });
       }
 
       if (agent.instructions) {
