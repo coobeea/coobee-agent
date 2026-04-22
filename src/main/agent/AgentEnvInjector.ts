@@ -388,7 +388,6 @@ function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
 interface AgentContextInfo {
   agentId?: string;
   agentName?: string;
-  agentType?: import('./threads/types').AgentType;
   agentMode?: import('./runtime/types').AgentMode;
   parentSessionId?: string;
 }
@@ -495,7 +494,6 @@ async function buildToolExecutionContext(
 
     // Agent 信息（可选）
     agentId: agentInfo?.agentId,
-    agentType: agentInfo?.agentType,
     parentSessionId: agentInfo?.parentSessionId
   };
 

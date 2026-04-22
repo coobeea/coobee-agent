@@ -20,9 +20,6 @@ import type { AgentMode } from '../runtime/types';
 /** Thread 运行时状态（跟踪当前执行进度） */
 export type ThreadRunStatus = 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
 
-/** Agent 分类类型（用于前端展示和模式区分） */
-export type AgentType = 'agent' | 'orchestrator' | 'swarm' | 'quality-loop' | 'discussion';
-
 // ==================== Thread 定义 ====================
 
 /** Thread 状态 */
@@ -39,6 +36,9 @@ export interface ThreadDefinition {
   /** 关联的 Agent ID（哪个智能体处理此会话） */
   agentId: string;
 
+  /** Agent 名称（从 Agent 配置中获取，用于展示） */
+  agentName?: string;
+
   /** 会话状态 */
   status: ThreadStatus;
 
@@ -47,9 +47,6 @@ export interface ThreadDefinition {
 
   /** Agent 运行模式 */
   agentMode: AgentMode;
-
-  /** Agent 分类类型 */
-  agentType: AgentType;
 
   /** 运行时状态（跟踪当前执行进度） */
   runStatus: ThreadRunStatus;
@@ -83,9 +80,9 @@ export interface ThreadIndexEntry {
   id: string;
   title: string;
   agentId: string;
+  agentName?: string;
   status: ThreadStatus;
   runStatus: ThreadRunStatus;
-  agentType: AgentType;
   messageCount: number;
   createdAt: string;
   updatedAt: string;
@@ -109,8 +106,6 @@ export interface CreateThreadParams {
   agentId: string;
   /** Agent 运行模式（默认 'agent'） */
   agentMode?: AgentMode;
-  /** Agent 分类类型（默认 'agent'） */
-  agentType?: AgentType;
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
   overrideModel?: string;
   /** 扩展元数据（可选） */

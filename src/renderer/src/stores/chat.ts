@@ -366,9 +366,18 @@ export const useChatStore = defineStore(
       threadMessageStates.value.delete(threadId);
     }
 
+    /**
+     * 添加历史消息（用于加载历史记录）
+     */
+    function addHistoryMessage(threadId: string, message: StreamChatMessage): void {
+      const threadState = getOrCreateThreadState(threadId);
+      threadState.messages.push(message);
+    }
+
     return {
       threadMessageStates,
       addUserMessage,
+      addHistoryMessage,
       handleStreamMessage,
       getThreadMessages,
       clearThreadMessages

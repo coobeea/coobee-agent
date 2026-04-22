@@ -12,9 +12,9 @@ export interface ThreadEntry {
   id: string;
   title: string;
   agentId: string;
+  agentName?: string;
   status: 'active' | 'archived' | 'deleted';
   runStatus: 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
-  agentType: 'agent' | 'orchestrator' | 'swarm' | 'quality-loop' | 'discussion';
   messageCount: number;
   createdAt: string;
   updatedAt: string;
@@ -36,16 +36,22 @@ export interface ListThreadsResponse {
 
 /** Thread 历史响应 */
 export interface ThreadHistoryResponse {
-  events: Array<{
-    ts: string;
-    seq: number;
-    type: string;
-    content: string;
-    data?: Record<string, unknown>;
-  }>;
-  userMessages: Array<{
-    content: string;
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: Array<{
+      type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
+      text?: string;
+      thinking?: string;
+      [key: string]: unknown;
+    }>;
     timestamp: number;
+    usage?: {
+      input?: number;
+      output?: number;
+      totalTokens?: number;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
   }>;
 }
 

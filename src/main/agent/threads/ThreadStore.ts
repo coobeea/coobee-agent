@@ -83,14 +83,20 @@ export class ThreadStore {
     const { Env } = await import('@main/common/env');
     const agentHomePath = await Env.getAgentHomeDir(params.agentId);
 
+    // ✅ 获取 Agent 名称
+    const { AgentStore } = await import('../agents/AgentStore');
+    const agentStore = await AgentStore.getInstance();
+    const agent = await agentStore.get(params.agentId);
+    const agentName = agent?.name;
+
     const definition: ThreadDefinition = {
       id,
       title: params.title,
       agentId: params.agentId,
+      agentName, // ✅ 填充 Agent 名称
       status: 'active',
       sessionId,
       agentMode: params.agentMode ?? 'agent',
-      agentType: params.agentType ?? 'agent',
       runStatus: 'idle',
       messageCount: 0,
       agentHomePath, // ✅ 填充 Agent Home 路径
@@ -414,9 +420,9 @@ function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndex
     id: def.id,
     title: def.title,
     agentId: def.agentId,
+    agentName: def.agentName,
     status: def.status,
     runStatus: def.runStatus ?? 'idle',
-    agentType: def.agentType ?? 'agent',
     messageCount: def.messageCount,
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,

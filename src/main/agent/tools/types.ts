@@ -118,7 +118,6 @@ export type ToolParametersSchema = z.ZodObject<any>;
 // ========== 工具执行上下文 ==========
 
 import type { SandboxContext } from '../sandbox/types';
-import type { AgentType } from '../threads/types';
 import type { AgentMode } from '../runtime/types';
 
 /**
@@ -197,9 +196,6 @@ export interface ToolExecutionContext extends SandboxContext {
 
   /** Agent 定义 ID（如果关联了持久化的 AgentDefinition） */
   agentId?: string;
-
-  /** Agent 类型（agent / orchestrator / swarm） */
-  agentType?: AgentType;
 
   /** 父会话 ID（子 Agent / Worker / Swarm Role 时存在，用于追溯委托链） */
   parentSessionId?: string;

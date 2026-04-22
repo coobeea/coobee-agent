@@ -77,12 +77,10 @@ export interface SkillDefinition {
  *
  *   - chat: 纯对话模式 — 不提供工具，不注入执行协议和 Skill，响应快、成本低
  *   - agent: 完整 Agent 模式 — 提供工具、注入执行协议和 Skill，支持 HITL
- *   - orchestrator / swarm / discussion: 多智能体模式
- *   - quality-loop: 质量循环模式 — 执行→验证→修复闭环
  *
  * 模式在 Builder 上设置，AgentEnvInjector 根据模式决定注入内容。
  */
-export type AgentMode = 'chat' | 'agent' | 'orchestrator' | 'swarm' | 'discussion' | 'quality-loop';
+export type AgentMode = 'chat' | 'agent';
 
 // ========== Agent 运行时通用选项 ==========
 
