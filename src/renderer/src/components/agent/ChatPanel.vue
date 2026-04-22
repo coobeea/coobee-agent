@@ -10,7 +10,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
 import { useThreadsStore } from '@/stores/threads';
 import { useAgentsStore } from '@/stores/agents';
-import type { StreamMessage } from '@shared/stream-protocol';
+import type { StreamChatMessage } from '@/types/chat';
 import { useGateway } from '@/composables/useGateway';
 import { getThreadHistory } from '@/api/threads';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
@@ -47,13 +47,8 @@ const isStreaming = computed(() => {
   return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
 });
 
-// 获取当前 thread 和 agent 信息
+// 获取当前 thread 信息
 const currentThread = computed(() => threadsStore.threads.find((t) => t.id === props.threadId));
-const currentAgent = computed(() => {
-  const thread = currentThread.value;
-  if (!thread) return null;
-  return agentsStore.agents.find((a) => a.id === thread.agentId);
-});
 
 // 从 agent metadata 中获取开场白和快捷问题
 const greeting = computed(() => agentGreeting.value);
@@ -160,33 +155,79 @@ async function loadThreadHistory(): Promise<void> {
 
     const history = result.data;
 
-    if (history.events.length === 0 && history.userMessages.length === 0) {
+    if (!history.messages || history.messages.length === 0) {
       return;
     }
 
-    let userIdx = 0;
+    // 直接处理聚合好的消息（来自 history.jsonl）
+    for (const msg of history.messages) {
+      const msgData = msg as any; // 临时使用 any，因为聚合消息格式不同
+      
+      if (msgData.role === 'user') {
+        // 用户消息
+        chatStore.addUserMessage(props.threadId, msgData.content || '');
+      } else if (msgData.role === 'assistant') {
+        // AI 消息（已聚合）
+        const chatMsg: StreamChatMessage = {
+          id: msgData.id || `hist-${msgData.timestamp}`,
+          role: 'assistant',
+          content: msgData.text || '',
+          blocks: [],
+          status: 'done',
+          timestamp: new Date(msgData.timestamp).getTime()
+        };
 
-    // 重放历史事件到 store
-    for (const evt of history.events) {
-      const streamMsg: StreamMessage = {
-        id: `hist-${evt.seq}`,
-        sessionId: props.threadId,
-        sequence: evt.seq,
-        timestamp: new Date(evt.ts).getTime(),
-        type: evt.type as StreamMessage['type'],
-        content: evt.content,
-        data: evt.data,
-        source: { type: 'agent', id: props.threadId, name: '' }
-      };
+        // 添加 thinking 块
+        if (msgData.thinking) {
+          chatMsg.blocks.push({
+            type: 'thinking',
+            text: msgData.thinking
+          });
+        }
 
-      // 在 run:start 前插入用户消息
-      if (evt.type === 'run:start' && userIdx < history.userMessages.length) {
-        chatStore.addUserMessage(props.threadId, history.userMessages[userIdx].content);
-        userIdx++;
+        // 添加 text 块
+        if (msgData.text) {
+          chatMsg.blocks.push({
+            type: 'text',
+            text: msgData.text
+          });
+        }
+
+        // 添加工具调用块
+        if (msgData.tools && Array.isArray(msgData.tools) && msgData.tools.length > 0) {
+          for (const tool of msgData.tools) {
+            chatMsg.blocks.push({
+              type: 'tool',
+              tool: {
+                name: tool.name || 'unknown',
+                arguments: JSON.stringify(tool.arguments || {}, null, 2),
+                result: tool.result || '',
+                status: tool.error ? 'error' : 'done'
+              }
+            });
+          }
+        }
+
+        // 添加统计信息
+        if (msgData.metadata) {
+          chatMsg.stats = {
+            inputTokens: msgData.metadata.inputTokens || 0,
+            outputTokens: msgData.metadata.outputTokens || 0,
+            totalTokens: msgData.metadata.totalTokens || 0,
+            llmCalls: msgData.metadata.llmCalls || 0,
+            toolCalls: Array.isArray(msgData.tools) ? msgData.tools.length : 0,
+            startTime: msgData.metadata.startTime 
+              ? new Date(msgData.metadata.startTime).getTime() 
+              : new Date(msgData.timestamp).getTime(),
+            endTime: msgData.metadata.endTime ? new Date(msgData.metadata.endTime).getTime() : undefined,
+            duration: msgData.metadata.duration,
+            tokensPerSecond: msgData.metadata.tokensPerSecond
+          };
+        }
+
+        // 添加到 chatStore
+        chatStore.addHistoryMessage(props.threadId, chatMsg);
       }
-
-      // 交给 store 处理
-      chatStore.handleStreamMessage(streamMsg);
     }
 
     await nextTick();

@@ -21,6 +21,8 @@ export { type IStreamEmitter, StreamEmitter, createStreamEmitter } from './Strea
 export {
   // 监控消费者
   StreamMonitor,
-  streamMonitor,
-  type SessionStats
+  EventWriter,
+  HistoryWriter
 } from './consumers';
+
+export type { SessionStats } from './consumers/StreamMonitor';

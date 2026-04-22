@@ -35,6 +35,11 @@ export const ReadyAgentSystemHook: LifecycleHook = {
       const { ToolRegistry } = await import('@main/agent/tools/registry');
       const { builtinTools } = await import('@main/agent/tools/builtin');
       const { eventBus } = await import('@main/common/eventbus');
+      const { streamConsumersManager } = await import('@main/agent/streaming/StreamConsumersManager');
+
+      // 0. 初始化流式消费者管理器（必须在最开始，因为后续执行需要监听器）
+      streamConsumersManager.init(Env.paths.workspacesDir);
+      log.info('[ReadyAgentSystemHook] Stream consumers initialized');
 
       // 1. 注册内置工具到 ToolRegistry
       const toolRegistry = ToolRegistry.getInstance();
@@ -106,12 +111,23 @@ export const BeforeQuitAgentSystemHook: LifecycleHook = {
   critical: false,
 
   async execute(): Promise<void> {
+    // 1. 停止流式消费者
+    try {
+      const { streamConsumersManager } = await import('@main/agent/streaming/StreamConsumersManager');
+      streamConsumersManager.destroy();
+      log.info('[BeforeQuitAgentSystemHook] Stream consumers destroyed');
+    } catch (err) {
+      log.error('[BeforeQuitAgentSystemHook] Failed to destroy stream consumers:', err);
+    }
+
+    // 2. 停止 Extension 监听器
     if (activeLoader) {
       activeLoader.stopWatch();
       activeLoader = null;
       log.info('[BeforeQuitAgentSystemHook] Extension watchers stopped');
     }
 
+    // 3. 停止 Background Services
     try {
       const { ExtensionManager } = await import('@main/agent/extension');
       const registry = ExtensionManager.getRegistry();

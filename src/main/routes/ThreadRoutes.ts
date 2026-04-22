@@ -87,17 +87,26 @@ export function registerThreadRoutes(router: Router): void {
   /**
    * GET /gateway/threads/:threadId/history
    *
-   * 获取 Thread 的历史消息（events.jsonl）
+   * 获取 Thread 的历史消息（从 session 文件）
    *
    * 返回格式：
    * {
-   *   events: [
-   *     { ts: '2026-04-17T...', seq: 1, type: 'run:start', content: '', data: {...} },
-   *     { ts: '2026-04-17T...', seq: 2, type: 'text:delta', content: 'Hello', data: {...} },
+   *   messages: [
+   *     {
+   *       role: 'user',
+   *       content: [{ type: 'text', text: '...' }],
+   *       timestamp: 123456
+   *     },
+   *     {
+   *       role: 'assistant',
+   *       content: [
+   *         { type: 'thinking', thinking: '...' },
+   *         { type: 'text', text: '...' }
+   *       ],
+   *       timestamp: 123457,
+   *       usage: { ... }
+   *     },
    *     ...
-   *   ],
-   *   userMessages: [
-   *     { content: 'user input', timestamp: 123456 }
    *   ]
    * }
    */
@@ -106,7 +115,7 @@ export function registerThreadRoutes(router: Router): void {
 
     if (!threadId) {
       ctx.status = 400;
-      ctx.body = { error: 'threadId is required' };
+      ctx.body = { success: false, error: 'threadId is required' };
       return;
     }
 
@@ -117,45 +126,22 @@ export function registerThreadRoutes(router: Router): void {
 
       if (!thread) {
         ctx.status = 404;
-        ctx.body = { error: 'Thread not found' };
+        ctx.body = { success: false, error: 'Thread not found' };
         return;
       }
 
-      // 读取 events.jsonl
+      // 从 session 文件读取完整对话历史
       const workspacePath = path.join(Env.paths.workspacesDir, threadId);
-      const eventsFile = path.join(workspacePath, 'events', 'events.jsonl');
-
-      let events: Record<string, unknown>[] = [];
-
-      if (await fs.pathExists(eventsFile)) {
-        const content = await fs.readFile(eventsFile, 'utf-8');
-        events = content
-          .split('\n')
-          .filter((line) => line.trim())
-          .map((line) => {
-            try {
-              return JSON.parse(line) as Record<string, unknown>;
-            } catch {
-              return null;
-            }
-          })
-          .filter((event): event is Record<string, unknown> => event !== null);
-      }
-
-      // 提取用户消息（从 session 文件）
-      log.debug(`[GET /threads/${threadId}/history] workspacePath: ${workspacePath}, sessionId: ${thread.sessionId}`);
-      const userMessages = await extractUserMessages(workspacePath, thread.sessionId);
-      log.debug(`[GET /threads/${threadId}/history] extracted ${userMessages.length} user messages`);
+      const messages = await extractMessagesFromSession(workspacePath, thread.sessionId);
 
       ctx.body = {
         success: true,
         data: {
-          events,
-          userMessages
+          messages
         }
       };
 
-      log.debug(`[GET /threads/${threadId}/history] 返回 ${events.length} 条事件, ${userMessages.length} 条用户消息`);
+      log.debug(`[GET /threads/${threadId}/history] 返回 ${messages.length} 条消息`);
     } catch (error) {
       log.error(`[GET /threads/${threadId}/history] 错误:`, error);
       ctx.status = 500;
@@ -217,64 +203,45 @@ export function registerThreadRoutes(router: Router): void {
 }
 
 /**
- * 从 session 文件中提取用户消息
+ * 从 session 文件中提取完整的对话消息
  *
  * session 文件格式：sessions/{sessionId}/*.jsonl
- * 每行是一个事件，包含 type、content、timestamp 等字段
+ * 每行是一个事件，type === 'message' 的事件包含完整的消息内容
+ *
+ * @returns 完整的对话消息列表（用户 + AI）
  */
-async function extractUserMessages(
+async function extractMessagesFromSession(
   workspacePath: string,
-  sessionId: string
-): Promise<{ content: string; timestamp: number }[]> {
-  const sessionsDir = path.join(workspacePath, 'sessions', sessionId);
+  _sessionId: string
+): Promise<Array<Record<string, unknown>>> {
+  const historyFile = path.join(workspacePath, 'history.jsonl');
 
-  log.debug(`[extractUserMessages] sessionsDir: ${sessionsDir}, exists: ${await fs.pathExists(sessionsDir)}`);
+  log.debug(`[extractMessagesFromSession] historyFile: ${historyFile}, exists: ${await fs.pathExists(historyFile)}`);
 
-  if (!(await fs.pathExists(sessionsDir))) {
+  if (!(await fs.pathExists(historyFile))) {
+    log.debug(`[extractMessagesFromSession] history.jsonl not found, returning empty array`);
     return [];
   }
 
-  const files = await fs.readdir(sessionsDir);
-  const jsonlFiles = files.filter((f) => f.endsWith('.jsonl'));
+  const messages: Array<Record<string, unknown>> = [];
 
-  log.debug(`[extractUserMessages] found ${jsonlFiles.length} session files`);
-
-  const userMessages: { content: string; timestamp: number }[] = [];
-
-  for (const file of jsonlFiles) {
-    const filePath = path.join(sessionsDir, file);
-    const content = await fs.readFile(filePath, 'utf-8');
-
+  try {
+    const content = await fs.readFile(historyFile, 'utf-8');
     const lines = content.split('\n').filter((line) => line.trim());
 
     for (const line of lines) {
       try {
-        const event = JSON.parse(line) as Record<string, unknown>;
-
-        // 查找用户消息：type === 'message' 且 message.role === 'user'
-        if (event.type === 'message') {
-          const message = event.message as Record<string, unknown> | undefined;
-          if (message?.role === 'user') {
-            // 提取文本内容：message.content[0].text
-            const content = message.content as Array<Record<string, unknown>> | undefined;
-            const text = content?.[0]?.text as string | undefined;
-
-            if (text) {
-              userMessages.push({
-                content: text,
-                timestamp: (message.timestamp as number) || Date.now()
-              });
-            }
-          }
-        }
-      } catch {
-        // 忽略解析错误
+        const message = JSON.parse(line) as Record<string, unknown>;
+        messages.push(message);
+      } catch (err) {
+        log.warn(`[extractMessagesFromSession] Failed to parse line in history.jsonl:`, err);
       }
     }
+
+    log.debug(`[extractMessagesFromSession] Loaded ${messages.length} aggregated messages from history.jsonl`);
+  } catch (err) {
+    log.error(`[extractMessagesFromSession] Failed to read history.jsonl:`, err);
   }
 
-  // 按时间戳排序
-  userMessages.sort((a, b) => a.timestamp - b.timestamp);
-
-  return userMessages;
+  return messages;
 }

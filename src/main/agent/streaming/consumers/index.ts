@@ -1,18 +1,9 @@
 /**
- * 流式消费者模块
- *
- * 消费者架构：
- * ┌──────────────────────────────────────┐
- * │         EventBus（中心）              │
- * │    stream:message 事件               │
- * └──────────────────────────────────────┘
- *              ↓
- *    ┌─────────┼─────────┐
- *    ↓         ↓         ↓
- * Consumer1  Consumer2  Consumer3
- * (推送)     (监控)     (...)
- *
- * 注：WebSocket 推送由 Gateway 事件桥接处理（src/main/gateway/events/StreamBridge.ts）
+ * 流式消息消费者（统一导出）
+ * 
+ * 所有消费者都通过监听 eventBus 实现，与核心流程完全解耦。
  */
 
-export { StreamMonitor, streamMonitor, type SessionStats } from './StreamMonitor';
+export { StreamMonitor } from './StreamMonitor';
+export { EventWriter } from './EventWriter';
+export { HistoryWriter } from './HistoryWriter';

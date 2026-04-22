@@ -114,6 +114,13 @@ export class StreamMonitor {
   }
 
   /**
+   * 启动监听（与 initialize 相同）
+   */
+  start(): void {
+    this.initialize();
+  }
+
+  /**
    * 清理资源（移除 EventBus 监听器）
    */
   destroy(): void {
@@ -130,6 +137,13 @@ export class StreamMonitor {
 
     this.initialized = false;
     log.info('[StreamMonitor] Destroyed');
+  }
+
+  /**
+   * 停止监听（与 destroy 相同）
+   */
+  stop(): void {
+    this.destroy();
   }
 
   /**

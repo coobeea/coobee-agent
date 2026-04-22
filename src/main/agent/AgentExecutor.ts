@@ -33,7 +33,7 @@ import { OpenAIBuilder } from './runtime/openai/OpenAIBuilder';
 import { createStreamEmitter, type IStreamEmitter } from './streaming/StreamEmitter';
 import type { StreamSource } from './streaming/types';
 import { injectEnv } from './AgentEnvInjector';
-import { AgentEventWriter } from './AgentEventWriter';
+import { streamConsumersManager } from './streaming/StreamConsumersManager';
 import { ProviderInjector } from './provider/ProviderInjector';
 import { fireHooks, recordMetrics } from './runtime/ChunkProcessor';
 import { SkillManager } from './skills/SkillManager';
@@ -234,7 +234,7 @@ class AgentExecutor {
    */
   private async *consumeAndForward(
     gen: AsyncGenerator<StreamChunk, ExecutionResult, unknown>,
-    eventWriter: AgentEventWriter | null,
+    emitter: IStreamEmitter | null,
     sessionId: string,
     onChunk?: (chunk: StreamChunk) => void,
     signal?: AbortSignal,
@@ -260,8 +260,8 @@ class AgentExecutor {
           content: 'Execution cancelled by user'
         };
         
-        if (eventWriter) {
-          eventWriter.dispatch(interruptedChunk);
+        if (emitter) {
+          emitter.forward(interruptedChunk);
         }
         onChunk?.(interruptedChunk);
         yield interruptedChunk;
@@ -273,9 +273,9 @@ class AgentExecutor {
 
       const chunk = r.value as StreamChunk;
 
-      // 统一分发：写文件 + 推前端（唯一入口，seq 全局唯一）
-      if (eventWriter) {
-        eventWriter.dispatch(chunk);
+      // 统一分发：广播到 eventBus（监听器自动处理持久化）
+      if (emitter) {
+        emitter.forward(chunk);
       }
 
       // === 检查点更新（fire-and-forget） ===
@@ -286,7 +286,7 @@ class AgentExecutor {
       }
 
       // === Extension Hook 触发（fire-and-forget，不阻塞流） ===
-      if (eventWriter) {
+      if (emitter) {
         // 仅在非轻量模式下触发 Hook
         fireHooks(
           chunk,
@@ -344,8 +344,8 @@ class AgentExecutor {
             content: 'Execution cancelled by user'
           };
           
-          if (eventWriter) {
-            eventWriter.dispatch(interruptedChunk);
+          if (emitter) {
+            emitter.forward(interruptedChunk);
           }
           onChunk?.(interruptedChunk);
           yield interruptedChunk;
@@ -436,7 +436,6 @@ class AgentExecutor {
       this.abortControllers.set(sessionId, internalController);
     }
 
-    let eventWriter: AgentEventWriter | null = null;
     let workspaceDir: string | undefined;
     let loader: import('./extension/ExtensionLoader').ExtensionLoader | null = null;
 
@@ -462,17 +461,15 @@ class AgentExecutor {
       }
     }
 
+    let emitter: IStreamEmitter | null = null;
+
     try {
       if (request.runtime) {
         // === 预构建 Runtime 路径（Orchestrator / Swarm / Discussion） ===
-        if (!isLightweight) {
-          eventWriter = new AgentEventWriter(workspaceDir);
-          eventWriter.register(sessionId);
-        }
-
         runtime = request.runtime;
-        if (eventWriter) {
-          eventWriter.setEmitter(this.createEmitter(sessionId, runtime));
+        
+        if (!isLightweight) {
+          emitter = this.createEmitter(sessionId, runtime);
         }
 
         // agent:start 事件
@@ -489,7 +486,7 @@ class AgentExecutor {
 
         const result = yield* this.consumeAndForward(
           gen,
-          eventWriter,
+          emitter,
           sessionId,
           onChunk,
           signal,
@@ -521,8 +518,10 @@ class AgentExecutor {
       // 0. 注入运行时环境
       if (!isLightweight) {
         const workspace = await injectEnv(sessionId, builder);
-        eventWriter = new AgentEventWriter(workspace);
-        eventWriter.register(sessionId);
+        workspaceDir = workspace;
+        
+        // 写入用户消息到 history.jsonl
+        streamConsumersManager.writeUserMessage(sessionId, message);
       }
 
       // === Extension Hooks: message_received + session_start + before_agent_start ===
@@ -535,10 +534,11 @@ class AgentExecutor {
         });
       }
 
-      // 1. 创建 Runtime + 注册统一分发器
+      // 1. 创建 Runtime + 创建 Emitter
       runtime = await builder.sessionId(sessionId).build();
-      if (eventWriter) {
-        eventWriter.setEmitter(this.createEmitter(sessionId, runtime));
+      
+      if (!isLightweight) {
+        emitter = this.createEmitter(sessionId, runtime);
       }
 
       // agent:start 事件
@@ -555,7 +555,7 @@ class AgentExecutor {
 
       const result = yield* this.consumeAndForward(
         gen,
-        eventWriter,
+        emitter,
         sessionId,
         onChunk,
         signal,
@@ -604,8 +604,10 @@ class AgentExecutor {
       throw error;
     } finally {
       if (!isLightweight) {
-        eventWriter?.unregister(sessionId);
         SkillManager.clearSession(sessionId);
+        
+        // 清理监听器缓存
+        streamConsumersManager.clearSession(sessionId);
 
         // 卸载任务级 Extension
         if (loader) {
