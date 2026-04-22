@@ -195,15 +195,15 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
 
     // ====== Chat & Agent 共享：基础环境设置 ======
 
-    // 9. 设置会话存储目录
-    builder.sessionDir(path.join(workspace, 'sessions'));
+    // 9. 设置会话存储目录（扁平化结构，直接使用 workspace）
+    builder.sessionDir(workspace);
 
     // 10. 工作目录：有工程目录时优先使用工程目录，否则用 workspace
     const effectiveCwdShared = builderProjectDir || workspace;
     builder.workspaceRoot(effectiveCwdShared);
 
-    // 11. 设置上下文快照目录
-    builder.contextDir(path.join(workspace, 'contexts'));
+    // 11. 设置上下文快照目录（扁平化结构，直接使用 workspace）
+    builder.contextDir(workspace);
 
     if (builderProjectDir) {
       log.info(

@@ -43,11 +43,13 @@ class ThreadsConfig {
    *
    * 工作空间结构：
    *   workspaces/{sessionId}/
-   *   ├── sessions/          会话持久化数据
-   *   ├── contexts/          LLM 请求上下文快照
-   *   ├── events/            流式事件记录
-   *   ├── logs/              Agent 运行日志
-   *   └── *                  Agent 工作区（Agent 可自由创建文件/目录）
+   *   ├── sessions/          SDK 会话文件目录
+   *   │   ├── session.jsonl      (OpenAI)
+   *   │   └── {timestamp}_{uuid}.jsonl  (PiMono)
+   *   ├── history.jsonl      前端展示（聚合）
+   *   ├── events.jsonl       调试事件流
+   *   ├── context.jsonl      上下文快照（追加式）
+   *   └── tasks/             多 Agent 协作区
    *
    * @example
    * - 开发环境: <项目>/.home/workspaces
@@ -60,7 +62,7 @@ class ThreadsConfig {
   /**
    * 获取指定 Session 的工作空间目录
    *
-   * 自动创建必要的目录结构，返回工作空间根路径。
+   * 自动创建工作空间根目录和 sessions 子目录。
    *
    * @param id Session ID（通常等于 Thread ID）
    * @returns 工作空间根路径 workspaces/{id}/
@@ -70,25 +72,22 @@ class ThreadsConfig {
    * // 返回: /.home/workspaces/12345/
    * // 结构: 12345/
    * //       ├── sessions/
-   * //       ├── contexts/
-   * //       ├── events/
-   * //       ├── logs/
-   * //       └── (Agent 创建的文件)
+   * //       ├── history.jsonl
+   * //       ├── events.jsonl
+   * //       └── context.jsonl
    */
   async getWorkspaceDir(id: string): Promise<string> {
     const workspace = path.join(this.workspaces, id);
-    const subDirs = [
-      workspace,
-      path.join(workspace, 'sessions'),
-      path.join(workspace, 'contexts'),
-      path.join(workspace, 'events'),
-      path.join(workspace, 'logs')
-    ];
-    for (const dir of subDirs) {
-      if (!fs.existsSync(dir)) {
-        await mkdirp(dir);
-      }
+    const sessionsDir = path.join(workspace, 'sessions');
+    
+    // 创建必要的目录
+    if (!fs.existsSync(workspace)) {
+      await mkdirp(workspace);
     }
+    if (!fs.existsSync(sessionsDir)) {
+      await mkdirp(sessionsDir);
+    }
+    
     return workspace;
   }
 }

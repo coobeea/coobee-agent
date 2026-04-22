@@ -1,257 +1,141 @@
-# Coobee Agent 文档索引
+# Coobee Agent 文档中心
 
-本目录包含 Coobee Agent 项目的所有设计文档、架构说明和开发指南。
+欢迎来到 Coobee Agent 文档中心！这里包含了项目的架构设计、问题追踪、开发指南等文档。
 
-## 📂 目录结构规范
+## 📚 文档导航
 
-所有目录和文件都使用序号命名，便于管理和查找。
+### 🏗️ [架构文档](./architecture/)
 
-```
-docs/
-├── README.md                 # 本文件（文档索引）
-├── 01-designs/               # 设计文档（架构方案、技术选型）
-├── 02-guides/                # 开发指南（如何使用、最佳实践）
-├── 03-rfcs/                  # RFC 文档（重大变更提案）
-└── 04-references/            # 参考文档（API 文档、配置说明）
-```
+系统架构设计和核心机制说明：
 
-### 01-designs/ - 设计文档
+- **[核心 Skills 自动注入机制](./architecture/core-skills-injection.md)**
+  - 为什么 Agent 配置的 skills 是空数组，但运行时有 5 个 Skills？
+  - 核心 Skills 注入流程和设计原理
 
-设计方案和架构文档，按时间顺序编号（最新的编号最大）。
+- **[AppendInstructions 内容说明](./architecture/append-instructions-content.md)**
+  - Runtime Environment 完整内容解析
+  - System Prompt 的构成和生成机制
+  - 动态注入的环境信息
 
-**命名规范**：`{序号}-{文档名称}.md`
+- **Workspace 目录结构** *(根目录)*
+  - [目录简化实施总结](../DIRECTORY_SIMPLIFICATION.md)
+  - [Workspace 修复总结](../WORKSPACE_FIX_SUMMARY.md)
 
-**当前文档**：
+### 🐛 [问题追踪](./issues/)
 
-- **01-websocket-push-architecture.md** - WebSocket 业务事件推送架构设计（v1.0 详细版）
-  - 创建时间：2026-04-11
-  - 状态：⚠️ 已被简化版替代
-  - 内容：详细的三层架构设计，包含完整的代码实现
+已知问题和 Bug 记录：
 
-- **02-websocket-push-simplified.md** - WebSocket 业务事件推送架构设计（v2.0 简化版）
-  - 创建时间：2026-04-11
-  - 状态：⚠️ 已被自动扫描版替代
-  - 内容：简化版设计，对标 IpcEventBroadcaster 的单一类实现
+- **[Context Snapshot Agent 信息问题](./issues/context-snapshot-agent-info-issues.md)**
+  - 问题 1: Instructions 默认值覆盖
+  - 问题 2: Name/Description 未正确记录
+  - 问题 3: 核心 Skills 自动注入未说明
 
-- **03-gateway-auto-scan-design.md** - Gateway 自动扫描架构设计（v3.0 最终版）
-  - 创建时间：2026-04-11
-  - 状态：✅ **当前推荐方案**
-  - 内容：自动扫描机制，业务层通过文件约定自动注册，通用层无需修改
+### 📖 API 文档 *(待创建)*
 
-- **04-agent-import-export-format.md** - 智能体导入导出 ZIP 包格式设计
-  - 创建时间：2026-04-15
-  - 状态：📝 **设计方案**
-  - 内容：定义智能体导入导出的标准 ZIP 包结构，包含导入导出流程设计和 UI 建议
+### 🛠️ 开发指南 *(待创建)*
 
-- **05-chat-api-data-flow.md** - Chat API 数据流设计
-  - 创建时间：2026-04-13
-  - 状态：✅ **已实施**
-  - 内容：统一的对话 API 数据流架构，包含 SSE 流式返回、WebSocket 广播和文件持久化三条并行路径
+## 🚀 快速开始
 
-- **06-websocket-agent-communication.md** - WebSocket Agent 通讯设计方案
-  - 创建时间：2026-04-17
-  - 状态：📝 **设计方案**
-  - 内容：通过 WebSocket 实现 Agent 双向通讯的完整方案，包含 RPC 协议、方法注册、性能对比和实施计划
+### 理解 Agent 执行流程
 
-- **07-websocket-rpc-migration.md** - WebSocket RPC 迁移指南
-  - 创建时间：2026-04-17
-  - 状态：✅ **迁移指南**
-  - 内容：从 coobee-ai 项目迁移已实现的 WebSocket RPC 系统到 coobee-agent，包含完整的代码对比、迁移步骤和测试计划
+1. 阅读 [核心 Skills 自动注入机制](./architecture/core-skills-injection.md) 了解 Skills 系统
+2. 阅读 [AppendInstructions 内容说明](./architecture/append-instructions-content.md) 了解 System Prompt 构成
+3. 查看 [架构文档总览](./architecture/) 了解整体架构
 
-- **08-chat-message-system-architecture.md** - 聊天消息展示系统架构设计
-  - 创建时间：2026-04-17
-  - 状态：✅ **已实施**
-  - 内容：完整的组件化聊天消息展示系统，支持流式渲染、多种内容块类型（文本、思考、工具调用）、状态管理和 WebSocket 实时订阅
+### 调试和问题排查
 
-- **09-chat-frontend-backend-integration.md** - 聊天系统前后端对接文档
-  - 创建时间：2026-04-17
-  - 状态：✅ **已实施**
-  - 内容：完成聊天消息展示系统的前后端对接，实现实时流式消息推送、历史消息加载、用户消息发送和完整的消息渲染
+1. 查看 [问题追踪](./issues/) 中是否有类似问题
+2. 检查 `context.jsonl` 文件了解实际执行情况
+3. 查看日志文件定位问题
 
-- **10-agent-execution-flow-analysis.md** - Agent 执行流程与双运行时架构分析
-  - 创建时间：2026-04-19
-  - 状态：📝 **设计中 (分析报告)**
-  - 内容：详细分析 AgentExecutor 的执行流程，对比 PiMono 和 OpenAI 双运行时的架构设计，并指出当前代码库中存在的抽象泄漏和执行流不一致等问题。
+### 贡献文档
 
-### 02-guides/ - 开发指南
+1. 在相应目录创建 Markdown 文件
+2. 使用清晰的标题和结构
+3. 包含代码示例和流程图
+4. 更新相应目录的 README
 
-开发指南和使用说明，帮助开发者快速上手。
-
-**当前文档**：
-
-- **01-provider-config-migration.md** - Provider 配置迁移指南
-  - 创建时间：2026-04-13
-  - 状态：✅ 当前推荐方案
-  - 内容：将 Provider 配置从 coobee.json5 独立到 providers.json5 的详细指南
-
-- **02-config-usage.md** - 配置系统使用指南 ⭐️
-  - 创建时间：2026-04-16
-  - 状态：✅ **当前推荐方案**
-  - 内容：统一的配置访问接口（ConfigStore、Providers、Models），按需引用模式，使用示例
-
-### 03-rfcs/ - RFC 文档
-
-（待添加）
-
-### 04-references/ - 参考文档
-
-（待添加）
-
----
-
-## 📝 文档创建规范
-
-### 1. 目录分类
-
-根据文档类型放入对应**序号目录**：
+## 📂 文档结构
 
 ```
 docs/
-├── README.md                 # 本文件（文档索引）
-├── 01-designs/               # 设计文档（架构方案、技术选型）
-├── 02-guides/                # 开发指南（如何使用、最佳实践）
-├── 03-rfcs/                  # RFC 文档（重大变更提案）
-└── 04-references/            # 参考文档（API 文档、配置说明）
+├── README.md                           # 本文件，文档中心首页
+├── architecture/                       # 架构文档
+│   ├── README.md                          架构文档索引
+│   ├── core-skills-injection.md           核心 Skills 注入机制
+│   └── append-instructions-content.md     AppendInstructions 内容
+├── issues/                             # 问题追踪
+│   ├── README.md                          问题列表索引
+│   └── context-snapshot-agent-info-issues.md
+├── api/                                # API 文档 (待创建)
+└── development/                        # 开发指南 (待创建)
 ```
 
-**目录序号说明**：
-- 目录序号固定，不随时间变化
-- `01-designs/` - 最重要的设计文档放在第一位
-- 目录内的文档使用独立的序号体系（从 01 开始）
+## 🔍 常见问题速查
 
-### 2. 文件命名规范
+### Q1: 为什么 Agent 配置的 instructions 是空的，但运行时显示 "你是一个 AI 助手"？
 
-**格式**：`{序号}-{简短描述}.md`
+**A**: 这是默认值覆盖问题。查看 [Context Snapshot Agent 信息问题 - 问题1](./issues/context-snapshot-agent-info-issues.md#问题-1-instructions-默认值覆盖问题)
 
-**序号规则**：
-- 两位数字，从 01 开始
-- 按创建时间递增
-- 同一目录内序号唯一
+### Q2: 为什么 Agent 配置的 skills 是空数组，但实际运行时有 5 个 Skills？
 
-**示例**：
+**A**: 这是核心 Skills 自动注入机制。查看 [核心 Skills 自动注入机制](./architecture/core-skills-injection.md)
+
+### Q3: appendInstructions 里面都有什么内容？
+
+**A**: 包含 runtime_environment、skill_discovery 等。查看 [AppendInstructions 内容说明](./architecture/append-instructions-content.md)
+
+### Q4: context.jsonl 文件是什么？有什么用？
+
+**A**: Context Snapshot，记录每次 LLM 调用的完整上下文，用于调试和分析。查看 [AppendInstructions 内容说明 - Context Snapshot 中的记录](./architecture/append-instructions-content.md#context-snapshot-中的记录)
+
+### Q5: workspace 目录结构是怎样的？
+
+**A**: 扁平化结构，包含 sessions/、history.jsonl、events.jsonl、context.jsonl。查看 [目录简化实施总结](../DIRECTORY_SIMPLIFICATION.md)
+
+## 🔗 相关资源
+
+- **项目 README**: [../README.md](../README.md)
+- **源代码**: `src/main/agent/`
+- **测试文件**: `src/main/agent/__tests__/`
+
+## 📝 文档约定
+
+### Markdown 格式
+
+- 使用清晰的标题层级（H1-H6）
+- 代码块指定语言（```typescript, ```bash 等）
+- 使用表格、列表增强可读性
+- 重要信息使用引用块或警告标记
+
+### 代码示例
+
+- 提供完整的代码路径
+- 标注关键代码行
+- 包含必要的上下文
+- 添加注释说明
+
+### 流程图
+
+使用文本流程图或 Mermaid 图表：
+
 ```
-01-designs/
-├── 01-websocket-push-architecture.md
-├── 02-websocket-push-simplified.md
-├── 03-gateway-auto-scan-design.md
-└── 04-[下一个设计方案].md
-
-02-guides/
-├── 01-getting-started.md
-├── 02-development-workflow.md
-└── 03-[下一个指南].md
+步骤1
+  ↓
+步骤2
+  ↓
+步骤3
 ```
 
-### 3. 文档头部规范
+## 📮 反馈和建议
 
-每个文档都应包含以下元信息：
-
-```markdown
-# [文档标题]
-
-> 日期：YYYY-MM-DD  
-> 版本：vX.X  
-> 状态：[设计方案 | 已实施 | 已废弃]
-
-## 概述
-
-[简要说明文档目的和背景]
-```
-
-### 4. 状态标记
-
-使用 emoji 标记文档状态：
-
-- 📝 **设计中** - 正在编写的设计方案
-- ✅ **已实施** - 已经实现并在使用
-- 🔄 **进行中** - 正在实施
-- ⚠️ **已废弃** - 已被新方案替代
-- 📚 **参考** - 作为历史参考保留
-
-### 5. 文档更新
-
-- 当创建新版本设计时，在旧文档顶部添加提示：
-  ```markdown
-  > ⚠️ **注意**：本方案已被 [新方案名称](链接) 替代，保留作为历史参考。
-  ```
-
-- 在 README.md 中更新文档列表
-- 保持序号不变，新文档使用新序号
+发现文档问题或有改进建议？
+- 在 Issues 中提出
+- 直接提交 PR 改进文档
+- 联系维护团队
 
 ---
 
-## 🔍 快速查找
-
-### 按主题查找
-
-**WebSocket / Gateway 相关**：
-- [03-gateway-auto-scan-design.md](01-designs/03-gateway-auto-scan-design.md) - ✅ 事件推送架构
-- [06-websocket-agent-communication.md](01-designs/06-websocket-agent-communication.md) - 📝 RPC 通讯方案
-- [07-websocket-rpc-migration.md](01-designs/07-websocket-rpc-migration.md) - ✅ RPC 迁移指南
-
-**配置管理相关**：
-- [01-provider-config-migration.md](02-guides/01-provider-config-migration.md) - ✅ 迁移指南
-- [02-provider-quickstart.md](02-guides/02-provider-quickstart.md) - ✅ 快速开始
-
-**智能体 / Agent 相关**：
-- [04-agent-import-export-format.md](01-designs/04-agent-import-export-format.md) - 📝 导入导出格式
-- [05-chat-api-data-flow.md](01-designs/05-chat-api-data-flow.md) - ✅ 对话 API 数据流
-- [06-websocket-agent-communication.md](01-designs/06-websocket-agent-communication.md) - 📝 WebSocket RPC 通讯
-- [07-websocket-rpc-migration.md](01-designs/07-websocket-rpc-migration.md) - ✅ 从 coobee-ai 迁移
-- [08-chat-message-system-architecture.md](01-designs/08-chat-message-system-architecture.md) - ✅ 消息展示系统架构
-- [09-chat-frontend-backend-integration.md](01-designs/09-chat-frontend-backend-integration.md) - ✅ 聊天系统前后端对接
-
-### 按状态查找
-
-**✅ 当前使用中**：
-- [03-gateway-auto-scan-design.md](01-designs/03-gateway-auto-scan-design.md)
-- [05-chat-api-data-flow.md](01-designs/05-chat-api-data-flow.md)
-- [07-websocket-rpc-migration.md](01-designs/07-websocket-rpc-migration.md)
-- [08-chat-message-system-architecture.md](01-designs/08-chat-message-system-architecture.md)
-- [09-chat-frontend-backend-integration.md](01-designs/09-chat-frontend-backend-integration.md)
-- [01-provider-config-migration.md](02-guides/01-provider-config-migration.md)
-- [02-config-usage.md](02-guides/02-config-usage.md)
-
-**📝 设计中**：
-- [04-agent-import-export-format.md](01-designs/04-agent-import-export-format.md)
-- [06-websocket-agent-communication.md](01-designs/06-websocket-agent-communication.md)
-
-**⚠️ 已废弃（保留参考）**：
-- [01-websocket-push-architecture.md](01-designs/01-websocket-push-architecture.md)
-- [02-websocket-push-simplified.md](01-designs/02-websocket-push-simplified.md)
-
----
-
-## 📊 文档统计
-
-- **总文档数**：12
-- **设计文档**：9
-- **开发指南**：3
-- **当前有效**：10
-- **历史参考**：2
-
----
-
-## 🤝 贡献指南
-
-创建新文档时，请遵循以下流程：
-
-1. **确定文档类型**，选择对应序号目录（01-designs/ / 02-guides/ / 03-rfcs/ / 04-references/）
-2. **查看该目录下当前最大序号**，新文档使用 `最大序号 + 1`
-3. **使用规范的文件名**：`{序号}-{描述}.md`
-4. **添加文档头部**（日期、版本、状态）
-5. **更新 README.md**，在对应章节添加文档链接
-6. **提交时说明**：`docs: add {目录序号}-{目录名称}/{文件序号}-{描述}`
-
-**示例**：
-```bash
-# 在 01-designs/ 下创建第 4 个设计文档
-touch docs/01-designs/04-config-management-design.md
-
-# 提交
-git commit -m "docs: add 01-designs/04-config-management-design"
-```
-
----
-
-最后更新：2026-04-17 (新增：聊天消息展示系统架构、前后端对接)
+**最后更新**: 2026-04-22  
+**维护者**: Coobee Team  
+**文档版本**: 1.0

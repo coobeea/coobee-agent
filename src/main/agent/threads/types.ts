@@ -51,9 +51,6 @@ export interface ThreadDefinition {
   /** 运行时状态（跟踪当前执行进度） */
   runStatus: ThreadRunStatus;
 
-  /** 消息数量（轻量统计，避免前端需要加载全部消息） */
-  messageCount: number;
-
   /** Agent Home 目录路径（用于前端展示 Agent 持久化数据） */
   agentHomePath: string;
 
@@ -83,7 +80,6 @@ export interface ThreadIndexEntry {
   agentName?: string;
   status: ThreadStatus;
   runStatus: ThreadRunStatus;
-  messageCount: number;
   createdAt: string;
   updatedAt: string;
   /** 该 Thread 的工作空间绝对路径（= workspacesDir/{id}） */
@@ -117,7 +113,6 @@ export interface UpdateThreadParams {
   title?: string;
   status?: ThreadStatus;
   runStatus?: ThreadRunStatus;
-  messageCount?: number;
   projectDir?: string | null;
   overrideModel?: string;
   metadata?: Record<string, unknown>;

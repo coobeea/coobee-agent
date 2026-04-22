@@ -123,8 +123,8 @@ const RUN = !!apiConfig;
 
 const LOG_PREFIX = '[集成测试]';
 const TEST_LOG_BASE = path.join(process.cwd(), 'test-results');
-/** Session 存储目录（测试用固定路径，与 readSessionFile 保持一致） */
-const TEST_SESSION_DIR = path.join(process.cwd(), 'test-results', 'userData', 'sessions');
+/** Workspace 根目录（测试用固定路径，扁平化结构） */
+const TEST_WORKSPACES_DIR = path.join(process.cwd(), 'test-results', 'userData', 'workspaces');
 
 let currentLogDir: string;
 let currentTestLogFile: string;
@@ -500,7 +500,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       instructions: '你是一个简洁的助手。用一句话回答，不超过20个字。',
       model: MODEL,
       sessionId,
-      sessionDir: TEST_SESSION_DIR
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId)
     });
     await runtime.initialize();
     const result = await runtime.runStream(inputText, {}, collect);
@@ -536,7 +536,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       model: MODEL,
       sdkTools: [addNumbersTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 5
     });
     await runtime.initialize();
@@ -578,7 +578,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       model: MODEL,
       sdkTools: [addNumbersTool, reverseStringTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 10
     });
     await runtime.initialize();
@@ -611,7 +611,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       model: MODEL,
       sdkTools: [addNumbersTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 5
     });
     await runtime.initialize();
@@ -641,7 +641,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       instructions: '你是简洁的助手。请记住用户告诉你的所有个人信息，并在后续对话中准确复述。',
       model: MODEL,
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 3
     });
     await runtime.initialize();
@@ -674,7 +674,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       model: MODEL,
       sdkTools: [getCurrentTimeTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 5
     });
     await runtime.initialize();
@@ -706,7 +706,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       model: MODEL,
       sdkTools: [addNumbersTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 5
     });
     await runtime.initialize();
@@ -750,7 +750,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       instructions: '用一句简短的话回答。',
       model: MODEL,
       sessionId,
-      sessionDir: TEST_SESSION_DIR
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId)
     });
     await runtime.initialize();
     const result = await runtime.runStream(inputText, {}, collect);
@@ -784,7 +784,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
       instructions: '你是一个简洁的助手。请记住用户告知的所有信息。',
       model: MODEL,
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 3
     });
     await runtime.initialize();
@@ -813,7 +813,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
     }
 
     // 4. 读取压缩前的 session 文件内容（用于调试 — 新格式 SessionItem）
-    const sessionFilePath = join(process.cwd(), 'test-results', 'userData', 'sessions', sessionId, 'messages.jsonl');
+    const sessionFilePath = join(process.cwd(), 'test-results', 'userData', 'workspaces', sessionId, 'sessions', 'session.jsonl');
     let beforeContent = '';
     try {
       beforeContent = fs.readFileSync(sessionFilePath, 'utf-8');
@@ -897,7 +897,7 @@ describe.skipIf(!RUN)('OpenAIAgentRuntime 集成测试（真实 API）', () => {
     testLog(`${LOG_PREFIX} Summary 项数: ${summaryCount}`);
 
     // 7. 验证 getItems() 智能上下文构建：应只返回总结上下文 + 后续消息
-    const session = new FileSession(sessionId, TEST_SESSION_DIR);
+    const session = new FileSession(sessionId, path.join(TEST_WORKSPACES_DIR, sessionId));
     const contextItems = await session.getItems();
     testLog(`${LOG_PREFIX} getItems() 返回 ${contextItems.length} 条上下文消息`);
 
@@ -1080,10 +1080,10 @@ describe('SessionCompressor 单元验证', () => {
   });
 
   it('FileSession 旧格式兼容：裸 AgentInputItem 自动识别', async () => {
-    const sessionRootDir = join(process.cwd(), 'test-results', 'sessions');
-    const sessionDir = join(sessionRootDir, 'compat-test');
+    const sessionRootDir = join(process.cwd(), 'test-results', 'workspaces');
+    const sessionDir = join(sessionRootDir, 'compat-test', 'sessions');
     fs.mkdirSync(sessionDir, { recursive: true });
-    const filePath = join(sessionDir, 'messages.jsonl');
+    const filePath = join(sessionDir, 'session.jsonl');
 
     // 手动写入旧格式（裸 AgentInputItem）
     const oldLines =

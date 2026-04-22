@@ -32,7 +32,7 @@ export class FileSession implements Session {
 
   /**
    * @param sessionId 会话 ID
-   * @param sessionDir 会话存储根目录（直接包含 {sessionId}/ 子目录）。
+   * @param sessionDir 会话存储根目录（指向 workspace/sessions/）。
    *   不传则使用默认路径：{Electron userData}/sessions 或 ~/.coobee-ai/sessions
    */
   constructor(
@@ -41,11 +41,8 @@ export class FileSession implements Session {
   ) {
     const dir = sessionDir || FileSession.getDefaultSessionDir();
 
-    // 🆕 将 : 替换为 __（Windows 文件系统兼容）
-    // 例如：283469346464145408:main → 283469346464145408__main
-    const safeSessionId = sessionId.replace(/:/g, '__');
-
-    this.filePath = join(dir, safeSessionId, 'messages.jsonl');
+    // 会话文件放在 sessions 子目录下
+    this.filePath = join(dir, 'sessions', 'session.jsonl');
   }
 
   /**

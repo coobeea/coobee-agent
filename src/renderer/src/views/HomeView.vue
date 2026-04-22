@@ -165,10 +165,6 @@ function formatTime(iso: string): string {
                     <span class="i-carbon-time"></span>
                     {{ formatTime(thread.updatedAt) }}
                   </span>
-                  <span v-if="thread.messageCount" class="flex items-center gap-1">
-                    <span class="i-carbon-chat"></span>
-                    {{ thread.messageCount }} 条消息
-                  </span>
                 </div>
               </div>
             </div>

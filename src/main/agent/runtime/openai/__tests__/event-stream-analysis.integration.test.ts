@@ -3,7 +3,7 @@
  *
  * 目标：
  *   1. 执行真实场景（简单问答、工具调用），捕获完整事件流
- *   2. 读取 session 文件（messages.jsonl），验证持久化内容
+ *   2. 读取 session 文件（session.jsonl，扁平化结构），验证持久化内容
  *   3. 获取 context snapshot，验证 LLM 上下文构建
  *   4. 将所有分析结果写入 docs/ 下的 Markdown 文档
  *
@@ -117,8 +117,8 @@ const RUN = !!apiConfig;
 const LOG_PREFIX = '[事件分析]';
 const TEST_LOG_BASE = path.join(process.cwd(), 'test-results');
 const DOCS_DIR = path.join(process.cwd(), 'docs', '2.openai-sdk');
-/** Session 存储目录（测试用固定路径，与 readSessionFile 保持一致） */
-const TEST_SESSION_DIR = path.join(process.cwd(), 'test-results', 'userData', 'sessions');
+/** Workspace 根目录（测试用固定路径，扁平化结构） */
+const TEST_WORKSPACES_DIR = path.join(process.cwd(), 'test-results', 'userData', 'workspaces');
 
 let currentLogDir: string;
 let currentTestLogFile: string;
@@ -206,7 +206,7 @@ function ofType(chunks: StreamChunk[], type: string): StreamChunk[] {
  * 读取 session 文件原始内容
  */
 function readSessionFile(sessionId: string): string {
-  const sessionFilePath = join(process.cwd(), 'test-results', 'userData', 'sessions', sessionId, 'messages.jsonl');
+  const sessionFilePath = join(process.cwd(), 'test-results', 'userData', 'workspaces', sessionId, 'sessions', 'session.jsonl');
   try {
     return fs.readFileSync(sessionFilePath, 'utf-8');
   } catch {
@@ -482,7 +482,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
       instructions: '你是一个简洁的助手。用一句话回答。',
       model: MODEL,
       sessionId,
-      sessionDir: TEST_SESSION_DIR
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId)
     });
     await runtime.initialize();
     const result = await runtime.runStream(inputText, {}, collect);
@@ -566,7 +566,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
     md.push(formatClosedLoopMarkdown(chunks));
     md.push('');
 
-    md.push(`### 1.3 Session 文件内容 (messages.jsonl)\n`);
+    md.push(`### 1.3 Session 文件内容 (session.jsonl)\n`);
     md.push(`共 ${sessionItems.length} 条记录：\n`);
     md.push(formatSessionItemsMarkdown(sessionItems));
     md.push('');
@@ -622,7 +622,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
       model: MODEL,
       sdkTools: [addNumbersTool, reverseStringTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 10
     });
     await runtime.initialize();
@@ -728,7 +728,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
     md.push('```');
     md.push('');
 
-    md.push(`### 2.4 Session 文件内容 (messages.jsonl)\n`);
+    md.push(`### 2.4 Session 文件内容 (session.jsonl)\n`);
     md.push(`共 ${sessionItems.length} 条记录：\n`);
     md.push(formatSessionItemsMarkdown(sessionItems));
     md.push('');
@@ -778,7 +778,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
       model: MODEL,
       sdkTools: [addNumbersTool],
       sessionId,
-      sessionDir: TEST_SESSION_DIR,
+      sessionDir: path.join(TEST_WORKSPACES_DIR, sessionId),
       maxTurns: 5
     });
     await runtime.initialize();
@@ -918,7 +918,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
     );
     summaryMd.push(`3. **文本纯净**: \`text:delta\` 和 \`text:done\` 中不含 \`<think>\` 标签`);
     summaryMd.push(
-      `4. **Session 持久化**: messages.jsonl 正确记录了所有对话历史（user, assistant, function_call, function_call_output）`
+      `4. **Session 持久化**: session.jsonl 正确记录了所有对话历史（user, assistant, function_call, function_call_output）`
     );
     summaryMd.push(`5. **Context 构建**: getItems() 正确返回累积的上下文，LLM 能回忆之前的信息`);
     summaryMd.push('');
@@ -947,7 +947,7 @@ describe.skipIf(!RUN)('事件流 + Session 完整分析', () => {
     summaryMd.push('');
     summaryMd.push(`### Session 文件格式\n`);
     summaryMd.push('```');
-    summaryMd.push('messages.jsonl 每行格式（SessionItem）：');
+    summaryMd.push('session.jsonl 每行格式（SessionItem）：');
     summaryMd.push('  { "seq": 1, "type": "message", "item": { "role": "user", "content": "..." }, "ts": ... }');
     summaryMd.push(
       '  { "seq": 2, "type": "message", "item": { "role": "assistant", "content": [{"type":"output_text","text":"..."}] }, "ts": ... }'

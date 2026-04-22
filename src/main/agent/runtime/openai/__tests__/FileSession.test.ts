@@ -162,8 +162,8 @@ describe('FileSession', () => {
 
   describe('getFilePath', () => {
     it('返回正确的文件路径', () => {
-      expect(session.getFilePath()).toContain('test-session-1');
-      expect(session.getFilePath()).toContain('messages.jsonl');
+      expect(session.getFilePath()).toContain('sessions');
+      expect(session.getFilePath()).toContain('session.jsonl');
     });
   });
 

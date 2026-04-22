@@ -194,14 +194,12 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     const modelRegistry = ModelRegistry.inMemory(authStorage);
 
     // 3. Session 管理
-    //    file 模式：用 sessionId 隔离目录，支持外部管理和恢复会话
+    //    file 模式：使用 workspace/sessions/ 目录
     //    memory 模式：内存存储，sessionId 仅作标识
-    // 🆕 将 : 替换为 __ 以兼容 Windows 文件系统
     const cwd = this.options.cwd || process.cwd();
-    const safeSessionId = this.sessionId.replace(/:/g, '__');
     const sessionDir = this.options.sessionDir
-      ? path.join(this.options.sessionDir, safeSessionId)
-      : path.join(cwd, '.coobee-ai', 'sessions', safeSessionId);
+      ? path.join(this.options.sessionDir, 'sessions')
+      : path.join(cwd, '.coobee-ai', 'sessions', this.sessionId);
     const sessionManager =
       this.options.sessionMode === 'file'
         ? SessionManager.continueRecent(cwd, sessionDir)

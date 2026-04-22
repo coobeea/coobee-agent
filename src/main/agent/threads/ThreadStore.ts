@@ -98,7 +98,6 @@ export class ThreadStore {
       sessionId,
       agentMode: params.agentMode ?? 'agent',
       runStatus: 'idle',
-      messageCount: 0,
       agentHomePath, // ✅ 填充 Agent Home 路径
       createdAt: now,
       updatedAt: now,
@@ -125,20 +124,17 @@ export class ThreadStore {
     return definition;
   }
 
-  /** 创建 Thread 的工作空间目录结构 */
+  /** 创建 Thread 的工作空间目录（扁平化结构） */
   private async createWorkspaceDirectories(threadId: string): Promise<void> {
     try {
       const { Threads } = await import('@main/config/threads');
-      // Threads.getWorkspaceDir 会自动创建完整的目录结构：
+      // Threads.getWorkspaceDir 会自动创建工作空间根目录：
       // - workspaces/{threadId}/
-      // - workspaces/{threadId}/sessions/
-      // - workspaces/{threadId}/contexts/
-      // - workspaces/{threadId}/events/
-      // - workspaces/{threadId}/logs/
+      // 扁平化结构，不再创建子目录，文件会在运行时按需创建
       await Threads.getWorkspaceDir(threadId);
-      log.debug(`[ThreadStore] Created workspace structure for thread ${threadId}`);
+      log.debug(`[ThreadStore] Created workspace directory for thread ${threadId}`);
     } catch (err) {
-      log.warn(`[ThreadStore] Failed to create workspace directories for thread ${threadId}:`, err);
+      log.warn(`[ThreadStore] Failed to create workspace directory for thread ${threadId}:`, err);
     }
   }
 
@@ -258,7 +254,6 @@ export class ThreadStore {
       ...(params.title !== undefined && { title: params.title }),
       ...(params.status !== undefined && { status: params.status }),
       ...(params.runStatus !== undefined && { runStatus: params.runStatus }),
-      ...(params.messageCount !== undefined && { messageCount: params.messageCount }),
       ...(params.projectDir !== undefined && { projectDir: params.projectDir ?? undefined }),
       ...(params.overrideModel !== undefined && { overrideModel: params.overrideModel || undefined }),
       ...(params.metadata !== undefined && { metadata: params.metadata }),
@@ -423,7 +418,6 @@ function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndex
     agentName: def.agentName,
     status: def.status,
     runStatus: def.runStatus ?? 'idle',
-    messageCount: def.messageCount,
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
     workspacePath: path.join(workspacesDir, def.id),

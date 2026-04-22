@@ -136,7 +136,6 @@ export const useThreadsStore = defineStore('threads', () => {
     threadId: string,
     updates: {
       title?: string;
-      messageCount?: number;
       status?: string;
       projectDir?: string | null;
       overrideModel?: string | null;

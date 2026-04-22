@@ -1,0 +1,150 @@
+# 架构文档
+
+本目录包含 Coobee Agent 系统的架构设计文档。
+
+## 文档列表
+
+### 核心机制
+
+1. **[核心 Skills 自动注入机制](./core-skills-injection.md)**
+   - 核心 Skills 列表和说明
+   - 运行时注入流程
+   - 与用户自定义 Skills 的关系
+   - 设计优缺点分析
+   - 常见问题 FAQ
+
+2. **[AppendInstructions 内容说明](./append-instructions-content.md)**
+   - Runtime Environment 完整内容
+   - Skill Discovery 提示
+   - 生成机制和代码位置
+   - 动态内容说明
+   - System Prompt 结构
+
+### Workspace 目录结构
+
+3. **[目录简化实施总结](../../DIRECTORY_SIMPLIFICATION.md)** *(根目录)*
+   - 旧结构 vs 新结构对比
+   - 修改的文件列表
+   - 测试验证方法
+
+4. **[Workspace 修复总结](../../WORKSPACE_FIX_SUMMARY.md)** *(根目录)*
+   - 问题诊断和修复过程
+   - PiMono Session 文件说明
+   - Runtime 对比
+
+### Context Snapshot
+
+5. **Context Snapshot 相关**
+   - [Context Snapshot Agent 信息问题](../issues/context-snapshot-agent-info-issues.md) *(Issues 目录)*
+     - Instructions 默认值问题
+     - Name/Description 未记录问题
+     - 核心 Skills 自动注入未说明
+
+## 架构概览
+
+### Agent 执行流程
+
+```
+用户请求
+    ↓
+AgentExecutor.execute()
+    ↓
+injectEnv() ← 注入运行时环境
+    ↓
+  ├─ 扫描 Skills (SkillManager)
+  ├─ 注入核心 Skills (5个)
+  ├─ 生成 appendInstructions
+  │   ├─ runtime_environment
+  │   ├─ skill_discovery
+  │   └─ 其他注入内容
+  ├─ 注入工具 (ToolRegistry)
+  └─ 设置沙箱环境
+    ↓
+Builder.build() → Runtime
+    ↓
+Runtime.runStream()
+    ↓
+LLM API 调用（包含完整 System Prompt）
+    ↓
+Stream 输出
+    ↓
+保存 Context Snapshot
+```
+
+### 文件系统结构
+
+```
+.home/
+  ├── agents/                    # Agent 定义
+  │   └── {agentId}.json
+  ├── workspaces/                # 运行时工作空间
+  │   └── {sessionId}/
+  │       ├── sessions/          # SDK 会话文件
+  │       ├── history.jsonl      # 前端展示
+  │       ├── events.jsonl       # 调试事件
+  │       └── context.jsonl      # 上下文快照
+  ├── threads/                   # Thread 定义
+  │   └── {threadId}.json
+  ├── config/                    # 配置文件
+  ├── skills/                    # 用户 Skills
+  └── data/                      # Agent 数据目录
+      └── {agentId}/
+```
+
+### 关键概念
+
+#### Agent vs Thread vs Session
+
+- **Agent**: 智能体定义，包含名称、描述、模型、Skills 等配置
+- **Thread**: 对话线程，关联一个 Agent，包含多轮对话
+- **Session**: 运行时会话，对应一个 workspace，包含执行状态
+
+通常关系：`Thread.id === Session.id`（主 Agent）
+
+#### Skills 层次
+
+1. **核心 Skills** (系统强制注入)
+   - execution-protocol
+   - self-reflection
+   - eval-refine-loop
+   - brain
+   - dimension-architect
+
+2. **Extension Skills** (Extension 系统贡献)
+   - 由已加载的 Extension 提供
+
+3. **用户 Skills** (用户自定义)
+   - 在 Agent 配置中指定
+
+#### Instructions 构成
+
+```
+最终 System Prompt = 
+  基础 instructions (用户配置)
+  + appendInstructions (系统注入)
+    ├─ runtime_environment
+    ├─ skill_discovery
+    ├─ agents_md (AGENTS.md)
+    ├─ agent_home (SOUL.md, USER.md 等)
+    ├─ workspace_context
+    └─ extension_instructions
+```
+
+## 相关目录
+
+- **[Issues 问题追踪](../issues/)** - 已知问题和 Bug
+- **[API 文档](../api/)** - API 接口文档 *(待创建)*
+- **[开发指南](../development/)** - 开发者指南 *(待创建)*
+
+## 贡献指南
+
+添加新的架构文档时，请：
+1. 在本目录创建 Markdown 文件
+2. 使用清晰的标题和结构
+3. 包含代码示例和流程图
+4. 更新本 README 的文档列表
+
+---
+
+**最后更新**: 2026-04-22  
+**维护者**: Coobee Team

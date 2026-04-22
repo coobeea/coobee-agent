@@ -2,8 +2,8 @@
  * Workspace 目录结构测试
  *
  * 验证主 Agent 和子 Agent 的目录结构是否符合设计规范：
- * - 主 Agent: sessions/{threadId}/
- * - 子 Agent: agents/{agentName}/
+ * - 主 Agent: workspaces/{threadId}/sessions/session.jsonl
+ * - 子 Agent: workspaces/{threadId}:delegate:{agentId}/sessions/session.jsonl
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

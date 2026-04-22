@@ -303,10 +303,12 @@ ${dataDirectorySection}
 ${projectDirSection}
 ${agentHomeSection}
 **Current Task Workspace (Internal/Temporary)**: ${env.workspace}/
-  ├── sessions/                             — Session data
-  ├── contexts/                             — Context snapshots
-  ├── events/                               — Event logs
-  ├── logs/                                 — Runtime logs
+  ├── sessions/                             — SDK session files
+  │   ├── session.jsonl                         (OpenAI)
+  │   └── {timestamp}_{uuid}.jsonl              (PiMono)
+  ├── history.jsonl                         — Aggregated message history (frontend display)
+  ├── events.jsonl                          — Debug event logs
+  ├── context.jsonl                         — Context snapshots (append-only)
   └── tasks/                                — Multi-agent collaboration area
 
   **PURPOSE**: This is the internal sandbox for the CURRENT task.
@@ -354,8 +356,9 @@ ${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '
 
 ${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '5' : '4') : '3'}. **System Files** (DO NOT manually modify)
    - {workspace}/sessions/         — Session data (managed by system)
-   - {workspace}/contexts/         — Context snapshots (managed by system)
-   - {workspace}/events/           — Event logs (managed by system)
+   - {workspace}/history.jsonl     — Aggregated history (managed by system)
+   - {workspace}/events.jsonl      — Event logs (managed by system)
+   - {workspace}/context.jsonl     — Context snapshots (managed by system)
 ${
   env.dataDirectory && env.projectDir
     ? `

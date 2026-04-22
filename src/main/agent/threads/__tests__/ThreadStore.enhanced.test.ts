@@ -118,7 +118,6 @@ describe('ThreadStore 增强字段', () => {
       title: 'Old Thread',
       agentId: 'default',
       status: 'active',
-      messageCount: 5,
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z'
     };

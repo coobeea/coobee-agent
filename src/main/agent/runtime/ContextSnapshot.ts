@@ -1,15 +1,14 @@
 /**
  * Context Snapshot — LLM 请求上下文快照
  *
- * 每次 LLM 调用完成后，由 Runtime 层将输入上下文和输出结果写入 JSON 文件。
+ * 每次 LLM 调用完成后，由 Runtime 层将输入上下文和输出结果追加写入 JSONL 文件。
  * 用于调试、Prompt 优化和成本分析。
  *
- * 写入位置：{workspace}/contexts/{timestamp}.json
- * 文件名格式：ISO 时间戳（冒号替换为短横线），自然排序 = 时间线顺序。
+ * 写入位置：{workspace}/context.jsonl（追加式，扁平化结构）
  *
  * 架构位置：
  *   AgentExecutor（调度层）
- *     → injectEnv() 设置 contextDir = {workspace}/contexts
+ *     → injectEnv() 设置 contextDir = {workspace}
  *     → Builder.contextDir(dir) → 传入 Runtime options
  *   Runtime 层（实际写入）
  *     → stream()/run() 完成后调用 saveContextSnapshot()
@@ -78,28 +77,11 @@ export interface ContextSnapshot {
 // ==================== 写入函数 ====================
 
 /**
- * 生成时间戳文件名
- *
- * 格式：2026-02-12T10-00-05-123.json
- * - ISO 格式保证自然排序 = 时间顺序
- * - 冒号替换为短横线，兼容 Windows
- * - 毫秒精度，基本不会冲突
- */
-function generateFilename(): string {
-  const ts = new Date()
-    .toISOString()
-    .replace(/:/g, '-') // 冒号 → 短横线（Windows 兼容）
-    .replace('.', '-') // 小数点 → 短横线
-    .replace('Z', ''); // 去掉尾部 Z
-  return `${ts}.json`;
-}
-
-/**
- * 将上下文快照写入文件
+ * 将上下文快照追加写入 JSONL 文件
  *
  * 写入失败仅记录警告，不阻断主流程。
  *
- * @param contextDir 上下文快照目录（{workspace}/contexts/）
+ * @param contextDir 上下文快照目录（{workspace}，扁平化结构）
  * @param snapshot   上下文快照数据
  */
 export async function writeContextSnapshot(contextDir: string, snapshot: ContextSnapshot): Promise<void> {
@@ -109,11 +91,11 @@ export async function writeContextSnapshot(contextDir: string, snapshot: Context
       fs.mkdirSync(contextDir, { recursive: true });
     }
 
-    const filename = generateFilename();
-    const filepath = path.join(contextDir, filename);
+    const filepath = path.join(contextDir, 'context.jsonl');
+    const line = JSON.stringify(snapshot) + '\n';
 
-    await fs.promises.writeFile(filepath, JSON.stringify(snapshot, null, 2), 'utf-8');
-    log.info(`Written: ${filename}`);
+    await fs.promises.appendFile(filepath, line, 'utf-8');
+    log.info(`Appended context snapshot to context.jsonl`);
   } catch (error) {
     // 写入失败不阻断执行
     log.warn(`Write failed:`, error);

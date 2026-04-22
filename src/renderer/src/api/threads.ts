@@ -15,7 +15,6 @@ export interface ThreadEntry {
   agentName?: string;
   status: 'active' | 'archived' | 'deleted';
   runStatus: 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
-  messageCount: number;
   createdAt: string;
   updatedAt: string;
   workspacePath: string;
@@ -58,7 +57,6 @@ export interface ThreadHistoryResponse {
 /** 更新 Thread 参数 */
 export interface UpdateThreadParams {
   title?: string;
-  messageCount?: number;
   status?: string;
   projectDir?: string | null;
   overrideModel?: string | null;

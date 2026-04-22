@@ -80,7 +80,7 @@ export class EventWriter {
    */
   private initializeSession(sessionId: string): void {
     const workspacePath = path.join(this.workspacesDir, sessionId);
-    const eventsFile = path.join(workspacePath, 'events', 'events.jsonl');
+    const eventsFile = path.join(workspacePath, 'events.jsonl');
 
     this.eventsFiles.set(sessionId, eventsFile);
     this.sequences.set(sessionId, 0);
