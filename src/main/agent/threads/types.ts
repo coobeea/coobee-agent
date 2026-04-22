@@ -60,9 +60,6 @@ export interface ThreadDefinition {
   /** 最后更新时间（ISO 8601） */
   updatedAt: string;
 
-  /** 工程目录（用户为此会话指定的输出目标路径） */
-  projectDir?: string;
-
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
   overrideModel?: string;
 
@@ -86,8 +83,6 @@ export interface ThreadIndexEntry {
   workspacePath: string;
   /** Agent Home 目录路径（用于前端展示 Agent 持久化数据） */
   agentHomePath: string;
-  /** 工程目录（用户指定的输出目标路径） */
-  projectDir?: string;
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
   overrideModel?: string;
 }
@@ -113,7 +108,6 @@ export interface UpdateThreadParams {
   title?: string;
   status?: ThreadStatus;
   runStatus?: ThreadRunStatus;
-  projectDir?: string | null;
   overrideModel?: string;
   metadata?: Record<string, unknown>;
 }

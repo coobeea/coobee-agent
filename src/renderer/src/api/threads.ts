@@ -19,7 +19,6 @@ export interface ThreadEntry {
   updatedAt: string;
   workspacePath: string;
   agentHomePath: string;
-  projectDir?: string;
   overrideModel?: string | null;
 }
 
@@ -58,7 +57,6 @@ export interface ThreadHistoryResponse {
 export interface UpdateThreadParams {
   title?: string;
   status?: string;
-  projectDir?: string | null;
   overrideModel?: string | null;
   enableThinking?: boolean;
 }

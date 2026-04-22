@@ -97,16 +97,6 @@ export class AgentEventWriter {
     return seq;
   }
 
-  // ==================== 兼容方法（逐步废弃） ====================
-
-  /**
-   * @deprecated 使用 dispatch() 替代。保留是为了兼容旧代码。
-   */
-  append(chunk: StreamChunk, seq: number): void {
-    this.seq = Math.max(this.seq, seq);
-    this.writeEvent(chunk, seq);
-  }
-
   // ==================== 内部方法 ====================
 
   private writeEvent(chunk: StreamChunk, seq: number): void {

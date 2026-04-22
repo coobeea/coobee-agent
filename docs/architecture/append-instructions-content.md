@@ -8,17 +8,26 @@
 
 以下是一个真实的 `appendInstructions` 示例（来自 `context.jsonl`）：
 
+> **📁 路径说明**
+> 
+> 文档中的路径分为两部分：
+> - **项目根目录**: `/Users/lifeng/git/git-coobee/coobee-agent/`
+> - **相对路径**: 从项目根目录开始的相对路径（如 `.home/workspaces/...`）
+> 
+> 完整路径 = 项目根目录 + 相对路径
+
 ### 1. Runtime Environment（运行时环境）
 
 ```xml
 <runtime_environment>
 Your Runtime Environment:
 
-
+- Agent ID: agent-mo04s0eg
+- Agent Name: 增值税
 - Session: 305265776047321088
-
-
-- Internal Workspace: /Users/lifeng/git/git-coobee/coobee-agent/.home/workspaces/305265776047321088
+- 数据目录 (Data Dir): .home/data/agent-mo04s0eg
+- Internal Workspace: .home/workspaces/305265776047321088
+  (项目根目录: /Users/lifeng/git/git-coobee/coobee-agent/)
 - Platform: darwin/arm64 (dev)
 - Security: sandbox=path-only, exec=auto
 - Model: ollama/gemma4:e4b (thinking=medium)
@@ -26,47 +35,87 @@ Your Runtime Environment:
 
 Directory Structure:
 
+📂 **数据目录 / Data Directory (IMPORTANT)**: .home/data/agent-mo04s0eg/
+  (如果 Agent 配置了 dataDirectory)
+  
+  ⚠️ **这是你的专属数据存储区，非常重要！**
+  
+  **用途**：
+  - 持久化存储所有业务数据（客户信息、进销存记录、知识库、文档等）
+  - 跨任务、跨会话的数据共享（今天保存的数据，明天仍可访问）
+  - 这是固定的目录，不会因为任务结束而清理
+  
+  **何时使用**：
+  - 用户要求保存、记录、存储任何业务数据时 → 保存到数据目录
+  - 用户询问"之前的记录""历史数据""上次的文件"时 → 从数据目录读取
+  - 生成报表、分析结果、知识文档时 → 保存到数据目录
+  
+  **路径**: .home/data/agent-mo04s0eg
 
+**Agent Home (Your Root Directory)**: .home/agents/agent-mo04s0eg/
+  (每个 Agent 都有自己的 Home 目录)
+  ├── IDENTITY.md                           — 身份名片：名字、风格、签名
+  ├── SOUL.md                               — 核心灵魂：行为原则、风格定调
+  ├── USER.md                               — 主人档案：用户称呼、偏好
+  ├── NOTES.md                              — 环境工具备注：特殊配置
+  ├── HEARTBEAT.md                          — 心跳任务清单：定期任务
+  ├── AGENTS.md                             — Agent 级规则 + 技能配置
+  └── BOOTSTRAP.md                          — 引导文件（初始化配置）
 
-**Current Task Workspace (Internal/Temporary)**: /Users/lifeng/git/git-coobee/coobee-agent/.home/workspaces/305265776047321088/
+  **PURPOSE**: Agent 的人格配置和记忆文件。这些 Markdown 文件定义了 Agent 的身份、
+  行为原则、用户偏好等。系统会将这些文件的内容注入到 System Prompt 中。
+
+**Current Task Workspace (Internal/Temporary)**: .home/workspaces/305265776047321088/
+  (相对于项目根目录)
   ├── sessions/                             — SDK session files
   │   ├── session.jsonl                         (OpenAI)
   │   └── {timestamp}_{uuid}.jsonl              (PiMono)
   ├── history.jsonl                         — Aggregated message history (frontend display)
   ├── events.jsonl                          — Debug event logs
   ├── context.jsonl                         — Context snapshots (append-only)
-  └── tasks/                                — Multi-agent collaboration area
+  └── tasks/                                — Multi-agent collaboration area (optional, created by task_plan tool)
 
   **PURPOSE**: This is the internal sandbox for the CURRENT task.
   Files here are task-specific and may be cleaned up after task completion.
 
 Key System Directories:
-- Config: /Users/lifeng/git/git-coobee/coobee-agent/.home/config
-- Skills: builtin=/Users/lifeng/git/git-coobee/coobee-agent/resources/skills, user=/Users/lifeng/git/git-coobee/coobee-agent/.home/skills
-- Agents: /Users/lifeng/git/git-coobee/coobee-agent/.home/agents
+- Data Directory: .home/data/{agentId}          — Agent 专属数据目录（业务数据持久化）
+- Agent Home: .home/agents/{agentId}            — Agent 配置和记忆文件
+- Config: .home/config                          — 全局配置
+- Skills: builtin=resources/skills, user=.home/skills  — Skills 搜索路径
+- Agents Definitions: .home/agents              — Agent 定义文件目录
+(以上均为相对于项目根目录的路径)
 
 File Output Guidelines:
 
 **Where to save files?**
 
+1. **数据目录（首选！业务数据持久化）** → .home/data/agent-mo04s0eg/
+   ⚠️ 优先级最高！所有业务数据都应保存到这里！
+   - 客户信息、进销存记录、知识库、分析报告、文档等
+   - 跨任务的持久化数据，下次开启新任务时可以继续访问
+   - 这是智能体专属的固定数据存储位置
+   - 用户要求"保存数据""记录信息""生成报告"时，默认使用此目录
 
+2. **Agent Home（配置和记忆）** → .home/agents/agent-mo04s0eg/
+   - IDENTITY.md      — 身份名片
+   - SOUL.md          — 核心灵魂和行为原则
+   - USER.md          — 用户偏好和使用习惯
+   - NOTES.md         — 环境备注和特殊配置
+   - HEARTBEAT.md     — 定期检查任务
+   - AGENTS.md        — Agent 级规则和技能配置
 
-1. **Agent Home（配置和记忆）** → {agentHome}/
-   - output/           — 训练成果、知识积累
-   - skill-data/       — Skill 结构化数据
-   - SOUL.md, USER.md  — 你的身份和记忆文件
-
-2. **Temporary Task Files** → Current Task Workspace
-   - /Users/lifeng/git/git-coobee/coobee-agent/.home/workspaces/305265776047321088/  — 临时文件、中间结果
+3. **Temporary Task Files** → Current Task Workspace
+   - .home/workspaces/305265776047321088/  — 临时文件、中间结果
    - 任务结束后可能被清理
 
-3. **System Files** (DO NOT manually modify)
+4. **System Files** (DO NOT manually modify)
    - {workspace}/sessions/         — Session data (managed by system)
    - {workspace}/history.jsonl     — Aggregated history (managed by system)
    - {workspace}/events.jsonl      — Event logs (managed by system)
    - {workspace}/context.jsonl     — Context snapshots (managed by system)
 
-**IMPORTANT**: When user asks "check our root directory" or similar, they usually mean the current workspace.
+**重要提示**：你有专属的数据目录 `.home/data/agent-mo04s0eg`，所有业务数据都应保存到这里！
 </runtime_environment>
 ```
 
@@ -128,8 +177,11 @@ builder.appendInstructions(
 
 | 字段 | 示例值 | 说明 |
 |------|--------|------|
+| Agent ID | `agent-mo04s0eg` | Agent 的唯一标识符（可选） |
+| Agent Name | `增值税` | Agent 的显示名称（可选） |
 | Session | `305265776047321088` | 当前会话的 Snowflake ID |
-| Internal Workspace | `/path/to/workspaces/{sessionId}` | 当前任务的工作空间路径 |
+| 数据目录 (Data Dir) | `.home/data/agent-mo04s0eg` | Agent 专属数据存储目录 |
+| Internal Workspace | `.home/workspaces/{sessionId}` | 当前任务的工作空间路径（相对于项目根目录） |
 | Platform | `darwin/arm64 (dev)` | 操作系统/架构/环境 |
 | Security | `sandbox=path-only, exec=auto` | 沙箱模式和命令审批策略 |
 | Model | `ollama/gemma4:e4b (thinking=medium)` | 使用的模型和思维链级别 |
@@ -137,32 +189,70 @@ builder.appendInstructions(
 
 #### 目录结构
 
+**Data Directory (数据目录)**: Agent 专属的持久化数据存储 ⚠️ **非常重要！**
+- 路径: `.home/data/{agentId}/`
+- 用途: 
+  - 持久化存储所有业务数据（客户信息、进销存记录、知识库、文档等）
+  - 跨任务、跨会话的数据共享（今天保存的数据，明天仍可访问）
+  - 这是固定的目录，不会因为任务结束而清理
+- 何时使用:
+  - 用户要求保存、记录、存储任何业务数据时 → 保存到数据目录
+  - 用户询问"之前的记录""历史数据""上次的文件"时 → 从数据目录读取
+  - 生成报表、分析结果、知识文档时 → 保存到数据目录
+- 配置: 在 Agent 定义的 `metadata.dataDirectory` 中指定
+- 优先级: **最高**！所有业务数据首选此目录
+
+**Agent Home**: Agent 的人格配置和记忆文件
+- 路径: `.home/agents/{agentId}/`
+- 包含文件（全部为 Markdown 格式）:
+  - `IDENTITY.md` - 身份名片：名字、风格、签名
+  - `SOUL.md` - 核心灵魂：行为原则、风格定调
+  - `USER.md` - 主人档案：用户称呼、偏好
+  - `NOTES.md` - 环境工具备注：特殊配置
+  - `HEARTBEAT.md` - 心跳任务清单：定期任务
+  - `AGENTS.md` - Agent 级规则 + 技能配置
+  - `BOOTSTRAP.md` - 引导文件（初始化配置）
+- 注入机制: 系统会读取这些文件（除了 AGENTS.md 和 BOOTSTRAP.md），并将内容注入到 System Prompt 的 `<agent_home>` 块中
+- 优先级: IDENTITY → SOUL → USER → NOTES → HEARTBEAT
+
 **Current Task Workspace**: 当前任务的临时工作空间
+- 路径: `.home/workspaces/{sessionId}/`
 - `sessions/` - SDK 会话文件（OpenAI/PiMono）
 - `history.jsonl` - 聚合的消息历史（供前端展示）
 - `events.jsonl` - 调试事件流
 - `context.jsonl` - 上下文快照（追加式）
-- `tasks/` - 多 Agent 协作区
+- `tasks/` - 多 Agent 协作区（可选，由 task_plan 工具创建）
 
 **Key System Directories**: 关键系统目录
-- `Config` - 配置文件目录
+- `Config` - 全局配置文件目录
 - `Skills` - Skill 搜索路径（builtin + user）
-- `Agents` - Agent 定义目录
+- `Agents Definitions` - Agent 定义文件目录（JSON 配置）
 
 #### 文件输出指南
 
 告诉 Agent 在不同场景下应该把文件保存到哪里：
 
-1. **Agent Home（配置和记忆）**
-   - 持久化的训练成果、知识积累
-   - Skill 结构化数据
-   - 身份和记忆文件（SOUL.md, USER.md）
+1. **数据目录（首选！业务数据持久化）** ⚠️ 优先级最高
+   - 所有业务数据都应保存到这里
+   - 存储内容: 客户信息、进销存记录、知识库、分析报告、文档等
+   - 持久化特点: 跨任务、跨会话的持久化数据
+   - 何时使用:
+     · 用户要求保存、记录、存储任何业务数据时 → 保存到数据目录
+     · 用户询问"之前的记录""历史数据""上次的文件"时 → 从数据目录读取
+     · 生成报表、分析结果、知识文档时 → 保存到数据目录
+   - 默认使用场景: 用户要求"保存数据""记录信息""生成报告"
 
-2. **Temporary Task Files（临时任务文件）**
+2. **Agent Home（配置和记忆）**
+   - Agent 的人格配置文件（IDENTITY.md, SOUL.md, USER.md 等）
+   - Agent 级规则和技能配置（AGENTS.md）
+   - 环境备注和定期任务（NOTES.md, HEARTBEAT.md）
+   - 注意: 这些是配置文件，不应该存储业务数据
+
+3. **Temporary Task Files（临时任务文件）**
    - 当前任务的中间结果
    - 任务结束后可能被清理
 
-3. **System Files（系统文件）**
+4. **System Files（系统文件）**
    - 由系统管理，Agent 不应手动修改
 
 ### Skill Discovery 说明

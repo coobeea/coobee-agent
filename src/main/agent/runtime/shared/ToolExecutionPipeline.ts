@@ -327,7 +327,8 @@ export async function executeToolPipeline(
 export function createFallbackToolContext(opts: { workspaceRoot: string; sessionId?: string }): ToolExecutionContext {
   const workspace = opts.workspaceRoot;
   const sessionId = opts.sessionId || 'unknown';
-  const userHome = path.join(os.homedir(), '.coobee-ai');
+  // 测试环境 fallback
+  const userHome = path.join(os.homedir(), '.coobee-test');
   return {
     mode: 'path-only',
     workspaceRoot: workspace,
@@ -335,7 +336,6 @@ export function createFallbackToolContext(opts: { workspaceRoot: string; session
     sessionId,
     threadId: sessionId,
     cwd: workspace,
-    tasksDir: path.join(workspace, 'tasks'),
     sessionsDir: path.join(workspace, 'sessions'),
     contextsDir: path.join(workspace, 'contexts'),
     eventsDir: path.join(workspace, 'events'),

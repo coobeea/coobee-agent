@@ -4,45 +4,39 @@
 2026-04-22
 
 ## 问题概述
-Context Snapshot（`context.jsonl`）中记录的 Agent 信息与 Agent 配置文件不一致，存在以下两个主要问题：
+Context Snapshot（`context.jsonl`）中记录的 Agent 信息与 Agent 配置文件不一致，存在以下主要问题：
 
-1. 当 Agent 配置的 `instructions` 为空字符串时，显示的是默认值而非空
-2. Agent 的 `name`（显示名称）和 `description` 字段未被正确记录
+1. ✅ 当 Agent 配置的 `instructions` 为空字符串时，显示的是默认值而非空（**已修复**）
+2. Agent 的 `name`（显示名称）和 `description` 字段未被正确记录（**待修复**）
+3. ✅ 核心 Skills 自动注入未说明（**已修复**）
 
 ## 问题详情
 
-### 问题 1: Instructions 默认值覆盖问题
+### 问题 1: Instructions 默认值覆盖问题 ✅ **已修复**
 
-#### 现象
+> **修复日期**: 2026-04-22  
+> **修复方式**: 移除默认值，改为空字符串；修改判断逻辑为 `!== undefined`
+
+#### 现象（历史记录）
 - **Agent 配置**: `agent-mo04s0eg.json` 中 `instructions` 为空字符串 `""`
 - **Context 记录**: `context.jsonl` 中 `config.instructions` 显示为 `"你是一个 AI 助手。"`
 
-#### 问题代码位置
+#### 问题代码位置（旧代码）
 **文件**: `src/main/agent/runtime/BaseAgentBuilder.ts:18`
 
 ```typescript
 export abstract class BaseAgentBuilder {
   protected _name = 'agent';
   protected _mode: AgentMode = 'agent';
-  protected _instructions = '你是一个 AI 助手。';  // ← 默认值
+  protected _instructions = '你是一个 AI 助手。';  // ← 旧：默认值
   // ...
-}
-```
-
-**文件**: `src/main/agent/runtime/BaseAgentBuilder.ts:90-93`
-
-```typescript
-/** 系统指令 */
-instructions(text: string): this {
-  this._instructions = text;  // ← 直接覆盖，没有检查空字符串
-  return this;
 }
 ```
 
 **文件**: `src/main/agent/extension/ExtensionApi.ts:192-194`
 
 ```typescript
-if (agentDef.instructions) {
+if (agentDef.instructions) {  // ← 旧：空字符串会被判定为 false
   builder.instructions(agentDef.instructions);
 }
 ```
@@ -53,34 +47,31 @@ if (agentDef.instructions) {
 3. 因此 `builder.instructions()` 不会被调用，默认值保持不变
 4. 这导致即使用户明确设置了空字符串，也会使用默认值
 
-#### 预期行为
-- 如果用户设置了 `instructions` 为空字符串，应该尊重用户的选择，不使用默认值
-- 或者，在 UI 层面提示用户 instructions 不能为空
+#### 修复实施
 
-#### 建议修复方案
+**修复日期**: 2026-04-22
 
-**方案 1: 区分 undefined 和空字符串**
-```typescript
-// ExtensionApi.ts
-if (agentDef.instructions !== undefined) {  // 改为检查 undefined
-  builder.instructions(agentDef.instructions || '你是一个 AI 助手。');
-}
-```
+**修改的文件**:
+1. `src/main/agent/runtime/BaseAgentBuilder.ts:18`
+   - 将默认值从 `'你是一个 AI 助手。'` 改为空字符串 `''`
+   
+2. `src/main/agent/extension/ExtensionApi.ts:192-194`
+   - 将判断条件从 `if (agentDef.instructions)` 改为 `if (agentDef.instructions !== undefined)`
+   
+3. `src/main/rpc/ChatMethods.ts:139-141`
+   - 同样修改判断条件
+   
+4. `src/main/routes/ChatRoutes.ts:178-180`
+   - 同样修改判断条件
+   
+5. `src/main/agent/__tests__/AgentExecutor.integration.test.ts:91-93`
+   - 同样修改判断条件
 
-**方案 2: 在 instructions() 方法中处理空值**
-```typescript
-// BaseAgentBuilder.ts
-instructions(text: string): this {
-  // 如果传入空字符串，保持默认值
-  if (text.trim()) {
-    this._instructions = text;
-  }
-  return this;
-}
-```
-
-**方案 3: 在数据验证层处理**
-在 Agent 创建/更新时，如果 instructions 为空，自动填充默认值或提示用户。
+**新行为**:
+- `instructions: ""` → 运行时使用空字符串，完全尊重用户配置
+- `instructions: undefined` → 运行时使用空字符串（默认值）
+- `instructions: "自定义指令"` → 运行时使用自定义指令
+- 空字符串和 undefined 都被明确区分和处理
 
 ---
 
@@ -293,9 +284,10 @@ export interface AgentRuntimeOptions {
 2. 前端展示（前端使用的是 Thread 和 Agent 定义，不依赖 context.jsonl）
 
 ## 优先级
-**中等优先级**
+**中等优先级**（问题 2 待修复）
 
-这是数据完整性和可维护性问题，不影响核心功能，但影响调试体验和未来扩展性。
+- 问题 1 和 3 已修复
+- 问题 2 是数据完整性和可维护性问题，不影响核心功能，但影响调试体验和未来扩展性
 
 ## 相关文件
 - `src/main/agent/runtime/BaseAgentBuilder.ts`
@@ -319,9 +311,13 @@ export interface AgentRuntimeOptions {
 
 ---
 
-### 问题 3: 核心 Skills 自动注入未说明
+### 问题 3: 核心 Skills 自动注入未说明 ✅ **已修复**
 
-#### 现象
+> **修复日期**: 2026-04-22  
+> **修复方式**: 移除强制注入机制，改为配置文件控制  
+> **详情**: 参见 [Skills 注入机制重大变更](../architecture/skills-injection-change.md)
+
+#### 现象（历史记录）
 
 **Agent 配置文件**: `.home/agents/agent-mo04s0eg.json`
 ```json
@@ -331,7 +327,7 @@ export interface AgentRuntimeOptions {
 }
 ```
 
-**Context Snapshot 记录**: `context.jsonl`
+**Context Snapshot 记录**: `context.jsonl`（旧行为）
 ```json
 {
   "config": {
@@ -346,7 +342,8 @@ export interface AgentRuntimeOptions {
 }
 ```
 
-即使 Agent 配置中 `skills` 为空数组，运行时仍然加载了 5 个核心 Skills。
+**旧行为**: 即使 Agent 配置中 `skills` 为空数组，运行时仍然加载了 5 个核心 Skills。  
+**新行为**: 完全由 Agent 配置决定，`skills: []` 则运行时不加载任何 Skill。
 
 #### 问题代码位置
 
@@ -468,18 +465,38 @@ async create(params: CreateAgentParams): Promise<AgentEntry> {
 但这可能导致 Agent 功能不完整。
 
 #### 优先级
-**低优先级 - 文档/UX 改进**
+~~**低优先级 - 文档/UX 改进**~~  
+✅ **已提升为高优先级并修复**
 
-这是一个设计特性，不影响功能。主要是 UX 和文档问题。
+用户明确反馈这是设计问题，要求移除强制注入。
 
-#### 建议修复步骤
+#### 修复实施
 
-1. **短期**: 添加文档说明（最简单）
-2. **中期**: UI 改进，明确显示核心 Skills 和自定义 Skills
-3. **长期**: 考虑是否在 Agent 定义中持久化核心 Skills 列表（只读）
+**修复日期**: 2026-04-22
+
+**修改的文件**:
+- `src/main/agent/AgentEnvInjector.ts`
+  - 移除强制注入核心 Skills 的代码
+  - 改为从 Agent 配置读取 skills 数组
+  - 只注入配置中指定的 Skills
+
+**新行为**:
+- `skills: []` → 运行时加载 0 个 Skills
+- `skills: ["brain"]` → 运行时只加载 brain
+- 完全由用户控制，不再有隐藏的自动注入
+
+**相关文档**:
+- [Skills 注入机制重大变更](../architecture/skills-injection-change.md) - 详细说明和迁移指南
+- [核心 Skills 自动注入机制](../architecture/core-skills-injection.md) - 已标记为过时
+
+**破坏性变更**:
+- 现有 Agent 如果依赖核心 Skills 的自动注入，需要手动更新配置文件
+- 建议为需要基础能力的 Agent 显式添加推荐 Skills
 
 ---
 
 **创建时间**: 2026-04-22  
 **发现人**: 用户反馈  
-**记录人**: AI Assistant
+**记录人**: AI Assistant  
+**修复时间**: 2026-04-22 (问题 1, 3)  
+**状态**: 问题 1 和 3 已修复，问题 2 待修复

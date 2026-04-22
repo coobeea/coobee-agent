@@ -199,7 +199,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     const cwd = this.options.cwd || process.cwd();
     const sessionDir = this.options.sessionDir
       ? path.join(this.options.sessionDir, 'sessions')
-      : path.join(cwd, '.coobee-ai', 'sessions', this.sessionId);
+      : path.join(cwd, '.coobee-test', 'sessions', this.sessionId);
     const sessionManager =
       this.options.sessionMode === 'file'
         ? SessionManager.continueRecent(cwd, sessionDir)

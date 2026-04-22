@@ -136,7 +136,8 @@ export const chatMethods: MethodGroup = {
         agentExecutor.applyProviderConfig(builder, { modelOverride: modelSpec });
       }
 
-      if (agent.instructions) {
+      // 设置 instructions（包括空字符串）
+      if (agent.instructions !== undefined) {
         builder.instructions(agent.instructions);
       }
 

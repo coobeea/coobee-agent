@@ -33,7 +33,7 @@ export class FileSession implements Session {
   /**
    * @param sessionId 会话 ID
    * @param sessionDir 会话存储根目录（指向 workspace/sessions/）。
-   *   不传则使用默认路径：{Electron userData}/sessions 或 ~/.coobee-ai/sessions
+   *   不传则使用默认路径：{Electron userData}/sessions 或 ~/.coobee-test/sessions（测试环境）
    */
   constructor(
     private readonly sessionId: string,
@@ -49,7 +49,7 @@ export class FileSession implements Session {
    * 获取默认会话存储目录
    *
    * Electron 环境：{userData}/sessions
-   * 非 Electron 环境（测试等）：~/.coobee-ai/sessions
+   * 非 Electron 环境（测试等）：~/.coobee-test/sessions
    */
   private static getDefaultSessionDir(): string {
     try {
@@ -57,7 +57,8 @@ export class FileSession implements Session {
       const { app } = require('electron');
       return join(app.getPath('userData'), 'sessions');
     } catch {
-      return join(process.env.HOME || '/tmp', '.coobee-ai', 'sessions');
+      // 测试环境 fallback: 使用临时目录
+      return join(process.env.HOME || '/tmp', '.coobee-test', 'sessions');
     }
   }
 

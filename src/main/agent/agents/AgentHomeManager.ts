@@ -26,18 +26,20 @@ import { createLogger } from '@main/common/logger';
 const log = createLogger('agent-home');
 
 /** Agent Home 中的标准文件 */
-const HOME_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md', 'AGENTS.md'] as const;
+const HOME_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md', 'AGENTS.md', 'BOOTSTRAP.md'] as const;
 
 /** 需要注入到 system prompt 的文件（按优先级排序） */
-const INJECTABLE_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md'] as const;
+const INJECTABLE_FILES = ['BOOTSTRAP.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md', 'AGENTS.md'] as const;
 
 /** 每个文件的用途说明（模板状态时展示） */
 const FILE_PURPOSES: Record<string, string> = {
+  'BOOTSTRAP.md': '引导文件：首次初始化配置',
   'IDENTITY.md': '身份名片：名字、风格、签名',
   'SOUL.md': '核心灵魂：行为原则、风格定调',
   'USER.md': '主人档案：用户称呼、偏好',
   'NOTES.md': '环境工具备注：特殊配置',
-  'HEARTBEAT.md': '心跳任务清单：定期任务'
+  'HEARTBEAT.md': '心跳任务清单：定期任务',
+  'AGENTS.md': 'Agent 级规则与技能配置'
 };
 
 // ==================== 模板定义 ====================
@@ -118,13 +120,37 @@ function agentsMdTemplate(): string {
 `;
 }
 
-const TEMPLATES: Record<string, () => string> = {
+function bootstrapTemplate(agentId: string): string {
+  return `# Bootstrap
+
+<!-- 首次引导文件 -->
+<!-- Agent ID: ${agentId} -->
+<!-- 此文件在首次初始化时自动创建，用于记录初始配置和引导信息 -->
+<!-- 完成引导后可以删除此文件 -->
+
+## 首次引导说明
+
+这是您的 Agent 的首次引导文件。请根据需要填写以下配置：
+
+1. 在 IDENTITY.md 中定义 Agent 的身份和风格
+2. 在 SOUL.md 中设置核心行为原则
+3. 在 USER.md 中记录用户偏好
+4. 在 NOTES.md 中添加环境配置说明
+5. 在 HEARTBEAT.md 中设置定期任务
+6. 在 AGENTS.md 中配置技能和规则
+
+完成配置后，此文件会在系统提示词中注入，您可以在适当时候删除它。
+`;
+}
+
+const TEMPLATES: Record<string, (agentId?: string) => string> = {
   'IDENTITY.md': identityTemplate,
   'SOUL.md': soulTemplate,
   'USER.md': userTemplate,
   'NOTES.md': notesTemplate,
   'HEARTBEAT.md': heartbeatTemplate,
-  'AGENTS.md': agentsMdTemplate
+  'AGENTS.md': agentsMdTemplate,
+  'BOOTSTRAP.md': (agentId) => bootstrapTemplate(agentId || 'unknown')
 };
 
 // ==================== AgentHomeManager ====================
@@ -141,6 +167,8 @@ export class AgentHomeManager {
    *
    * 如果目录已存在，不会覆盖已有文件。
    * 仅在文件缺失时写入默认模板。
+   * 
+   * BOOTSTRAP.md 只在首次初始化时创建（即其他标准文件都不存在时）。
    */
   initHome(agentId: string): string {
     const homeDir = path.join(this.homesDir, agentId);
@@ -151,13 +179,25 @@ export class AgentHomeManager {
     fs.mkdirSync(memoryDir, { recursive: true });
     fs.mkdirSync(skillsDir, { recursive: true });
 
+    // 检查是否是首次初始化（除 BOOTSTRAP.md 外的标准文件都不存在）
+    const standardFiles = HOME_FILES.filter(f => f !== 'BOOTSTRAP.md');
+    const hasExistingFiles = standardFiles.some(file => 
+      fs.existsSync(path.join(homeDir, file))
+    );
+
     // 写入缺失的标准文件
     for (const file of HOME_FILES) {
       const filePath = path.join(homeDir, file);
+      
+      // BOOTSTRAP.md 只在首次初始化时创建
+      if (file === 'BOOTSTRAP.md' && hasExistingFiles) {
+        continue;
+      }
+      
       if (!fs.existsSync(filePath)) {
         const templateFn = TEMPLATES[file];
         if (templateFn) {
-          fs.writeFileSync(filePath, templateFn(), 'utf-8');
+          fs.writeFileSync(filePath, templateFn(agentId), 'utf-8');
         }
       }
     }

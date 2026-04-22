@@ -1,6 +1,6 @@
 /**
  * 流式消费者管理器
- * 
+ *
  * 在系统启动时初始化所有监听器，统一管理其生命周期。
  */
 
@@ -22,7 +22,7 @@ export class StreamConsumersManager {
 
   /**
    * 初始化所有消费者
-   * 
+   *
    * @param workspacesDir - workspaces 根目录路径
    */
   init(workspacesDir: string): void {
@@ -79,9 +79,9 @@ export class StreamConsumersManager {
 
   /**
    * 写入用户消息到历史文件
-   * 
+   *
    * 用户消息不在 stream 事件流中，需要手动写入
-   * 
+   *
    * @param sessionId - 会话 ID
    * @param content - 用户消息内容
    * @param timestamp - 时间戳（可选，默认当前时间）
@@ -101,7 +101,7 @@ export class StreamConsumersManager {
 
   /**
    * 清理指定会话的缓存
-   * 
+   *
    * @param sessionId - 会话 ID
    */
   clearSession(sessionId: string): void {

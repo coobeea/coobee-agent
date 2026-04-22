@@ -4,12 +4,18 @@
  * 在 Builder 构建前注入运行时环境：
  *   1. 获取/创建 Agent 工作空间
  *   2. 扫描并加载 Skill（仅 agent 模式）
- *   3. 注入执行协议 + 运行时路径 + Skill 发现提示 + Agent 发现提示（仅 agent 模式）
- *   4. 设置会话存储目录、工作目录、上下文快照目录
+ *   3. 根据 Agent 配置注入 Skills（仅 agent 模式）
+ *   4. 注入运行时路径 + Skill 发现提示 + Agent 发现提示（仅 agent 模式）
+ *   5. 设置会话存储目录、工作目录、上下文快照目录
  *
  * 运行模式差异：
- *   - chat: 只设置基础环境（workspace, sessionDir, contextDir），不注入工具/Skill/执行协议
- *   - agent: 完整注入（工具 + Skill + 执行协议 + 运行时路径 + Skill 发现提示）
+ *   - chat: 只设置基础环境（workspace, sessionDir, contextDir），不注入工具/Skill
+ *   - agent: 根据 Agent 配置注入（工具 + Skills + 运行时路径 + Skill 发现提示）
+ *
+ * Skill 注入策略：
+ *   - 不再强制注入核心 Skills
+ *   - 完全根据 Agent 配置文件中的 skills 数组决定
+ *   - 空数组 = 不注入任何 Skill
  *
  * 从 AgentExecutor 中提取，专注于环境准备职责。
  */
@@ -19,7 +25,6 @@ import fs from 'node:fs';
 import { createLogger } from '@main/common/logger';
 import { formatRuntimePaths, buildAgentEnv, type AgentEnv } from './AgentEnv';
 import { SkillManager } from './skills';
-import { CORE_SKILLS } from './skills/CoreSkills';
 import { AgentHomeManager } from './agents/AgentHomeManager';
 import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
@@ -70,24 +75,31 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
       }
     }
 
-    // 5. 注入工程目录
-    const builderProjectDir = (builder as unknown as { getProjectDir?: () => string | undefined }).getProjectDir?.();
-    if (builderProjectDir) {
-      agentEnv.projectDir = builderProjectDir;
-    }
 
-    // 6. 注入数据目录（从 Agent 定义的 metadata 中读取）
+    // 6. 从 Agent 定义中读取配置（dataDirectory、skills 等）
+    let agentDefinedSkills: string[] | undefined;
     if (agentId) {
       try {
         const { AgentStore } = await import('./agents/AgentStore');
         const store = await AgentStore.getInstance();
         const agentDef = await store.get(agentId);
-        if (agentDef?.metadata?.dataDirectory) {
-          agentEnv.dataDirectory = agentDef.metadata.dataDirectory as string;
+        if (agentDef) {
+          // 读取数据目录，如果未设置则使用默认路径
+          let dataDirectory = agentDef.metadata?.dataDirectory as string | undefined;
+          if (!dataDirectory) {
+            // 使用默认数据目录：.home/data/{agentId}
+            dataDirectory = path.join(Env.paths.userHome, 'data', agentId);
+            log.debug(`[EnvInjector] Using default dataDirectory: ${dataDirectory}`);
+          }
+          agentEnv.dataDirectory = dataDirectory;
           log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
+          
+          // 读取 skills 配置（用于后续注入）
+          agentDefinedSkills = agentDef.skills;
+          log.debug(`[EnvInjector] Agent defined skills: ${agentDefinedSkills?.join(', ') || '(none)'}`);
         }
       } catch (error) {
-        log.warn(`[EnvInjector] Failed to load dataDirectory for agent ${agentId}:`, error);
+        log.warn(`[EnvInjector] Failed to load agent definition for ${agentId}:`, error);
       }
     }
 
@@ -134,16 +146,29 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         ...extensionInstructions
       );
 
-      // 8b. 注入核心技能到 builder（确保子 Agent 也拥有核心技能）
-      //     builder.skills() 是累加模式，不会覆盖已有 skills
-      const coreSkillDefs = CORE_SKILLS.map((name) => skillManager.getByName(name)).filter(
-        (s): s is NonNullable<typeof s> => s !== null
-      );
-      if (coreSkillDefs.length > 0) {
-        builder.skills(coreSkillDefs);
-        log.info(
-          `[EnvInjector] Injected ${coreSkillDefs.length} core skills: ${coreSkillDefs.map((s) => s.name).join(', ')}`
+      // 8b. 根据 Agent 配置注入 Skills（不再强制注入核心 Skills）
+      //     只注入 Agent 配置文件中指定的 skills
+      if (agentDefinedSkills && agentDefinedSkills.length > 0) {
+        const skillDefs = agentDefinedSkills
+          .map((name) => skillManager.getByName(name))
+          .filter((s): s is NonNullable<typeof s> => s !== null);
+        
+        if (skillDefs.length > 0) {
+          builder.skills(skillDefs);
+          log.info(
+            `[EnvInjector] Injected ${skillDefs.length} agent skills: ${skillDefs.map((s) => s.name).join(', ')}`
+          );
+        }
+        
+        // 警告：如果配置的 skill 找不到
+        const notFound = agentDefinedSkills.filter(
+          (name) => !skillDefs.find((s) => s.name === name)
         );
+        if (notFound.length > 0) {
+          log.warn(`[EnvInjector] Skills not found: ${notFound.join(', ')}`);
+        }
+      } else {
+        log.debug(`[EnvInjector] No skills configured for agent ${agentId || '(unknown)'}`);
       }
 
       // 8c. 注入工具到 builder（如果 builder 还没有设置工具）
@@ -205,13 +230,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
     // 11. 设置上下文快照目录（扁平化结构，直接使用 workspace）
     builder.contextDir(workspace);
 
-    if (builderProjectDir) {
-      log.info(
-        `[EnvInjector] Injected: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}, projectDir=${builderProjectDir}`
-      );
-    } else {
-      log.info(`[EnvInjector] Injected: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}`);
-    }
+    log.info(`[EnvInjector] Injected: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}`);
     return workspace;
   } catch (error) {
     log.warn(`[EnvInjector] Failed, continuing without env:`, error);
@@ -376,9 +395,6 @@ function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
     COOBEE_SESSION_ID: env.sessionId,
     COOBEE_USER_HOME: env.userHome
   };
-  if (env.projectDir) {
-    vars.COOBEE_PROJECT_DIR = env.projectDir;
-  }
   return vars;
 }
 
@@ -452,8 +468,9 @@ async function buildToolExecutionContext(
     configDir = Env.paths.configDir;
     tempDir = Env.paths.temp;
   } catch {
+    // 测试环境 fallback
     const os = await import('node:os');
-    userHome = path.join(os.homedir(), '.coobee-ai');
+    userHome = path.join(os.homedir(), '.coobee-test');
     configDir = path.join(userHome, 'config');
     tempDir = os.tmpdir();
   }

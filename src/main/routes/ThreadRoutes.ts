@@ -172,7 +172,7 @@ export function registerThreadRoutes(router: Router): void {
       }
 
       // 只允许更新特定字段
-      const allowedFields = ['title', 'status', 'projectDir', 'overrideModel', 'enableThinking'];
+      const allowedFields = ['title', 'status', 'overrideModel', 'enableThinking'];
       const filteredUpdates: Record<string, unknown> = {};
 
       for (const key of allowedFields) {

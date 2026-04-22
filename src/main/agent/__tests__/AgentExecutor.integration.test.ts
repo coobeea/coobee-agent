@@ -88,7 +88,8 @@ describe('AgentExecutor Integration', () => {
       .maxTurns(1)
       .model(model);
 
-    if (agentDef!.instructions) {
+    // 设置 instructions（包括空字符串）
+    if (agentDef!.instructions !== undefined) {
       builder.instructions(agentDef!.instructions);
     }
 

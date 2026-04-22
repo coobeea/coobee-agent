@@ -37,8 +37,6 @@ export interface AgentEnv {
   workspace: string;
   /** 当前会话 ID */
   sessionId: string;
-  /** 任务目录（{workspace}/tasks/，多 Agent 委托时使用） */
-  tasksDir: string;
 
   // --- 系统路径 ---
   /** 用户主目录（应用级，如 ~/.coobee-ai） */
@@ -73,10 +71,6 @@ export interface AgentEnv {
   userExtensionsDir: string;
   /** 已加载的 Extension ID 列表 */
   loadedExtensions: string[];
-
-  // --- 工程目录 ---
-  /** 用户指定的工程目录（中间产物、输出文件的目标路径） */
-  projectDir?: string;
 
   // --- 数据目录 ---
   /** Agent 专属的数据目录（持久化业务数据） */
@@ -187,7 +181,6 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
     // 工作空间
     workspace,
     sessionId,
-    tasksDir: path.join(workspace, 'tasks'),
 
     // 系统路径
     userHome: Env.paths.userHome,
@@ -242,17 +235,16 @@ export function formatRuntimePaths(env: AgentEnv): string {
   const agentHomeSection = env.agentHome
     ? `
 **Agent Home (Your Root Directory)**: ${env.agentHome}/
-  ├── SOUL.md                               — 你的核心灵魂和行为原则
-  ├── USER.md                               — 用户偏好和使用习惯
-  ├── IDENTITY.md                           — 你的身份名片
-  ├── AGENTS.md                             — 技能和工具配置
-  ├── NOTES.md                              — 环境备注和特殊配置
-  ├── HEARTBEAT.md                          — 定期检查任务
-  ├── output/                               — 持久化输出文件（训练成果、知识积累）
-  └── skill-data/                           — Skill 结构化数据（跨会话保留）
+  ├── IDENTITY.md                           — 身份名片：名字、风格、签名
+  ├── SOUL.md                               — 核心灵魂：行为原则、风格定调
+  ├── USER.md                               — 主人档案：用户称呼、偏好
+  ├── NOTES.md                              — 环境工具备注：特殊配置
+  ├── HEARTBEAT.md                          — 心跳任务清单：定期任务
+  ├── AGENTS.md                             — Agent 级规则 + 技能配置
+  └── BOOTSTRAP.md                          — 引导文件（初始化配置）
 
-  **PURPOSE**: This is YOUR permanent space. Store training results, accumulated knowledge,
-  and any data you want to reuse in future tasks here.
+  **PURPOSE**: Agent 的人格配置和记忆文件。这些 Markdown 文件定义了 Agent 的身份、
+  行为原则、用户偏好等。系统会将这些文件的内容注入到 System Prompt 中。
 `
     : '';
 
@@ -276,22 +268,12 @@ export function formatRuntimePaths(env: AgentEnv): string {
 `
     : '';
 
-  const projectDirSection = env.projectDir
-    ? `
-⭐ **工程目录 / Project Directory**: \`${env.projectDir}/\`
-  这是用户为当前会话指定的工程目录（根目录）。
-  所有中间产物、解析数据、输出文件都应保存到此目录。
-  当用户提到"根目录""项目目录""工程目录""project directory"时，指的就是这个路径。
-`
-    : '';
-
   return `<runtime_environment>
 Your Runtime Environment:
 ${env.agentId ? `- Agent ID: ${env.agentId}` : ''}
 ${env.agentName ? `- Agent Name: ${env.agentName}` : ''}
 - Session: ${env.sessionId}
 ${env.dataDirectory ? `- 数据目录 (Data Dir): ${env.dataDirectory}` : ''}
-${env.projectDir ? `- 工程目录 (Project Dir): ${env.projectDir}` : ''}
 - Internal Workspace: ${env.workspace}
 - Platform: ${env.platform}/${env.arch} (${env.isDev ? 'dev' : 'prod'})
 - Security: sandbox=${env.sandboxMode}, exec=${env.execApproval}
@@ -300,7 +282,6 @@ ${env.projectDir ? `- 工程目录 (Project Dir): ${env.projectDir}` : ''}
 
 Directory Structure:
 ${dataDirectorySection}
-${projectDirSection}
 ${agentHomeSection}
 **Current Task Workspace (Internal/Temporary)**: ${env.workspace}/
   ├── sessions/                             — SDK session files
@@ -315,9 +296,11 @@ ${agentHomeSection}
   Files here are task-specific and may be cleaned up after task completion.
 
 Key System Directories:
-- Config: ${env.configDir}
-- Skills: builtin=${env.builtinSkillsDir}, user=${env.userSkillsDir}
-- Agents: ${env.userAgentsDir}
+- Data Directory: ${env.dataDirectory || '{dataDirectory}'}          — Agent 专属数据目录（业务数据持久化）
+- Agent Home: ${env.agentHome || '{agentHome}'}            — Agent 配置和记忆文件
+- Config: ${env.configDir}                          — 全局配置
+- Skills: builtin=${env.builtinSkillsDir}, user=${env.userSkillsDir}  — Skills 搜索路径
+- Agents Definitions: ${env.userAgentsDir}              — Agent 定义文件目录
 
 File Output Guidelines:
 
@@ -334,45 +317,31 @@ ${
 `
     : ''
 }
-${
-  env.projectDir
-    ? `
-${env.dataDirectory ? '2' : '1'}. **工程目录（任务输出）** → ${env.projectDir}/
-   - 当前任务的输出、中间结果、解析数据、生成内容
-   - 用户说"根目录""项目目录""工程目录"时，指的就是这个路径
-   - 读取用户资料、浏览项目文件时，也应从此目录开始
-`
-    : ''
-}
 
-${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '3' : '2') : '1'}. **Agent Home（配置和记忆）** → ${env.agentHome || '{agentHome}'}/
-   - output/           — 训练成果、知识积累
-   - skill-data/       — Skill 结构化数据
-   - SOUL.md, USER.md  — 你的身份和记忆文件
+${env.dataDirectory ? '2' : '1'}. **Agent Home（配置和记忆）** → ${env.agentHome || '{agentHome}'}/
+   - IDENTITY.md      — 身份名片
+   - SOUL.md          — 核心灵魂和行为原则
+   - USER.md          — 用户偏好和使用习惯
+   - NOTES.md         — 环境备注和特殊配置
+   - HEARTBEAT.md     — 定期检查任务
+   - AGENTS.md        — Agent 级规则和技能配置
 
-${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '4' : '3') : '2'}. **Temporary Task Files** → Current Task Workspace
+${env.dataDirectory ? '3' : '2'}. **Temporary Task Files** → Current Task Workspace
    - ${env.workspace}/  — 临时文件、中间结果
    - 任务结束后可能被清理
 
-${env.dataDirectory || env.projectDir ? (env.dataDirectory && env.projectDir ? '5' : '4') : '3'}. **System Files** (DO NOT manually modify)
+${env.dataDirectory ? '4' : '3'}. **System Files** (DO NOT manually modify)
    - {workspace}/sessions/         — Session data (managed by system)
    - {workspace}/history.jsonl     — Aggregated history (managed by system)
    - {workspace}/events.jsonl      — Event logs (managed by system)
    - {workspace}/context.jsonl     — Context snapshots (managed by system)
 ${
-  env.dataDirectory && env.projectDir
+  env.dataDirectory
     ? `
-**重要提示**：
-- 业务数据（客户信息、记录、报表）→ 数据目录 \`${env.dataDirectory}\`
-- 任务输出（代码、中间结果）→ 工程目录 \`${env.projectDir}\`
-- 当用户说"保存数据"时，优先使用数据目录；说"项目文件"时使用工程目录`
-    : env.dataDirectory
-      ? `
+
 **重要提示**：你有专属的数据目录 \`${env.dataDirectory}\`，所有业务数据都应保存到这里！`
-      : env.projectDir
-        ? `
-**重要提示**：你的主要工作目录是工程目录 \`${env.projectDir}\`。当用户要求查看文件、列出目录内容、或保存输出时，默认使用此目录。`
-        : `
+    : `
+
 **IMPORTANT**: When user asks "check our root directory" or similar, they usually mean ${env.agentHome ? `Agent Home (${env.agentHome})` : 'the current workspace'}.`
 }
 </runtime_environment>`;

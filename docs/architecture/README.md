@@ -6,12 +6,11 @@
 
 ### 核心机制
 
-1. **[核心 Skills 自动注入机制](./core-skills-injection.md)**
-   - 核心 Skills 列表和说明
-   - 运行时注入流程
-   - 与用户自定义 Skills 的关系
-   - 设计优缺点分析
-   - 常见问题 FAQ
+1. **[Skills 注入机制重大变更](./skills-injection-change.md)** ⭐ **最新**
+   - 移除强制注入，改为配置文件控制
+   - 旧机制 vs 新机制对比
+   - 迁移指南和影响分析
+   - UI/文档改进建议
 
 2. **[AppendInstructions 内容说明](./append-instructions-content.md)**
    - Runtime Environment 完整内容
@@ -19,6 +18,11 @@
    - 生成机制和代码位置
    - 动态内容说明
    - System Prompt 结构
+
+3. **[核心 Skills 自动注入机制](./core-skills-injection.md)** ⚠️ **已过时**
+   - 核心 Skills 列表和说明
+   - 运行时注入流程（旧版本）
+   - **注意**: 此机制已于 2026-04-22 废除
 
 ### Workspace 目录结构
 
@@ -52,7 +56,7 @@ AgentExecutor.execute()
 injectEnv() ← 注入运行时环境
     ↓
   ├─ 扫描 Skills (SkillManager)
-  ├─ 注入核心 Skills (5个)
+  ├─ 根据 Agent 配置注入 Skills
   ├─ 生成 appendInstructions
   │   ├─ runtime_environment
   │   ├─ skill_discovery
@@ -103,18 +107,23 @@ Stream 输出
 
 #### Skills 层次
 
-1. **核心 Skills** (系统强制注入)
-   - execution-protocol
-   - self-reflection
-   - eval-refine-loop
-   - brain
-   - dimension-architect
+⚠️ **注意**: 自 2026-04-22 起，不再强制注入核心 Skills。
+
+1. **Agent 配置 Skills** (Agent 配置文件指定)
+   - 在 Agent 定义的 `skills` 数组中指定
+   - 完全由用户控制
+   - 空数组 = 不加载任何 Skill
 
 2. **Extension Skills** (Extension 系统贡献)
    - 由已加载的 Extension 提供
+   - 可自动注入（如果 Extension 配置了自动注入）
 
-3. **用户 Skills** (用户自定义)
-   - 在 Agent 配置中指定
+3. **推荐的基础 Skills** (供参考，不再强制注入)
+   - execution-protocol - 任务分解、五步工作法
+   - self-reflection - 自我评估与修复
+   - eval-refine-loop - 输出质量评估
+   - brain - 知识库搜索与复用
+   - dimension-architect - 需求维度量化
 
 #### Instructions 构成
 

@@ -125,9 +125,9 @@ import type { AgentMode } from '../runtime/types';
  *
  * 继承 SandboxContext（路径守卫、Docker 等），在此基础上提供：
  *   - 会话标识：sessionId（必填）, threadId, parentSessionId
- *   - Agent 信息：agentName, agentMode, agentId, agentType
+ *   - Agent 信息：agentName, agentMode, agentId
  *   - 当前工作目录：cwd（exec / file 工具的默认基准）
- *   - 工作空间路径：sessionsDir, contextsDir, eventsDir, tasksDir, outputDir
+ *   - 工作空间路径：sessionsDir, contextsDir, eventsDir
  *   - 系统路径：userHome, configDir, tempDir
  *
  * 由 AgentEnvInjector 构建，通过 Builder → Runtime → ToolExecutionPipeline 注入。
@@ -156,11 +156,6 @@ export interface ToolExecutionContext extends SandboxContext {
    * 通常等于 workspaceRoot，Docker 模式下为容器内工作目录。
    */
   cwd: string;
-
-  // === 工作空间目录 ===
-
-  /** 多 Agent 任务目录 — {workspace}/tasks/ */
-  tasksDir: string;
 
   // === 系统空间 ===
 

@@ -274,7 +274,7 @@ export class AgentImportExport {
         const zip = new AdmZip();
 
         // 递归添加目录中的所有文件
-        const addDirectory = (dir: string, zipDir: string = '') => {
+        const addDirectory = (dir: string, zipDir: string = ''): void => {
           const files = fs.readdirSync(dir);
           for (const file of files) {
             const fullPath = path.join(dir, file);

@@ -253,19 +253,19 @@ class AgentExecutor {
       // 检测中止信号：提前退出循环，通知 generator 结束
       if (signal?.aborted) {
         log.info(`[AgentExecutor] Aborted: sessionId=${sessionId}`);
-        
+
         // 发送 run:interrupted 事件
         const interruptedChunk: StreamChunk = {
           type: 'run:interrupted',
           content: 'Execution cancelled by user'
         };
-        
+
         if (emitter) {
           emitter.forward(interruptedChunk);
         }
         onChunk?.(interruptedChunk);
         yield interruptedChunk;
-        
+
         await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
         this.updateSessionStatus(sessionId, 'idle');
         return { output: '', error: 'Aborted by user' };
@@ -337,19 +337,19 @@ class AgentExecutor {
         r = await abortPromise;
         if (signal.aborted && !r.done) {
           log.info(`[AgentExecutor] Aborted during gen.next(): sessionId=${sessionId}`);
-          
+
           // 发送 run:interrupted 事件
           const interruptedChunk: StreamChunk = {
             type: 'run:interrupted',
             content: 'Execution cancelled by user'
           };
-          
+
           if (emitter) {
             emitter.forward(interruptedChunk);
           }
           onChunk?.(interruptedChunk);
           yield interruptedChunk;
-          
+
           await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
           this.updateSessionStatus(sessionId, 'idle');
           return { output: '', error: 'Aborted by user' };
@@ -467,7 +467,7 @@ class AgentExecutor {
       if (request.runtime) {
         // === 预构建 Runtime 路径（Orchestrator / Swarm / Discussion） ===
         runtime = request.runtime;
-        
+
         if (!isLightweight) {
           emitter = this.createEmitter(sessionId, runtime);
         }
@@ -519,7 +519,7 @@ class AgentExecutor {
       if (!isLightweight) {
         const workspace = await injectEnv(sessionId, builder);
         workspaceDir = workspace;
-        
+
         // 写入用户消息到 history.jsonl
         streamConsumersManager.writeUserMessage(sessionId, message);
       }
@@ -536,7 +536,7 @@ class AgentExecutor {
 
       // 1. 创建 Runtime + 创建 Emitter
       runtime = await builder.sessionId(sessionId).build();
-      
+
       if (!isLightweight) {
         emitter = this.createEmitter(sessionId, runtime);
       }
@@ -605,7 +605,7 @@ class AgentExecutor {
     } finally {
       if (!isLightweight) {
         SkillManager.clearSession(sessionId);
-        
+
         // 清理监听器缓存
         streamConsumersManager.clearSession(sessionId);
 
