@@ -1,19 +1,19 @@
 /**
  * 历史聚合写入器（消费者：生成 history.jsonl）
- * 
- * 监听 EventBus 的流式消息，实时聚合并写入前端友好的历史格式。
- * 
+ *
+ * 监听 EventBus 的流式消息，实时聚合并异步写入前端友好的历史格式。
+ *
  * 聚合策略：
  * - 按 turn 聚合（一轮对话）
  * - 合并同一轮的 thinking + text + tools
  * - 生成统一的 AggregatedMessage 格式（运行时无关）
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
 import { StreamEventType, type StreamEvent, type StreamMessage } from '../types';
+import { AsyncJsonlWriter } from './AsyncJsonlWriter';
 
 const log = createLogger('history-writer');
 
@@ -55,6 +55,7 @@ export class HistoryWriter {
   private historyFiles = new Map<string, string>();
   private currentTurns = new Map<string, Partial<AggregatedMessage>>();
   private userMessages = new Map<string, string>(); // 暂存用户消息
+  private writer = new AsyncJsonlWriter('HistoryWriter');
   private workspacesDir: string;
   private initialized = false;
 
@@ -79,10 +80,11 @@ export class HistoryWriter {
   /**
    * 停止监听
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.initialized) return;
 
     eventBus.off(StreamEventType.MESSAGE, this.handleMessage);
+    await this.writer.closeAll();
     this.historyFiles.clear();
     this.currentTurns.clear();
     this.userMessages.clear();
@@ -221,7 +223,7 @@ export class HistoryWriter {
     const data = message.data as Record<string, unknown> | undefined;
     if (!data) return;
 
-    const tool = turn.tools.find(t => t.callId === data.callId);
+    const tool = turn.tools.find((t) => t.callId === data.callId);
     if (tool) {
       tool.status = 'done';
       tool.result = (data.output as string) || '';
@@ -257,23 +259,17 @@ export class HistoryWriter {
     if (!historyFile) return;
 
     try {
-      // 确保目录存在
-      const dir = path.dirname(historyFile);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
       // 清理空字段
       if (!turn.thinking) delete turn.thinking;
       if (turn.tools?.length === 0) delete turn.tools;
 
-      // 写入
+      // 异步批量写入
       const line = JSON.stringify(turn);
-      fs.appendFileSync(historyFile, line + '\n');
+      this.writer.writeLine(historyFile, line);
 
-      log.debug(`[HistoryWriter] Wrote turn for session: ${sessionId}`);
+      log.debug(`[HistoryWriter] Queued turn for session: ${sessionId}`);
     } catch (err) {
-      log.warn(`[HistoryWriter] Write failed for session ${sessionId}:`, err);
+      log.warn(`[HistoryWriter] Enqueue failed for session ${sessionId}:`, err);
     }
 
     // 清理当前 turn
@@ -298,26 +294,30 @@ export class HistoryWriter {
 
     const file = this.historyFiles.get(sessionId)!;
     try {
-      const dir = path.dirname(file);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
       const line = JSON.stringify(message);
-      fs.appendFileSync(file, line + '\n');
+      this.writer.writeLine(file, line);
 
-      log.debug(`[HistoryWriter] Wrote user message for session: ${sessionId}`);
+      log.debug(`[HistoryWriter] Queued user message for session: ${sessionId}`);
     } catch (err) {
-      log.warn(`[HistoryWriter] Write user message failed:`, err);
+      log.warn(`[HistoryWriter] Enqueue user message failed:`, err);
     }
   }
 
   /**
    * 清理指定会话的缓存
    */
-  clearSession(sessionId: string): void {
+  async clearSession(sessionId: string): Promise<void> {
+    const historyFile = this.historyFiles.get(sessionId);
+    if (historyFile) {
+      await this.writer.closeFile(historyFile);
+    }
     this.historyFiles.delete(sessionId);
     this.currentTurns.delete(sessionId);
     this.userMessages.delete(sessionId);
+  }
+
+  /** 强制 flush（测试和退出流程使用） */
+  async flush(): Promise<void> {
+    await this.writer.flush();
   }
 }

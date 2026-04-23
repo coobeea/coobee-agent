@@ -53,7 +53,7 @@ export const chatMethods: MethodGroup = {
      */
     listThreads: async () => {
       const store = await ThreadStore.getInstance();
-      const threads = await store.list();
+      const threads = await store.listAsync();
 
       log.debug(`列出会话: ${threads.length} 个`);
       return { threads };

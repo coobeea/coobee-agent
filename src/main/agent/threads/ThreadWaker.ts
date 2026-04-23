@@ -197,7 +197,7 @@ export class ThreadWaker {
       const { ThreadStore } = await import('./ThreadStore');
       const threadStore = await ThreadStore.getInstance();
 
-      const allThreads = await threadStore.list();
+      const allThreads = await threadStore.listAsync();
       const pendingThreads = allThreads.filter(
         (thread) => thread.status === 'active' && thread.runStatus !== 'idle' && thread.runStatus !== 'completed'
       );

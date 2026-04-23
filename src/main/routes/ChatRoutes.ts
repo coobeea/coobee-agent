@@ -68,7 +68,7 @@ export function registerChatRoutes(router: Router): void {
   router.get('/chat/threads', async (ctx) => {
     try {
       const store = await ThreadStore.getInstance();
-      const threads = await store.list();
+      const threads = await store.listAsync();
 
       const response: ApiResponse<{ threads: ThreadIndexEntry[] }> = {
         success: true,

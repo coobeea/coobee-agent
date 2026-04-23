@@ -607,7 +607,7 @@ class AgentExecutor {
         SkillManager.clearSession(sessionId);
 
         // 清理监听器缓存
-        streamConsumersManager.clearSession(sessionId);
+        await streamConsumersManager.clearSession(sessionId);
 
         // 卸载任务级 Extension
         if (loader) {

@@ -13,6 +13,7 @@
  */
 
 import fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createLogger } from '@main/common/logger';
 import { Env } from '@main/common/env';
@@ -85,7 +86,7 @@ export class AgentStore {
     }
 
     // 扫描目录加载索引
-    await this.rebuildIndex();
+    await this.rebuildIndexAsync();
 
     // 先标记为已初始化，防止 create() 内部循环调用 init()
     this.initialized = true;
@@ -103,51 +104,41 @@ export class AgentStore {
       return;
     }
 
-    const files = fs.readdirSync(builtinAgentsDir).filter((f) => f.endsWith('.json'));
-    for (const file of files) {
-      try {
-        const filePath = path.join(builtinAgentsDir, file);
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        const def = JSON.parse(raw) as AgentDefinition;
+    const files = (await fsp.readdir(builtinAgentsDir)).filter((f) => f.endsWith('.json'));
+    const definitions = await Promise.all(files.map((file) => this.readAgentDefinitionFile(builtinAgentsDir, file)));
 
-        if (!this.index.has(def.id)) {
-          // 转换为 CreateAgentParams
-          const params: CreateAgentParams = {
-            id: def.id,
-            name: def.name,
-            description: def.description,
-            instructions: def.instructions,
-            excludeTools: def.excludeTools,
-            skills: def.skills,
-            model: def.model,
-            createdBy: 'system',
-            metadata: def.metadata
-          };
+    for (const def of definitions) {
+      if (!def || this.index.has(def.id)) continue;
 
-          await this.create(params);
-          log.info(`[AgentStore] Seeded builtin agent: ${def.id}`);
-        }
-      } catch (err) {
-        log.error(`[AgentStore] Failed to seed builtin agent from ${file}:`, err);
-      }
+      // 转换为 CreateAgentParams
+      const params: CreateAgentParams = {
+        id: def.id,
+        name: def.name,
+        description: def.description,
+        instructions: def.instructions,
+        excludeTools: def.excludeTools,
+        skills: def.skills,
+        model: def.model,
+        createdBy: 'system',
+        metadata: def.metadata
+      };
+
+      await this.create(params);
+      log.info(`[AgentStore] Seeded builtin agent: ${def.id}`);
     }
   }
 
-  /** 扫描目录重建索引 */
-  private async rebuildIndex(): Promise<void> {
+  /** 异步扫描目录重建索引，避免批量读文件阻塞主进程事件循环 */
+  async rebuildIndexAsync(): Promise<void> {
     this.index.clear();
 
     if (fs.existsSync(this.userDir)) {
-      const files = fs.readdirSync(this.userDir).filter((f) => f.endsWith('.json'));
-      for (const file of files) {
-        try {
-          const filePath = path.join(this.userDir, file);
-          const raw = fs.readFileSync(filePath, 'utf-8');
-          const def = JSON.parse(raw) as AgentDefinition;
-          this.index.set(def.id, toIndexEntry(def, this.homeManager));
-        } catch (err) {
-          log.warn(`[AgentStore] Failed to load ${file}:`, err);
-        }
+      const files = (await fsp.readdir(this.userDir)).filter((f) => f.endsWith('.json'));
+      const definitions = await Promise.all(files.map((file) => this.readAgentDefinitionFile(this.userDir, file)));
+
+      for (const def of definitions) {
+        if (!def) continue;
+        this.index.set(def.id, toIndexEntry(def, this.homeManager));
       }
     }
   }
@@ -241,6 +232,11 @@ export class AgentStore {
 
   /** 列出所有 Agent（轻量索引） */
   async list(): Promise<AgentIndexEntry[]> {
+    return this.listAsync();
+  }
+
+  /** 异步列出所有 Agent（初始化阶段索引重建已异步批量读取） */
+  async listAsync(): Promise<AgentIndexEntry[]> {
     await this.init();
     return Array.from(this.index.values());
   }
@@ -349,5 +345,16 @@ export class AgentStore {
   private writeDefinition(def: AgentDefinition): void {
     const filePath = path.join(this.userDir, `${def.id}.json`);
     fs.writeFileSync(filePath, JSON.stringify(def, null, 2), 'utf-8');
+  }
+
+  private async readAgentDefinitionFile(dir: string, file: string): Promise<AgentDefinition | null> {
+    try {
+      const filePath = path.join(dir, file);
+      const raw = await fsp.readFile(filePath, 'utf-8');
+      return JSON.parse(raw) as AgentDefinition;
+    } catch (err) {
+      log.warn(`[AgentStore] Failed to load ${file}:`, err);
+      return null;
+    }
   }
 }

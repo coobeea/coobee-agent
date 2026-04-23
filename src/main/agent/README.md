@@ -121,10 +121,14 @@ Runtime yield chunk
   -> AgentExecutor.consumeAndForward()
   -> StreamEmitter.forward()
   -> EventBus
-  -> EventWriter(events.jsonl)
-  -> HistoryWriter(history.jsonl)
+  -> EventWriter(async queue -> events.jsonl)
+  -> HistoryWriter(async queue -> history.jsonl)
   -> StreamMonitor
 ```
+
+`EventWriter` 和 `HistoryWriter` 使用异步 JSONL 队列批量 flush，避免高频 `text:delta` / 工具输出在 Electron 主进程里直接同步写盘。会话结束和应用退出前会强制 flush。
+
+默认写盘路径是普通异步 append；需要进一步隔离高频落盘时，可以设置 `COOBEE_AGENT_STREAM_WRITE_WORKER=1` 启用可选 Worker 写盘。同步降级仍可通过 `COOBEE_AGENT_SYNC_STREAM_WRITES=1` / `SYNC_MODE=1` 强制打开。
 
 持久化分工：
 
@@ -135,6 +139,8 @@ Runtime yield chunk
 | `workspaces/{id}/history.jsonl` | 前端消息投影        |
 | `workspaces/{id}/events.jsonl`  | 细粒度事件日志      |
 | `workspaces/{id}/context*.json` | 调试和审计快照      |
+
+列表型批量读取走明确异步入口：`ThreadStore.listAsync()`、`AgentStore.listAsync()`；兼容入口 `list()` 仍保留，但新调用点应优先使用 `listAsync()`。
 
 ## 参考文档
 

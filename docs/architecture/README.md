@@ -23,20 +23,21 @@
    - 执行链路、模块边界、真实职责图
    - 当前不合理点与优化优先级
    - 推荐的收敛和重构顺序
+   - P2 性能与稳定性收敛：异步 JSONL 写盘、Store 批量读取异步化、可选 Worker 写盘
 
-4. **[核心 Skills 自动注入机制](./core-skills-injection.md)** ⚠️ **已过时**
-   - 核心 Skills 列表和说明
-   - 运行时注入流程（旧版本）
-   - **注意**: 此机制已于 2026-04-22 废除
+4. **[核心 Skills 自动注入机制](./core-skills-injection.md)** ⚠️ **历史归档**
+   - 旧核心 Skills 强制注入机制说明
+   - 当前状态：主路径已移除，仅保留 `legacy/CoreSkills.ts` 兼容层
+   - **注意**: 新代码不要依赖 `CORE_SKILLS` / `ensureCoreSkills()`
 
 ### Workspace 目录结构
 
-5. **[目录简化实施总结](../../DIRECTORY_SIMPLIFICATION.md)** *(根目录)*
+5. **[目录简化实施总结](../../DIRECTORY_SIMPLIFICATION.md)** _(根目录)_
    - 旧结构 vs 新结构对比
    - 修改的文件列表
    - 测试验证方法
 
-6. **[Workspace 修复总结](../../WORKSPACE_FIX_SUMMARY.md)** *(根目录)*
+6. **[Workspace 修复总结](../../WORKSPACE_FIX_SUMMARY.md)** _(根目录)_
    - 问题诊断和修复过程
    - PiMono Session 文件说明
    - Runtime 对比
@@ -44,7 +45,7 @@
 ### Context Snapshot
 
 7. **Context Snapshot 相关**
-   - [Context Snapshot Agent 信息问题](../issues/context-snapshot-agent-info-issues.md) *(Issues 目录)*
+   - [Context Snapshot Agent 信息问题](../issues/context-snapshot-agent-info-issues.md) _(Issues 目录)_
      - Instructions 默认值问题
      - Name/Description 未记录问题
      - 核心 Skills 自动注入未说明
@@ -121,7 +122,7 @@ Stream 输出
 
 2. **Extension Skills** (Extension 系统贡献)
    - 由已加载的 Extension 提供
-   - 可自动注入（如果 Extension 配置了自动注入）
+   - Extension 加载、卸载和热重载后会主动失效 Skill 缓存
 
 3. **推荐的基础 Skills** (供参考，不再强制注入)
    - execution-protocol - 任务分解、五步工作法
@@ -133,7 +134,7 @@ Stream 输出
 #### Instructions 构成
 
 ```
-最终 System Prompt = 
+最终 System Prompt =
   基础 instructions (用户配置)
   + appendInstructions (系统注入)
     ├─ runtime_environment
@@ -144,15 +145,22 @@ Stream 输出
     └─ extension_instructions
 ```
 
+#### P2 IO 稳定性
+
+- `EventWriter` / `HistoryWriter` 通过 `AsyncJsonlWriter` 异步批量写入 JSONL。
+- `COOBEE_AGENT_STREAM_WRITE_WORKER=1` 可启用可选 Worker 写盘路径，默认仍走普通异步 append。
+- `ThreadStore.listAsync()` / `AgentStore.listAsync()` 作为列表场景的明确异步入口，兼容 `list()` 仍可用。
+
 ## 相关目录
 
 - **[Issues 问题追踪](../issues/)** - 已知问题和 Bug
-- **[API 文档](../api/)** - API 接口文档 *(待创建)*
-- **[开发指南](../development/)** - 开发者指南 *(待创建)*
+- **[API 文档](../api/)** - API 接口文档 _(待创建)_
+- **[开发指南](../development/)** - 开发者指南 _(待创建)_
 
 ## 贡献指南
 
 添加新的架构文档时，请：
+
 1. 在本目录创建 Markdown 文件
 2. 使用清晰的标题和结构
 3. 包含代码示例和流程图
@@ -160,5 +168,5 @@ Stream 输出
 
 ---
 
-**最后更新**: 2026-04-22  
+**最后更新**: 2026-04-23
 **维护者**: Coobee Team

@@ -14,6 +14,7 @@
  */
 
 import fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 import * as lockfile from 'proper-lockfile';
 import { eventBus } from '@main/common/eventbus';
@@ -66,7 +67,6 @@ export class ThreadStore {
     }
     log.info(`[ThreadStore] Initialized: ${this.threadsDir}`);
   }
-
 
   // ==================== CRUD ====================
 
@@ -170,9 +170,73 @@ export class ThreadStore {
     offset?: number;
     limit?: number;
   }): Promise<ThreadIndexEntry[]> {
+    return this.listAsync(options);
+  }
+
+  /**
+   * 异步列出所有 Thread（批量读取文件）
+   *
+   * 避免在路由/启动恢复等批量列表场景阻塞主进程事件循环。
+   */
+  async listAsync(options?: {
+    agentId?: string;
+    status?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<ThreadIndexEntry[]> {
     await this.init();
 
-    // 读取目录下所有 .json 文件
+    const files = (await fsp.readdir(this.threadsDir)).filter((f) => f.endsWith('.json'));
+
+    const entries = (
+      await Promise.all(
+        files.map(async (file) => {
+          const thread = await this.readThreadDefinitionFile(file);
+          if (!thread) return null;
+
+          if (thread.status === 'deleted') return null;
+          if (options?.agentId && thread.agentId !== options.agentId) return null;
+          if (options?.status && thread.status !== options.status) return null;
+
+          return toIndexEntry(thread, this.workspacesDir);
+        })
+      )
+    ).filter((entry): entry is ThreadIndexEntry => entry !== null);
+
+    // 按 updatedAt 降序（最近更新的在前）
+    entries.sort((a, b) => {
+      const timeA = new Date(a.updatedAt).getTime();
+      const timeB = new Date(b.updatedAt).getTime();
+      return timeB - timeA;
+    });
+
+    // 分页
+    const offset = options?.offset ?? 0;
+    const limit = options?.limit ?? entries.length;
+    return entries.slice(offset, offset + limit);
+  }
+
+  private async readThreadDefinitionFile(file: string): Promise<ThreadDefinition | null> {
+    try {
+      const filePath = path.join(this.threadsDir, file);
+      const raw = await fsp.readFile(filePath, 'utf-8');
+      return JSON.parse(raw) as ThreadDefinition;
+    } catch (err) {
+      log.warn(`[ThreadStore] Failed to read ${file}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * 同步列出所有 Thread（仅保留给测试/迁移期兼容）
+   *
+   * 新代码应使用 listAsync()。
+   */
+  listSync(options?: { agentId?: string; status?: string; offset?: number; limit?: number }): ThreadIndexEntry[] {
+    if (!fs.existsSync(this.threadsDir)) {
+      fs.mkdirSync(this.threadsDir, { recursive: true });
+    }
+
     const files = fs.readdirSync(this.threadsDir).filter((f) => f.endsWith('.json'));
     const entries: ThreadIndexEntry[] = [];
 

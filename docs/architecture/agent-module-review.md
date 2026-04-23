@@ -384,7 +384,9 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 后续仍可考虑为 `LifecycleHook` 增加 `dependsOn` 语义，但 P1 阶段的初始化竞态已先通过 priority 收敛。
 
-### P2-1 主进程里同步文件 IO 太多，流式输出高频时会放大卡顿风险
+### ✅ P2-1 主进程里同步文件 IO 太多，流式输出高频时会放大卡顿风险（已收敛）
+
+**状态**：P2 已完成主要高频/批量 IO 路径收敛。`EventWriter` / `HistoryWriter` 不再在 EventBus listener 内同步 `appendFileSync`，而是通过 `AsyncJsonlWriter` 入队后批量异步 flush；会话结束和应用退出前会强制 flush。`ThreadStore.listAsync()`、`AgentStore.rebuildIndexAsync()`、`AgentStore.listAsync()` 已覆盖批量读取路径，事件写盘还提供默认关闭的可选 Worker 通道。
 
 关键文件：
 
@@ -392,6 +394,11 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 - `src/main/agent/agents/AgentStore.ts`
 - `src/main/agent/streaming/consumers/EventWriter.ts`
 - `src/main/agent/streaming/consumers/HistoryWriter.ts`
+- `src/main/agent/streaming/consumers/AsyncJsonlWriter.ts`
+- `src/main/routes/ChatRoutes.ts`
+- `src/main/routes/ThreadRoutes.ts`
+- `src/main/routes/AgentRoutes.ts`
+- `src/main/agent/threads/ThreadWaker.ts`
 
 当前大量路径使用了同步 IO：
 
@@ -411,31 +418,30 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 建议：
 
-1. 事件写盘优先改成“内存队列 + 异步 flush”。
-2. `ThreadStore.list()`/`AgentStore.rebuildIndex()` 这类批量读取逐步迁到 async 版本。
-3. 如果后续事件量继续上升，可以把事件落盘迁到 worker。
+1. ✅ 事件写盘优先改成“内存队列 + 异步 flush”。
+2. ✅ `ThreadStore.list()`/`AgentStore.rebuildIndex()` 这类批量读取迁到 async 版本，并保留兼容入口。
+3. ✅ 事件落盘提供可选 Worker 通道：默认普通异步 append，`COOBEE_AGENT_STREAM_WRITE_WORKER=1` 时启用 Worker，失败回退普通异步 append。
+4. ✅ 新增 100 events/s 基准流量自动化烟测，覆盖无丢失、顺序完整和耗时阈值。
 
-### P2-2 还残留一层“已废弃但仍在导出/测试”的 CoreSkills 旧机制
+### ✅ P2-2 还残留一层“已废弃但仍在导出/测试”的 CoreSkills 旧机制（已收敛）
+
+**状态**：`src/main/agent/skills/CoreSkills.ts` 已移除，兼容实现迁入 `src/main/agent/skills/legacy/CoreSkills.ts` 并标记 `@deprecated`；旧 CoreSkills 测试已删除，新代码不要再依赖该机制。
 
 关键文件：
 
-- `src/main/agent/skills/CoreSkills.ts`
+- `src/main/agent/skills/legacy/CoreSkills.ts`
 - `src/main/agent/skills/index.ts`
 
-架构文档已经明确“强制注入核心 Skills 已废弃”，但代码层面：
-
-- `CoreSkills.ts` 还在
-- `skills/index.ts` 还在导出
-- 测试里还在以它为主要前提
-
-这会让后来维护的人误以为“系统其实还有一层隐式核心技能机制”。
+原问题是：架构文档已经明确“强制注入核心 Skills 已废弃”，但代码层面仍保留主路径文件、导出和测试，容易让后来维护的人误以为系统还有一层隐式核心技能机制。
 
 建议：
 
-1. 如果已废弃，尽快移到 `legacy/` 或删除。
-2. 如果还要保留给子 Agent 用，就明确改名，不要再叫 `CoreSkills`。
+1. ✅ 已移到 `legacy/`，主路径不再保留 `CoreSkills.ts`。
+2. 后续如 UI 需要推荐 Skill，应新增 `RecommendedSkills` 这类明确语义的配置，而不是复用 CoreSkills。
 
-### P2-3 Skill 缓存没有和热重载/扩展装卸建立明确联动
+### ✅ P2-3 Skill 缓存没有和热重载/扩展装卸建立明确联动（已解决）
+
+**状态**：`SkillManager.invalidateCache(path?, options?)` 已支持防抖失效、立即失效和缓存统计；`ExtensionLoader.loadAll/load/unload/watch` 路径会在扩展装卸后主动失效 Skill 缓存。
 
 关键文件：
 
@@ -443,7 +449,7 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 - `src/main/agent/skills/SkillManager.ts:179-180`
 - `src/main/agent/extension/ExtensionLoader.ts`
 
-`SkillManager` 有 30 秒全局缓存，但当前代码里几乎没有看到扩展加载/卸载后主动 `invalidateCache()` 的路径。
+原问题是：`SkillManager` 有 30 秒全局缓存，但扩展加载/卸载后缺少主动 `invalidateCache()` 路径。
 
 结果是：
 
@@ -452,8 +458,8 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 建议：
 
-1. Extension load/unload/watch 之后主动失效缓存。
-2. 或者缓存键里加目录 mtime / manifest version。
+1. ✅ Extension load/unload/watch 之后主动失效缓存。
+2. 后续如 Skill 规模继续增大，可以再考虑缓存键加入目录 mtime / manifest version。
 
 ## 5. 建议的收敛路线
 
@@ -485,12 +491,16 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 - ✅ 广播、持久化、Thread 状态同步都在 Executor / consumers 做
 - ✅ 对齐 PiMono / OpenAI 的工具增量输出和 handoff 事件语义
 
-### 第四阶段：性能与维护性（下一轮优化）
+### 第四阶段：性能与维护性（✅ P2 已完成）
 
-- 流式事件持久化改异步队列
-- Skill cache 与扩展热插拔联动
-- 清理 `CoreSkills`、`AgentEventWriter` 这类遗留层
-- 把 README / 架构文档 / 测试前提统一到当前实现
+- ✅ 流式事件持久化改异步队列
+- ✅ 可选 Worker 写盘路径
+- ✅ Store 批量读取异步化
+- ✅ 100 events/s 自动化基准烟测
+- ✅ Skill cache 与扩展热插拔联动
+- ✅ 清理 `CoreSkills` 主路径残留，迁入 legacy 兼容层
+- ✅ 把 README / 架构文档 / 测试前提统一到当前实现
+- 后续可继续补桌面端真实 Agent 高频输出人工压测
 
 ## 6. 一句话结论
 

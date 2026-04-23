@@ -1,6 +1,7 @@
 # Skills 注入机制重大变更
 
 ## 变更日期
+
 2026-04-22
 
 ## 变更概述
@@ -25,6 +26,7 @@ export const CORE_SKILLS = [
 ```
 
 **结果**：
+
 - Agent 配置: `skills: []`
 - 实际运行时: 5 个核心 Skills + 0 个用户 Skills = **5 个 Skills**
 
@@ -52,18 +54,19 @@ if (coreSkillDefs.length > 0) {
 ```json
 // .home/agents/{agentId}.json
 {
-  "skills": []  // 空数组 → 不加载任何 Skill
+  "skills": [] // 空数组 → 不加载任何 Skill
 }
 ```
 
 ```json
 // .home/agents/{agentId}.json
 {
-  "skills": ["brain", "execution-protocol"]  // 只加载这两个
+  "skills": ["brain", "execution-protocol"] // 只加载这两个
 }
 ```
 
 **结果**：
+
 - Agent 配置: `skills: []` → 运行时: **0 个 Skills**
 - Agent 配置: `skills: ["brain"]` → 运行时: **1 个 Skill**（brain）
 
@@ -96,16 +99,14 @@ if (agentDefinedSkills && agentDefinedSkills.length > 0) {
   const skillDefs = agentDefinedSkills
     .map((name) => skillManager.getByName(name))
     .filter((s): s is NonNullable<typeof s> => s !== null);
-  
+
   if (skillDefs.length > 0) {
     builder.skills(skillDefs);
     log.info(`[EnvInjector] Injected ${skillDefs.length} agent skills: ${skillDefs.map((s) => s.name).join(', ')}`);
   }
-  
+
   // 警告：如果配置的 skill 找不到
-  const notFound = agentDefinedSkills.filter(
-    (name) => !skillDefs.find((s) => s.name === name)
-  );
+  const notFound = agentDefinedSkills.filter((name) => !skillDefs.find((s) => s.name === name));
   if (notFound.length > 0) {
     log.warn(`[EnvInjector] Skills not found: ${notFound.join(', ')}`);
   }
@@ -119,6 +120,7 @@ if (agentDefinedSkills && agentDefinedSkills.length > 0) {
 ### 用户反馈
 
 用户认为强制注入核心 Skills 的设计不合理：
+
 1. Agent 配置中 `skills: []` 是空的，但实际运行时有 5 个 Skills
 2. 用户无法控制是否加载这些 Skills
 3. 配置文件与实际行为不一致，造成困惑
@@ -127,7 +129,8 @@ if (agentDefinedSkills && agentDefinedSkills.length > 0) {
 
 **旧理念**: 核心 Skills 是所有 Agent 的"必备能力"，应该强制注入
 
-**新理念**: 
+**新理念**:
+
 - 用户对 Agent 行为有完全控制权
 - 配置文件应该真实反映运行时行为
 - Skills 是可选增强能力，不是必须的基础能力
@@ -211,16 +214,15 @@ if (agentDefinedSkills && agentDefinedSkills.length > 0) {
 3. **迁移脚本**: 提供自动迁移工具（可选）
 4. **模板 Agent**: 提供预配置了推荐 Skills 的 Agent 模板
 
-## CORE_SKILLS 常量的新用途
+## CORE_SKILLS 兼容层状态
 
-虽然不再强制注入，但 `CORE_SKILLS` 常量仍然保留，用于：
+P2 后，`src/main/agent/skills/CoreSkills.ts` 已从主路径移除。兼容实现移动到：
 
-1. **UI 推荐**: 前端可以读取这个列表，提示用户"推荐的 Skills"
-2. **文档说明**: 说明系统推荐的基础 Skills
-3. **快速配置**: 提供"使用推荐 Skills"按钮，一键添加核心 Skills
-4. **测试基准**: 测试文件仍然使用这个常量
+```text
+src/main/agent/skills/legacy/CoreSkills.ts
+```
 
-**建议**: 将 `CORE_SKILLS` 重命名为 `RECOMMENDED_SKILLS`，更准确反映其新用途。
+它仅用于旧调用方迁移，已标记 `@deprecated`。新代码不要继续依赖 `CORE_SKILLS`、`ensureCoreSkills()` 或 `loadCoreSkillDefinitions()`。
 
 ## 实施步骤
 
@@ -231,42 +233,42 @@ if (agentDefinedSkills && agentDefinedSkills.length > 0) {
 3. ✅ 移除 CORE_SKILLS 导入
 4. ✅ 更新注释说明
 5. ✅ TypeScript 编译验证通过
+6. ✅ P2 中将 CoreSkills 迁入 `legacy/` 并删除相关测试
 
 ### 待完成
 
 1. ⏳ 更新 UI，添加推荐 Skills 提示
 2. ⏳ 创建迁移脚本（可选）
 3. ⏳ 更新用户文档
-4. ⏳ 考虑重命名 CORE_SKILLS → RECOMMENDED_SKILLS
 
 ## 测试建议
 
 ### 测试场景
 
 1. **空 Skills 配置**
+
    ```json
    { "skills": [] }
    ```
+
    预期: 运行时不加载任何 Skill
 
 2. **部分 Skills 配置**
+
    ```json
    { "skills": ["brain"] }
    ```
+
    预期: 运行时只加载 brain
 
 3. **全部核心 Skills**
+
    ```json
    {
-     "skills": [
-       "execution-protocol",
-       "self-reflection",
-       "eval-refine-loop",
-       "brain",
-       "dimension-architect"
-     ]
+     "skills": ["execution-protocol", "self-reflection", "eval-refine-loop", "brain", "dimension-architect"]
    }
    ```
+
    预期: 运行时加载全部 5 个
 
 4. **不存在的 Skill**
@@ -278,16 +280,19 @@ if (agentDefinedSkills && agentDefinedSkills.length > 0) {
 ### 验证方法
 
 **方法 1: 查看 context.jsonl**
+
 ```bash
 cat .home/workspaces/{sessionId}/context.jsonl | jq '.config.skills'
 ```
 
 **方法 2: 查看日志**
+
 ```
 [EnvInjector] Injected N agent skills: skill1, skill2, ...
 ```
 
 **方法 3: 在运行时使用 skill_list 工具**
+
 ```
 用户: 列出所有可用的 Skills
 AI: [显示实际加载的 Skills]
@@ -305,13 +310,15 @@ AI: [显示实际加载的 Skills]
 ## 相关文件
 
 ### 修改的文件
+
 - `src/main/agent/AgentEnvInjector.ts` - 移除强制注入，改为读取配置
 
-### 保留的文件（供参考）
-- `src/main/agent/skills/CoreSkills.ts` - CORE_SKILLS 常量保留，供 UI 推荐使用
-- `src/main/agent/skills/__tests__/CoreSkills.test.ts` - 测试文件保留
+### 兼容文件（不建议新代码使用）
+
+- `src/main/agent/skills/legacy/CoreSkills.ts` - 旧 CoreSkills 兼容层，已标记 `@deprecated`
 
 ### 需要更新的文件（未来）
+
 - 前端 Agent 编辑页面 - 添加推荐 Skills 提示
 - 用户文档 - 说明推荐的基础 Skills
 
@@ -330,13 +337,13 @@ AI: [显示实际加载的 Skills]
 <!-- Agent 编辑页面 -->
 <div class="skills-section">
   <label>Skills (可选)</label>
-  
+
   <!-- 推荐 Skills -->
   <div class="recommended-skills">
     <span>💡 推荐的基础 Skills:</span>
     <button @click="addRecommendedSkills">一键添加推荐 Skills</button>
   </div>
-  
+
   <!-- Skills 列表 -->
   <div class="skills-list">
     <skill-item v-for="skill in skills" :key="skill" />
@@ -352,13 +359,13 @@ AI: [显示实际加载的 Skills]
 
 如果你想要 Agent 具备以下能力，建议添加对应的 Skill：
 
-| Skill | 能力 | 推荐场景 |
-|-------|------|---------|
-| execution-protocol | 任务分解、五步工作法 | 复杂任务执行 |
-| self-reflection | 自我评估与修复 | 需要质量保证 |
-| eval-refine-loop | 输出质量评估 | 内容生成、优化 |
-| brain | 知识库复用 | 需要记忆和学习 |
-| dimension-architect | 需求量化分析 | 复杂需求分析 |
+| Skill               | 能力                 | 推荐场景       |
+| ------------------- | -------------------- | -------------- |
+| execution-protocol  | 任务分解、五步工作法 | 复杂任务执行   |
+| self-reflection     | 自我评估与修复       | 需要质量保证   |
+| eval-refine-loop    | 输出质量评估         | 内容生成、优化 |
+| brain               | 知识库复用           | 需要记忆和学习 |
+| dimension-architect | 需求量化分析         | 复杂需求分析   |
 
 **纯对话 Agent**: 如果只需要简单对话，可以不添加任何 Skill（`skills: []`）。
 
@@ -383,12 +390,12 @@ done
 
 ### 变更内容
 
-| 方面 | 旧机制 | 新机制 |
-|------|--------|--------|
+| 方面        | 旧机制               | 新机制         |
+| ----------- | -------------------- | -------------- |
 | Skills 来源 | 强制注入 CORE_SKILLS | Agent 配置文件 |
-| 用户控制 | ❌ 无法禁用 | ✅ 完全控制 |
-| 配置一致性 | ❌ 配置 ≠ 实际 | ✅ 配置 = 实际 |
-| 空数组行为 | 5 个核心 Skills | 0 个 Skills |
+| 用户控制    | ❌ 无法禁用          | ✅ 完全控制    |
+| 配置一致性  | ❌ 配置 ≠ 实际       | ✅ 配置 = 实际 |
+| 空数组行为  | 5 个核心 Skills      | 0 个 Skills    |
 
 ### 迁移要求
 
@@ -401,6 +408,7 @@ done
 🔴 **高优先级**
 
 这是破坏性变更，需要：
+
 1. 通知所有用户
 2. 提供迁移指南
 3. 更新文档和 UI

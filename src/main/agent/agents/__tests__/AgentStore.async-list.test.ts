@@ -1,0 +1,95 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentDefinition } from '../types';
+
+vi.mock('@main/common/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  })
+}));
+
+let tmpDir: string;
+let userDir: string;
+let homesDir: string;
+let builtinAgentsDir: string;
+
+vi.mock('@main/common/env', () => ({
+  get Env() {
+    return {
+      paths: {
+        userHome: tmpDir,
+        userAgentsDir: userDir,
+        builtinAgentsDir
+      }
+    };
+  }
+}));
+
+function writeAgent(dir: string, agent: AgentDefinition): void {
+  fs.writeFileSync(path.join(dir, `${agent.id}.json`), JSON.stringify(agent, null, 2), 'utf-8');
+}
+
+function createAgent(id: string, createdBy: AgentDefinition['createdBy'] = 'user'): AgentDefinition {
+  const now = new Date().toISOString();
+  return {
+    id,
+    name: id,
+    description: `${id} description`,
+    instructions: `${id} instructions`,
+    createdAt: now,
+    updatedAt: now,
+    createdBy,
+    version: 1,
+    skills: []
+  };
+}
+
+describe('AgentStore 异步列表', () => {
+  let AgentStore: typeof import('../AgentStore').AgentStore;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentstore-async-list-'));
+    userDir = path.join(tmpDir, 'agents');
+    homesDir = path.join(tmpDir, 'homes');
+    builtinAgentsDir = path.join(tmpDir, 'builtin-agents');
+    fs.mkdirSync(userDir, { recursive: true });
+    fs.mkdirSync(homesDir, { recursive: true });
+    fs.mkdirSync(builtinAgentsDir, { recursive: true });
+
+    vi.resetModules();
+    const mod = await import('../AgentStore');
+    AgentStore = mod.AgentStore;
+    AgentStore.resetInstance();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('listAsync 会通过异步索引重建读取用户和内置 Agent', async () => {
+    writeAgent(userDir, createAgent('alpha'));
+    writeAgent(userDir, createAgent('beta'));
+    writeAgent(builtinAgentsDir, createAgent('builtin-helper', 'system'));
+
+    const store = new AgentStore(userDir, homesDir);
+    const agents = await store.listAsync();
+
+    expect(agents.map((agent) => agent.id).sort()).toEqual(['alpha', 'beta', 'builtin-helper']);
+    expect(agents.find((agent) => agent.id === 'builtin-helper')?.createdBy).toBe('system');
+  });
+
+  it('list 兼容入口仍返回异步索引结果', async () => {
+    writeAgent(userDir, createAgent('alpha'));
+
+    const store = new AgentStore(userDir, homesDir);
+    const agents = await store.list();
+
+    expect(agents).toHaveLength(1);
+    expect(agents[0].id).toBe('alpha');
+  });
+});

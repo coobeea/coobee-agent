@@ -114,7 +114,7 @@ export const BeforeQuitAgentSystemHook: LifecycleHook = {
     // 1. 停止流式消费者
     try {
       const { streamConsumersManager } = await import('@main/agent/streaming/StreamConsumersManager');
-      streamConsumersManager.destroy();
+      await streamConsumersManager.destroy();
       log.info('[BeforeQuitAgentSystemHook] Stream consumers destroyed');
     } catch (err) {
       log.error('[BeforeQuitAgentSystemHook] Failed to destroy stream consumers:', err);

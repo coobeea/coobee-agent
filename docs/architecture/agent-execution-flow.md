@@ -209,8 +209,8 @@ chunk
 ```text
 StreamEmitter.forward()
   -> EventBus
-  -> EventWriter(events.jsonl)
-  -> HistoryWriter(history.jsonl)
+  -> EventWriter(async queue -> events.jsonl)
+  -> HistoryWriter(async queue -> history.jsonl)
   -> StreamMonitor(metrics)
 ```
 
@@ -224,6 +224,10 @@ Extension
 ```
 
 它不再直接写 `events.jsonl`，也不再持有 `StreamEmitter`。
+
+P2 后，`EventWriter` 和 `HistoryWriter` 不再在 EventBus listener 内同步 `appendFileSync`。它们会先把 JSONL 行写入内存队列，再由 `AsyncJsonlWriter` 批量异步 flush。会话结束、消费者销毁和应用退出前都会强制 flush，避免常规退出路径丢事件。
+
+`AsyncJsonlWriter` 默认使用普通异步 append，支持 `COOBEE_AGENT_SYNC_STREAM_WRITES=1` / `SYNC_MODE=1` 强制同步降级；如果需要进一步隔离高频写盘，可通过 `COOBEE_AGENT_STREAM_WRITE_WORKER=1` 启用可选 Worker 写盘路径。Worker append 失败时会回退到普通异步 append，不改变默认稳定路径。
 
 ## 5. 持久化边界
 
@@ -239,6 +243,7 @@ Extension
 
 P1 已经把 agentHome、dataDirectory、workspace、sessionDir 的运行期解析集中到 `AgentContextResolver`，但持久化边界仍需要继续观察：
 
+- P2 后 `ThreadStore.listAsync()`、`AgentStore.rebuildIndexAsync()`、`AgentStore.listAsync()` 已经覆盖批量列表/索引重建场景，路由、RPC 和启动恢复扫描也迁移到了异步列表入口。
 - `ThreadDefinition` 里仍有一些运行期可推导字段，需要后续判断是否保留。
 - `history.jsonl` 仍然承担前端消息投影职责，不应反向成为 SDK session 真相源。
 - `events.jsonl` 和 `history.jsonl` 应持续保持“事件事实”和“前端视图”的边界。
@@ -269,6 +274,7 @@ sessionStatus.unregister(sessionId)
 - Runtime 只负责产出 `StreamChunk`，不负责广播。
 - `AgentEventWriter` 只作为兼容层存在，新代码不要再依赖它。
 - Extension Hook 如果新增时机，需要写进类型、执行链路和文档，避免只停留在注释里。
+- EventBus 消费者不要在高频 listener 中直接做同步磁盘写入；新增持久化消费者应复用异步队列或等价机制。
 
 ## 8. 扩展阅读
 

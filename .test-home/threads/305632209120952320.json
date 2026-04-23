@@ -1,0 +1,14 @@
+{
+  "id": "305632209120952320",
+  "title": "Test Thread",
+  "agentId": "app-copilot",
+  "agentName": "应用管家",
+  "status": "active",
+  "sessionId": "305632209120952320",
+  "agentMode": "agent",
+  "runStatus": "idle",
+  "agentHomePath": "/Users/lifeng/git/git-coobee/coobee-agent/.test-home/agents/app-copilot",
+  "createdAt": "2026-04-23T09:13:17.026Z",
+  "updatedAt": "2026-04-23T09:13:17.026Z",
+  "overrideModel": "qwen3.5:9b"
+}

@@ -115,12 +115,22 @@ describe('ThreadStore 增强字段', () => {
     await store.create({ title: 'A', agentId: 'a1', agentMode: 'chat' });
     await store.create({ title: 'B', agentId: 'a2' });
 
-    const list = await store.list();
+    const list = await store.listAsync();
     expect(list).toHaveLength(2);
     expect(list[0].runStatus).toBe('idle');
     expect(list[0].workspacePath).toBe(path.join(workspacesDir, list[0].id));
     expect(list[1].runStatus).toBe('idle');
     expect(list[1].workspacePath).toBe(path.join(workspacesDir, list[1].id));
+  });
+
+  it('list 兼容入口委托到异步批量读取', async () => {
+    const store = new ThreadStore(tmpDir, workspacesDir);
+    await store.create({ title: 'A', agentId: 'a1' });
+    await store.create({ title: 'B', agentId: 'a2' });
+
+    const list = await store.list({ agentId: 'a1' });
+    expect(list).toHaveLength(1);
+    expect(list[0].agentId).toBe('a1');
   });
 
   it('get 返回包含所有新字段的完整定义', async () => {

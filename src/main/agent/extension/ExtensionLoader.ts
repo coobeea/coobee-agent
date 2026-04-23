@@ -16,6 +16,7 @@ import { createLogger } from '@main/common/logger';
 import { ExtensionRegistry } from './ExtensionRegistry';
 import { createExtensionApi, createEventBusWrapper } from './ExtensionApi';
 import type { ExtensionManifest, ExtensionModule, ExtensionOrigin } from './types';
+import { SkillManager } from '../skills/SkillManager';
 
 const log = createLogger('extension');
 
@@ -92,6 +93,8 @@ export class ExtensionLoader {
         await this.load(extDir, origin);
       }
     }
+
+    SkillManager.invalidateCache(searchPaths.join('|'), { immediate: true });
   }
 
   /**
@@ -220,6 +223,7 @@ export class ExtensionLoader {
     }
 
     this.loadedExtensions.set(manifest.id, dir);
+    SkillManager.invalidateCache(dir, { immediate: true });
 
     // 将该 Extension 新注册的工具同步到 ToolRegistry（热重载场景）
     const extTools = this.registry.getTools().filter((t) => t.extensionId === manifest.id);
@@ -300,6 +304,7 @@ export class ExtensionLoader {
     // 7. 清理本地记录
     this.loadedExtensions.delete(extensionId);
     this.loadedModules.delete(extensionId);
+    SkillManager.invalidateCache(extensionId, { immediate: true });
 
     log.info(`[ExtensionLoader] Unloaded "${extensionId}"`);
   }

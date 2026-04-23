@@ -184,7 +184,7 @@ Content.`;
     beforeEach(() => {
       tmpDir = path.join('/tmp', `skillmanager-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       fs.mkdirSync(tmpDir, { recursive: true });
-      SkillManager.invalidateCache();
+      SkillManager.resetCacheForTests();
       manager = new SkillManager();
     });
 
@@ -430,7 +430,7 @@ Content.`;
       configDir = path.join(tmpDir, 'config');
       fs.mkdirSync(path.join(tmpDir, 'skills'), { recursive: true });
       fs.mkdirSync(configDir, { recursive: true });
-      SkillManager.invalidateCache();
+      SkillManager.resetCacheForTests();
       manager = new SkillManager();
     });
 
@@ -521,6 +521,52 @@ Content.`;
       const blocks = manager.toPromptBlocks();
 
       expect(blocks).toContain('config-status="missing"');
+    });
+  });
+
+  // ==================== 缓存统计与失效 ====================
+
+  describe('cache stats / invalidation', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = path.join('/tmp', `skillmanager-cache-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      fs.mkdirSync(path.join(tmpDir, 'skill-a'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'skill-a', 'SKILL.md'),
+        '---\nname: Skill A\ndescription: Cached\n---\n\n# Skill A'
+      );
+      SkillManager.resetCacheForTests();
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      SkillManager.resetCacheForTests();
+    });
+
+    it('记录 cache miss / hit 和命中率', () => {
+      const first = new SkillManager();
+      first.scanSkills([tmpDir]);
+
+      const second = new SkillManager();
+      second.scanSkills([tmpDir]);
+
+      const stats = SkillManager.getCacheStats();
+      expect(stats.misses).toBe(1);
+      expect(stats.hits).toBe(1);
+      expect(stats.hitRate).toBe(0.5);
+    });
+
+    it('支持立即失效并记录路径', () => {
+      const manager = new SkillManager();
+      manager.scanSkills([tmpDir]);
+
+      SkillManager.invalidateCache(tmpDir, { immediate: true });
+
+      const stats = SkillManager.getCacheStats();
+      expect(stats.invalidations).toBe(1);
+      expect(stats.lastInvalidatedAt).toBeTypeOf('number');
+      expect(stats.invalidatedPaths).toContain(tmpDir);
     });
   });
 

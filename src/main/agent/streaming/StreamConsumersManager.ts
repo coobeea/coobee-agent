@@ -58,13 +58,13 @@ export class StreamConsumersManager {
   /**
    * 清理所有消费者资源
    */
-  destroy(): void {
+  async destroy(): Promise<void> {
     if (!this.initialized) return;
 
     try {
       this.streamMonitor?.stop();
-      this.eventWriter?.stop();
-      this.historyWriter?.stop();
+      await this.eventWriter?.stop();
+      await this.historyWriter?.stop();
 
       this.streamMonitor = null;
       this.eventWriter = null;
@@ -104,9 +104,17 @@ export class StreamConsumersManager {
    *
    * @param sessionId - 会话 ID
    */
-  clearSession(sessionId: string): void {
-    this.eventWriter?.clearSession(sessionId);
-    this.historyWriter?.clearSession(sessionId);
+  async clearSession(sessionId: string): Promise<void> {
+    await this.eventWriter?.clearSession(sessionId);
+    await this.historyWriter?.clearSession(sessionId);
+  }
+
+  /**
+   * 强制 flush 所有待写入事件
+   */
+  async flush(): Promise<void> {
+    await this.eventWriter?.flush();
+    await this.historyWriter?.flush();
   }
 
   /**

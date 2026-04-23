@@ -20,6 +20,20 @@ import { log } from '@main/common/logger';
 import type { SkillConfigField, SkillDefinition } from '../runtime/types';
 import { loadSkillConfigs, type SkillConfigMap } from './SkillConfig';
 
+export interface SkillCacheStats {
+  hits: number;
+  misses: number;
+  invalidations: number;
+  hitRate: number;
+  lastInvalidatedAt?: number;
+  invalidatedPaths: string[];
+}
+
+export interface InvalidateCacheOptions {
+  /** 立即清理缓存，跳过防抖 */
+  immediate?: boolean;
+}
+
 // ==================== Skill 文件解析 ====================
 
 /**
@@ -142,6 +156,17 @@ export class SkillManager {
   /** 缓存有效期（毫秒），默认 30 秒 */
   private static CACHE_TTL_MS = 30_000;
 
+  /** 缓存失效防抖时间（毫秒） */
+  private static INVALIDATE_DEBOUNCE_MS = 300;
+
+  /** 缓存命中统计 */
+  private static cacheHits = 0;
+  private static cacheMisses = 0;
+  private static cacheInvalidations = 0;
+  private static lastInvalidatedAt: number | undefined;
+  private static invalidatedPaths = new Set<string>();
+  private static invalidateTimer: NodeJS.Timeout | undefined;
+
   /**
    * 设置指定 session 的 SkillManager 实例
    *
@@ -175,9 +200,76 @@ export class SkillManager {
     SkillManager.sessionInstances.delete(sessionId);
   }
 
-  /** 清除全局缓存（热重载时调用） */
-  static invalidateCache(): void {
+  /**
+   * 清除全局缓存（热重载时调用）。
+   *
+   * 默认带 300ms 防抖，避免 watch 高频触发导致重复扫描。Extension 的
+   * load/unload 完成点可以传入 `{ immediate: true }` 立即失效。
+   */
+  static invalidateCache(skillPath?: string, options: InvalidateCacheOptions = {}): void {
+    if (skillPath) {
+      SkillManager.invalidatedPaths.add(skillPath);
+    }
+
+    if (options.immediate) {
+      SkillManager.clearCacheNow();
+      return;
+    }
+
+    if (SkillManager.invalidateTimer) {
+      clearTimeout(SkillManager.invalidateTimer);
+    }
+
+    SkillManager.invalidateTimer = setTimeout(() => {
+      SkillManager.invalidateTimer = undefined;
+      SkillManager.clearCacheNow();
+    }, SkillManager.INVALIDATE_DEBOUNCE_MS);
+  }
+
+  /**
+   * 获取缓存统计信息（测试和诊断用）。
+   */
+  static getCacheStats(): SkillCacheStats {
+    const total = SkillManager.cacheHits + SkillManager.cacheMisses;
+    return {
+      hits: SkillManager.cacheHits,
+      misses: SkillManager.cacheMisses,
+      invalidations: SkillManager.cacheInvalidations,
+      hitRate: total > 0 ? SkillManager.cacheHits / total : 0,
+      lastInvalidatedAt: SkillManager.lastInvalidatedAt,
+      invalidatedPaths: [...SkillManager.invalidatedPaths]
+    };
+  }
+
+  /**
+   * 重置缓存与统计（测试用）。
+   */
+  static resetCacheForTests(): void {
+    if (SkillManager.invalidateTimer) {
+      clearTimeout(SkillManager.invalidateTimer);
+      SkillManager.invalidateTimer = undefined;
+    }
     SkillManager.cache = null;
+    SkillManager.cacheHits = 0;
+    SkillManager.cacheMisses = 0;
+    SkillManager.cacheInvalidations = 0;
+    SkillManager.lastInvalidatedAt = undefined;
+    SkillManager.invalidatedPaths.clear();
+  }
+
+  private static clearCacheNow(): void {
+    if (SkillManager.invalidateTimer) {
+      clearTimeout(SkillManager.invalidateTimer);
+      SkillManager.invalidateTimer = undefined;
+    }
+    SkillManager.cache = null;
+    SkillManager.cacheInvalidations += 1;
+    SkillManager.lastInvalidatedAt = Date.now();
+    log.debug(
+      `[SkillManager] Cache invalidated${
+        SkillManager.invalidatedPaths.size > 0 ? ` (${[...SkillManager.invalidatedPaths].join(', ')})` : ''
+      }`
+    );
   }
 
   /** 已加载的 Skill（name → SkillDefinition） */
@@ -209,11 +301,14 @@ export class SkillManager {
     const cacheKey = searchPaths.join('|');
     const cached = SkillManager.cache;
     if (cached && cached.key === cacheKey && Date.now() - cached.ts < SkillManager.CACHE_TTL_MS) {
+      SkillManager.cacheHits += 1;
       this.skills = new Map(cached.skills);
       this.dirNameToSkillName = new Map(cached.dirMap);
       log.debug(`[SkillManager] 使用缓存，${this.skills.size} 个 Skill`);
       return this.getAll();
     }
+
+    SkillManager.cacheMisses += 1;
 
     // 缓存未命中，执行完整扫描
     this.doScan(searchPaths);
@@ -283,6 +378,7 @@ export class SkillManager {
    */
   register(skill: SkillDefinition): void {
     this.skills.set(skill.name, skill);
+    SkillManager.invalidateCache(skill.filePath);
     log.debug(`[SkillManager] 注册 Skill: ${skill.name}`);
   }
 
@@ -294,6 +390,7 @@ export class SkillManager {
   unregister(name: string): boolean {
     const existed = this.skills.delete(name);
     if (existed) {
+      SkillManager.invalidateCache(name);
       log.debug(`[SkillManager] 注销 Skill: ${name}`);
     }
     return existed;

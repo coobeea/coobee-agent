@@ -57,7 +57,7 @@ export function registerAgentRoutes(router: Router): void {
   router.get('/agents', async (ctx) => {
     try {
       const store = AgentStore.getInstance();
-      const agents = await store.list();
+      const agents = await store.listAsync();
 
       // 系统内置 Agent 排在最前
       agents.sort((a, b) => {

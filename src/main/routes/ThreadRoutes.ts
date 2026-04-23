@@ -50,13 +50,13 @@ export function registerThreadRoutes(router: Router): void {
       const limitNum = limit ? parseInt(limit as string, 10) : 50;
 
       // 获取总数（用于返回分页信息）
-      const allThreads = await store.list({
+      const allThreads = await store.listAsync({
         agentId: agentId as string | undefined
       });
       const total = allThreads.length;
 
       // 获取当前页数据
-      const threads = await store.list({
+      const threads = await store.listAsync({
         agentId: agentId as string | undefined,
         offset: offsetNum,
         limit: limitNum
