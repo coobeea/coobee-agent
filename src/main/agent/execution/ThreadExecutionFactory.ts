@@ -58,10 +58,7 @@ export class ThreadExecutionFactory {
    * @param agentExecutor AgentExecutor 实例
    * @param contextResolver AgentContextResolver 实例（可选，默认使用全局实例）
    */
-  static getInstance(
-    agentExecutor: AgentExecutor,
-    contextResolver?: AgentContextResolver
-  ): ThreadExecutionFactory {
+  static getInstance(agentExecutor: AgentExecutor, contextResolver?: AgentContextResolver): ThreadExecutionFactory {
     if (!ThreadExecutionFactory.instance) {
       ThreadExecutionFactory.instance = new ThreadExecutionFactory(
         agentExecutor,
@@ -86,9 +83,7 @@ export class ThreadExecutionFactory {
   async createBuilder(params: CreateBuilderParams): Promise<PiMonoBuilder> {
     const { threadId, sessionMode = 'file', isResume = false } = params;
 
-    log.debug(
-      `[ExecutionFactory] Creating builder for thread ${threadId} (mode=${sessionMode}, resume=${isResume})`
-    );
+    log.debug(`[ExecutionFactory] Creating builder for thread ${threadId} (mode=${sessionMode}, resume=${isResume})`);
 
     // 1. 加载 Thread 定义
     const { ThreadStore } = await import('../threads/ThreadStore');

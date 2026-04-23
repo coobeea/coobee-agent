@@ -6,6 +6,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AgentContextResolver, type ResolveParams } from '../AgentContextResolver';
 import type { AgentDefinition } from '../../agents/types';
 
+type MockAgentStore = {
+  _setMockAgent(agent: AgentDefinition): void;
+  _clearMockAgents(): void;
+};
+
+async function getMockAgentStore(): Promise<MockAgentStore> {
+  const { AgentStore } = await import('@main/agent/agents/AgentStore');
+  return (await AgentStore.getInstance()) as unknown as MockAgentStore;
+}
+
 // Mock dependencies
 vi.mock('@main/common/logger', () => ({
   createLogger: () => ({
@@ -52,14 +62,13 @@ describe('AgentContextResolver', () => {
 
   beforeEach(async () => {
     // 重置单例
-    (AgentContextResolver as any).instance = null;
+    AgentContextResolver.resetInstance();
     resolver = AgentContextResolver.getInstance();
     resolver.clearCache();
 
     // 清理 mock agents
-    const { AgentStore } = await import('@main/agent/agents/AgentStore');
-    const store = await AgentStore.getInstance();
-    (store as any)._clearMockAgents();
+    const store = await getMockAgentStore();
+    store._clearMockAgents();
   });
 
   describe('参数验证', () => {
@@ -105,8 +114,7 @@ describe('AgentContextResolver', () => {
   describe('正常场景', () => {
     it('应该正确解析 Agent 上下文', async () => {
       // 设置 mock agent
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-123',
         name: 'Test Agent',
@@ -121,7 +129,7 @@ describe('AgentContextResolver', () => {
           dataDirectory: '/custom/data/dir'
         }
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-123',
@@ -140,8 +148,7 @@ describe('AgentContextResolver', () => {
     });
 
     it('应该使用默认 dataDirectory', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-789',
         name: 'Test Agent',
@@ -154,7 +161,7 @@ describe('AgentContextResolver', () => {
         version: 1
         // 没有 metadata.dataDirectory
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-789',
@@ -167,8 +174,7 @@ describe('AgentContextResolver', () => {
     });
 
     it('应该使用 modelOverride', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-override',
         name: 'Test Agent',
@@ -180,7 +186,7 @@ describe('AgentContextResolver', () => {
         createdBy: 'user',
         version: 1
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-override',
@@ -194,8 +200,7 @@ describe('AgentContextResolver', () => {
     });
 
     it('应该忽略空字符串的 modelOverride', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-empty-model',
         name: 'Test Agent',
@@ -207,7 +212,7 @@ describe('AgentContextResolver', () => {
         createdBy: 'user',
         version: 1
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-empty-model',
@@ -223,8 +228,7 @@ describe('AgentContextResolver', () => {
 
   describe('缓存机制', () => {
     it('应该缓存解析结果', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-cache',
         name: 'Test Agent',
@@ -236,7 +240,7 @@ describe('AgentContextResolver', () => {
         createdBy: 'user',
         version: 1
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-cache',
@@ -254,8 +258,7 @@ describe('AgentContextResolver', () => {
     });
 
     it('clearCache 应该清空缓存', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-clear',
         name: 'Test Agent',
@@ -267,7 +270,7 @@ describe('AgentContextResolver', () => {
         createdBy: 'user',
         version: 1
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-clear',
@@ -294,8 +297,7 @@ describe('AgentContextResolver', () => {
 
   describe('路径安全验证', () => {
     it('应该接受合法的 workspace 路径', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-valid-path',
         name: 'Test Agent',
@@ -307,7 +309,7 @@ describe('AgentContextResolver', () => {
         createdBy: 'user',
         version: 1
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-valid-path',
@@ -321,8 +323,7 @@ describe('AgentContextResolver', () => {
     });
 
     it('应该拒绝路径遍历攻击', async () => {
-      const { AgentStore } = await import('@main/agent/agents/AgentStore');
-      const store = await AgentStore.getInstance();
+      const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-attack',
         name: 'Test Agent',
@@ -334,7 +335,7 @@ describe('AgentContextResolver', () => {
         createdBy: 'user',
         version: 1
       };
-      (store as any)._setMockAgent(mockAgent);
+      store._setMockAgent(mockAgent);
 
       const params: ResolveParams = {
         agentId: 'agent-attack',

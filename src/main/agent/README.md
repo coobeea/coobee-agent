@@ -1,171 +1,143 @@
-# AI 模块架构说明
+# Agent 模块架构说明
 
-> 最后更新：2026-02-15
+> 最后更新：2026-04-23
+
+`src/main/agent` 是 Electron 主进程里的 Agent 执行内核。它不是单纯的 SDK wrapper，而是负责把 Thread、Agent 定义、Runtime、工具、Skill、Extension、沙箱和事件持久化串成一条可执行链路。
 
 ## 目录结构
 
+```text
+src/main/agent/
+├── AgentExecutor.ts              # 执行调度：并发锁、Abort、Hook、事件转发、清理
+├── AgentEnv.ts                   # 运行期 AgentEnv 类型和 runtime paths 格式化
+├── AgentEnvInjector.ts           # 环境注入：workspace、Skill、工具、沙箱、prompt blocks
+├── AgentEventWriter.ts           # 已废弃兼容层：Extension 事件转发到 EventBus
+├── agents/                       # Agent 定义、Agent Home、导入导出
+├── context/                      # AgentContextResolver：统一运行期路径和上下文解析
+├── execution/                    # ThreadExecutionFactory：统一 Thread -> Builder 配置
+├── extension/                    # Extension 加载、注册、Hook 执行和隔离
+├── prompt/                       # PromptAssemblyService：appendInstructions 拼装
+├── provider/                     # Provider、模型选择、API Key、fallback、成本统计
+├── runtime/                      # Runtime 抽象、PiMono/OpenAI 适配、session/compression/tool services
+├── sandbox/                      # 路径守卫、命令策略、工具策略、Docker 上下文
+├── skills/                       # Skill 扫描、缓存、按需发现
+├── streaming/                    # StreamEmitter、EventWriter、HistoryWriter、StreamMonitor
+├── threads/                      # Thread 元数据、恢复唤醒、workspace 目录结构
+└── tools/                        # SDK 无关 ToolDefinition、注册表、内置工具
 ```
-src/main/ai/
-├── AgentExecutor.ts         # 执行调度层（Builder + 并发控制 + HITL 编排）
-├── AgentEnv.ts              # Agent 环境构建（AgentEnv 接口 + formatRuntimePaths）
-├── runtime/                 # 运行时层
-│   ├── AgentRuntime.ts      # 统一运行时接口
-│   ├── types.ts             # 公共类型（StreamChunk, ExecutionResult, SkillDefinition...）
-│   ├── pimono/              # PiMono Runtime（pi-coding-agent SDK）
-│   └── openai/              # OpenAI Runtime（@openai/agents SDK）
-├── tools/                   # 工具系统（SDK 无关）
-│   ├── types.ts             # ToolDefinition, ToolCategory
-│   ├── registry.ts          # ToolRegistry（工具注册表）
-│   └── builtin/             # 10 个内置工具
-│       ├── read.ts          # 文件读取
-│       ├── write.ts         # 文件写入
-│       ├── edit.ts          # 文件编辑
-│       ├── exec.ts          # Shell 命令执行（含 ExecPolicy 安全策略）
-│       ├── process.ts       # 后台进程管理
-│       ├── memory.ts        # 持久化记忆管理
-│       ├── session_status.ts   # 会话状态查询
-│       ├── session_history.ts  # 对话历史时间线
-│       ├── context_inspect.ts  # LLM 上下文快照查看
-│       └── skill_list.ts      # 按需 Skill 发现
-├── skills/                  # Skill 管理
-│   └── SkillManager.ts      # 扫描、加载、注册、查询 Skill
-├── sandbox/                 # 沙箱安全层
-│   ├── path-guard.ts        # 路径守卫（含 symlink 穿越检查）
-│   ├── exec-policy.ts       # 命令安全策略（白名单/黑名单/allowlist 学习）
-│   ├── tool-policy.ts       # 工具策略（allow/deny 过滤）
-│   ├── docker.ts            # Docker 容器隔离
-│   ├── context.ts           # SandboxContext 构建
-│   └── types.ts             # 沙箱类型定义
-├── process/                 # 后台进程注册表
-│   └── ProcessRegistry.ts   # 单例进程管理（MAX=20）
-├── streaming/               # 流式输出
-│   ├── StreamEmitter.ts     # 流式消息生产者
-│   └── types.ts             # 流式类型定义
-├── memory/                  # ⚠️ 设计储备（未接入产品代码）
-│   ├── SessionMemoryStore.ts
-│   ├── ShortTermMemory.ts
-│   ├── WorkingMemoryStore.ts
-│   └── LongTermMemoryStore.ts
-├── teams/                   # ⚠️ OpenAI SDK 专用（多 Agent Team）
-├── orchestration/           # ⚠️ OpenAI SDK 专用（Orchestrator-Worker）
-└── swarm/                   # ⚠️ OpenAI SDK 专用（Swarm 编排）
-```
-
----
 
 ## 核心执行链路
 
-```
-Gateway (chat.ts)
-  → agentExecutor.submit({ builder, message, sessionId })
-    → AgentExecutor.execute()
-      1. injectEnv() — 注入环境 + 执行协议 + Skill 发现提示
-      2. Extension hooks — before_agent_start
-      3. builder.build() → AgentRuntime
-      4. runtime.stream() — 流式执行
-      5. Extension hooks — agent_end / session_end
-      6. runtime.destroy()
+```text
+ChatRoutes / ThreadWaker
+  -> ThreadExecutionFactory.createBuilder()
+  -> AgentExecutor.stream() / submit()
+  -> AgentEnvInjector.injectEnv()
+  -> Extension start hooks
+  -> builder.build()
+  -> runtime.stream(message)
+  -> AgentExecutor.consumeAndForward()
+  -> StreamEmitter.forward()
+  -> EventBus
+  -> StreamConsumers(EventWriter / HistoryWriter / StreamMonitor)
+  -> Extension end hooks
+  -> runtime.destroy()
 ```
 
----
+P1 后的关键约束：
+
+- Thread 执行 Builder 统一由 `ThreadExecutionFactory` 创建，避免 ChatRoutes 和 ThreadWaker 配置漂移。
+- Agent Home、dataDirectory、workspace、sessionDir、effectiveModel 统一由 `AgentContextResolver` 解析。
+- runtime paths、AGENTS.md、Agent Home、workspace context、Skill discovery 和 Extension instructions 统一由 `PromptAssemblyService` 拼装。
+- Runtime 只产出 `StreamChunk`，事件广播和落盘统一由 `AgentExecutor -> StreamEmitter -> EventBus -> StreamConsumers` 完成。
+
+## Runtime
+
+| Runtime              | SDK               | 状态         |
+| -------------------- | ----------------- | ------------ |
+| `PiMonoAgentRuntime` | `pi-coding-agent` | 主力 Runtime |
+| `OpenAIAgentRuntime` | `@openai/agents`  | 支持 Runtime |
+
+两套 Runtime 都实现 `AgentRuntime` 接口，并以 `AsyncGenerator<StreamChunk>` 形式输出事件。OpenAI Runtime 在 P1 后也不再直接调用 `StreamEmitter`，`agent:updated` 和工具增量统一走 yield。
 
 ## 工具系统
 
-工具使用统一 `ToolDefinition` 接口，**SDK 无关**。Runtime 内部自动转换为各 SDK 原生格式。
-
-工具通过 AsyncGenerator 模式执行：
-
-- `yield ToolStreamUpdate` — 增量输出（进度、中间结果）
-- `return ToolResult` — 最终结果
-
-工具本身只包含纯执行逻辑，安全策略由 sandbox 层统一处理。
-
-### 内置工具分类
-
-| 类别     | 工具                                                   | 风险  |
-| -------- | ------------------------------------------------------ | ----- |
-| 文件操作 | `read`, `write`, `edit`                                | 低/中 |
-| 执行     | `exec`, `process`                                      | 高/中 |
-| 记忆     | `memory`                                               | 低    |
-| 可观测性 | `session_status`, `session_history`, `context_inspect` | 低    |
-| 发现     | `skill_list`                                           | 低    |
-
----
-
-## Skill 系统
-
-Skill 是文件驱动的场景化指导知识（`SKILL.md`），通过按需发现机制加载：
-
-1. Agent 调用 `skill_list` 工具查看可用 Skill
-2. Agent 决定使用某个 Skill
-3. Agent 调用 `read` 工具读取 SKILL.md
-4. Agent 按指令操作
-
-Skill 来源按优先级：内置 → Extension 贡献 → 用户 → Agent 自生成。
-
----
-
-## 安全层
-
-### 路径守卫（path-guard）
-
-- 所有文件操作路径限制在 workspaceRoot/sandboxRoot 内
-- **符号链接穿越检查**：通过 `realpathSync` 解析真实路径
-- 防止 `../../../etc/passwd` 类路径穿越攻击
-
-### 命令策略（exec-policy）
-
-- **安全白名单**：`ls`, `git`, `node` 等只读/低风险命令直接放行
-- **危险黑名单**：`rm -rf`, `sudo`, `curl|sh` 等始终拒绝
-- **未知命令**：不在白名单的命令直接拒绝执行
-
-### 工具策略（tool-policy）
-
-- 基于 allow/deny 规则过滤工具调用
-
----
-
-## 运行时实现
-
-| Runtime            | SDK             | 状态 |
-| ------------------ | --------------- | ---- |
-| PiMonoAgentRuntime | pi-coding-agent | 主力 |
-| OpenAIAgentRuntime | @openai/agents  | 支持 |
-
-两个 Runtime 都实现 `AgentRuntime` 接口，支持：
-
-- 流式执行（AsyncGenerator）
-- 会话持久化（JSONL）
-- 上下文压缩
-- 上下文快照
-
----
-
-## 添加新工具
+工具使用 SDK 无关的 `ToolDefinition`：
 
 ```typescript
-import { z } from 'zod';
-import type { ToolDefinition, ToolStreamUpdate, ToolResult } from '../types';
-import { ToolCategory } from '../types';
-
-export const myTool: ToolDefinition = {
-  name: 'my_tool',
-  description: '工具描述（给 LLM 看）',
-  category: ToolCategory.FileSystem,
-  needUserConfirm: false,
-  parameters: z.object({
-    input: z.string().describe('输入参数')
-  }),
-
-  execute: async function* (
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: ZodSchema;
+  execute: (
     params: Record<string, unknown>,
     signal?: AbortSignal,
     context?: ToolExecutionContext
-  ): AsyncGenerator<ToolStreamUpdate, ToolResult, unknown> {
-    yield { type: 'progress', content: 'Processing...' };
-    return { success: true, llmContent: 'Done.' };
-  }
-};
+  ) => AsyncGenerator<ToolStreamUpdate, ToolResult, unknown>;
+}
 ```
 
-然后在 `builtin/index.ts` 中导入并加入 `builtinTools` 数组。
+工具执行统一经过 sandbox 和 pipeline，Runtime 只负责把工具定义转换为对应 SDK 的工具格式。
+
+常见内置工具：
+
+| 类别   | 工具                                                                              |
+| ------ | --------------------------------------------------------------------------------- |
+| 文件   | `read`, `write`, `edit`, `glob`, `search`                                         |
+| 执行   | `exec`, `process`                                                                 |
+| 记忆   | `memory`                                                                          |
+| 可观测 | `session_status`, `session_history`, `context_inspect`, `task-plan`, `todo-write` |
+| 发现   | `skill_list`                                                                      |
+
+## Skill 与 Prompt
+
+Skill 通过按需发现机制暴露给 Agent：
+
+1. Runtime 注入 Skill discovery 说明。
+2. Agent 调用 `skill_list` 查看可用 Skill。
+3. Agent 选择需要的 Skill 后，用 `read` 读取对应 `SKILL.md`。
+4. Agent 按 Skill 指令执行任务。
+
+Prompt 附加块不再散落在 Runtime 和 Injector 中，而是由 `PromptAssemblyService` 统一装配，并带默认字符预算。
+
+## Extension
+
+Extension Hook 分三类：
+
+| 阶段   | Hook                                                      |
+| ------ | --------------------------------------------------------- |
+| 启动前 | `message_received`, `session_start`, `before_agent_start` |
+| 执行中 | `before_tool_call`, `after_tool_call`                     |
+| 结束后 | `agent_end`, `session_end`                                |
+
+如果后续需要把 agent handoff、checkpoint、approval 等节点也做成扩展点，需要同步更新 Hook 类型、执行位置和架构文档。
+
+## 事件与持久化
+
+主事件链路：
+
+```text
+Runtime yield chunk
+  -> AgentExecutor.consumeAndForward()
+  -> StreamEmitter.forward()
+  -> EventBus
+  -> EventWriter(events.jsonl)
+  -> HistoryWriter(history.jsonl)
+  -> StreamMonitor
+```
+
+持久化分工：
+
+| 文件                            | 语义                |
+| ------------------------------- | ------------------- |
+| `threads/{id}.json`             | Thread 元数据真相源 |
+| `workspaces/{id}/sessions/...`  | SDK 会话历史        |
+| `workspaces/{id}/history.jsonl` | 前端消息投影        |
+| `workspaces/{id}/events.jsonl`  | 细粒度事件日志      |
+| `workspaces/{id}/context*.json` | 调试和审计快照      |
+
+## 参考文档
+
+- [Agent 执行流程](../../../docs/architecture/agent-execution-flow.md)
+- [Agent 模块梳理与优化建议](../../../docs/architecture/agent-module-review.md)
+- [P1 三个服务接口说明](../../../docs/architecture/agent-p1-services.md)

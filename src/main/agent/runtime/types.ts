@@ -360,6 +360,8 @@ export type StreamChunkType =
   // ⑦ handoff: Agent 切换
   | 'handoff:start' // 请求切换
   | 'handoff:done' // 切换完成
+  // ⑦.5 agent: Agent 运行期状态
+  | 'agent:updated' // SDK 当前 Agent 已切换或更新
   // ⑧ compression: Session 压缩
   | 'compression:start' // 压缩开始
   | 'compression:done' // 压缩完成（含统计信息）

@@ -17,7 +17,6 @@ import type { StreamedRunResult, Tool } from '@openai/agents';
 import { FileSession } from './FileSession';
 import { SessionCompressor } from './SessionCompressor';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
-import { createStreamEmitter, type IStreamEmitter } from '../../streaming/StreamEmitter';
 import { AbstractAgentRuntime } from '../AbstractAgentRuntime';
 import {
   buildInstructions,
@@ -91,8 +90,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   private session!: FileSession;
   private readonly sessionId: string;
 
-  // 流式输出
-  private streamEmitter!: IStreamEmitter;
+  // Runtime 内部异步回调产生的 chunk，统一由 stream generator yield 给 AgentExecutor。
+  private pendingRuntimeChunks: StreamChunk[] = [];
 
   // Session 压缩器
   private compressor?: SessionCompressor;
@@ -140,13 +139,6 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
 
     // 2. 创建 FileSession（单层持久化）
     this.session = new FileSession(this.sessionId, this.options.sessionDir);
-
-    // 3. 创建流式发射器
-    this.streamEmitter = createStreamEmitter(this.sessionId, {
-      type: 'agent',
-      id: this.id,
-      name: this.name
-    });
 
     // 4. 创建 Session 压缩器（如果配置启用）
     if (this.options.compression?.enabled) {
@@ -401,24 +393,29 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
           this.handleRunItemStreamEvent(event, emit);
           break;
         case 'agent_updated_stream_event':
-          await this.handleAgentUpdatedStreamEvent(event);
+          this.handleAgentUpdatedStreamEvent(event, emit);
           break;
       }
 
       // yield 本轮收集的所有 chunk
-      for (const chunk of buffer) {
+      for (const chunk of [...buffer, ...this.drainPendingRuntimeChunks()]) {
         yield chunk;
       }
     }
 
     // 关闭最后一轮
     if (state.turnOpen) {
+      buffer.length = 0;
       thinkParser.flush();
       // flush 可能产生额外 chunk
-      for (const chunk of buffer) {
+      for (const chunk of [...buffer, ...this.drainPendingRuntimeChunks()]) {
         yield chunk;
       }
       yield { type: 'turn:done', content: '', data: { turnIndex: state.turnIndex } };
+    }
+
+    for (const chunk of this.drainPendingRuntimeChunks()) {
+      yield chunk;
     }
   }
 
@@ -598,13 +595,20 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   /**
    * 处理 agent_updated_stream_event：Agent 切换通知
    */
-  private async handleAgentUpdatedStreamEvent(event: {
-    type: 'agent_updated_stream_event';
-    agent?: { name?: string };
-  }): Promise<void> {
+  private handleAgentUpdatedStreamEvent(
+    event: {
+      type: 'agent_updated_stream_event';
+      agent?: { name?: string };
+    },
+    emit: (chunk: StreamChunk) => void
+  ): void {
     const agentName = event.agent?.name || 'unknown';
-    await this.streamEmitter.emit('agent_updated', `Agent updated: ${agentName}`, {
-      agentName
+    emit({
+      type: 'agent:updated',
+      content: `Agent updated: ${agentName}`,
+      data: {
+        agentName
+      }
     });
   }
 
@@ -678,8 +682,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
           const result = await executeToolPipeline(def, params as Record<string, unknown>, {
             sandboxContext,
             onUpdate: (update) => {
-              // 桥接到 StreamChunk: tool:delta → forward 自动映射为 StreamMessage
-              this.streamEmitter?.forward({
+              // 工具增量输出也回到 yield 链路，由 AgentExecutor 统一广播和持久化。
+              this.pendingRuntimeChunks.push({
                 type: 'tool:delta',
                 content: update.content,
                 data: { delta: update.content }
@@ -691,6 +695,13 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         }
       })
     );
+  }
+
+  private drainPendingRuntimeChunks(): StreamChunk[] {
+    if (this.pendingRuntimeChunks.length === 0) return [];
+    const chunks = [...this.pendingRuntimeChunks];
+    this.pendingRuntimeChunks.length = 0;
+    return chunks;
   }
 
   // ========== Session 压缩 ==========

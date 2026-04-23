@@ -10,7 +10,7 @@
  * 已提取的职责：
  *   - Builder 实现 → runtime/pimono/PiMonoBuilder.ts, runtime/openai/OpenAIBuilder.ts
  *   - 环境注入 → AgentEnvInjector.ts
- *   - 事件写入 → AgentEventWriter.ts
+ *   - 事件广播 / 持久化 → StreamEmitter.ts + StreamConsumersManager.ts
  *   - 执行协议 → AgentEnvInjector.ts (buildExecutionProtocol)
  *   - HITL 审批 → extensions/tool-approval（通过 before_tool_call Hook）
  *   - 块处理（指标/ Hook/ suspendReason）→ runtime/ChunkProcessor.ts

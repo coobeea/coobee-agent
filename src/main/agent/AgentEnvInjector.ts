@@ -21,7 +21,6 @@
  */
 
 import path from 'node:path';
-import fs from 'node:fs';
 import { createLogger } from '@main/common/logger';
 import { formatRuntimePaths, buildAgentEnv, type AgentEnv } from './AgentEnv';
 import { SkillManager } from './skills';
@@ -31,6 +30,7 @@ import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
 import type { AgentBuilder } from './AgentExecutor';
 import { AgentContextResolver } from './context/AgentContextResolver';
+import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 
 const log = createLogger('ai');
 
@@ -75,7 +75,6 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         agentEnv.agentName = agentName;
       }
     }
-
 
     // 6. P1 重构：使用 AgentContextResolver 解析运行时上下文
     let agentDefinedSkills: string[] | undefined;
@@ -131,23 +130,21 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
             `3. Follow the instructions in the SKILL.md file\n` +
             `</skill_discovery>`
           : '';
-      const agentsMdBlock = await readAgentsMdFiles(Env.paths.agentsMdPath, agentHome, workspace);
-      const agentHomeBlock = homeManager && agentId ? homeManager.readInjectableFiles(agentId) : undefined;
-      const workspaceCtxBlock = readWorkspaceContextFiles(workspace);
-
       // 收集 Extension 注入的指令（运行时注入，对所有 Agent 生效）
       const extensionInstructions = collectExtensionInstructions();
-
-      builder.appendInstructions(
-        // 🔕 执行协议注入已禁用（过于复杂）
-        // executionProtocol,
+      const promptAssembly = new PromptAssemblyService();
+      const promptBlocks = promptAssembly.assemble({
         runtimePathsBlock,
-        ...(agentsMdBlock ? [agentsMdBlock] : []),
-        ...(agentHomeBlock ? [agentHomeBlock] : []),
-        ...(workspaceCtxBlock ? [workspaceCtxBlock] : []),
-        ...(skillDiscoveryHint ? [skillDiscoveryHint] : []),
-        ...extensionInstructions
-      );
+        globalAgentsMdPath: Env.paths.agentsMdPath,
+        agentHome,
+        agentId,
+        agentHomeManager: homeManager,
+        workspace,
+        skillDiscoveryHint,
+        extensionInstructions
+      });
+
+      builder.appendInstructions(...promptAssembly.toInstructions(promptBlocks));
 
       // 8b. 根据 Agent 配置注入 Skills（不再强制注入核心 Skills）
       //     只注入 Agent 配置文件中指定的 skills
@@ -155,18 +152,16 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         const skillDefs = agentDefinedSkills
           .map((name) => skillManager.getByName(name))
           .filter((s): s is NonNullable<typeof s> => s !== null);
-        
+
         if (skillDefs.length > 0) {
           builder.skills(skillDefs);
           log.info(
             `[EnvInjector] Injected ${skillDefs.length} agent skills: ${skillDefs.map((s) => s.name).join(', ')}`
           );
         }
-        
+
         // 警告：如果配置的 skill 找不到
-        const notFound = agentDefinedSkills.filter(
-          (name) => !skillDefs.find((s) => s.name === name)
-        );
+        const notFound = agentDefinedSkills.filter((name) => !skillDefs.find((s) => s.name === name));
         if (notFound.length > 0) {
           log.warn(`[EnvInjector] Skills not found: ${notFound.join(', ')}`);
         }
@@ -242,145 +237,6 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
     log.warn(`[EnvInjector] Failed, continuing without env:`, error);
     return undefined;
   }
-}
-
-// ==================== 工作空间上下文文件读取 ====================
-
-/**
- * 扫描工作空间根目录下的用户 .md 文件，作为会话级持久上下文注入
- *
- * 只读取工作空间根下的 .md 文件（不递归），不包含 .runtime/ 等系统目录下的文件。
- *
- * 典型用例：Agent 在上一轮对话中写入 discussion_summary.md，
- * 下一轮对话自动加载，保持跨轮次的对话连续性。
- */
-function readWorkspaceContextFiles(workspace: string): string | undefined {
-  const EXCLUDED = new Set<string>();
-  const maxTotalLen = 6000;
-  const maxPerFile = 3000;
-
-  try {
-    const entries = fs.readdirSync(workspace, { withFileTypes: true });
-    const mdFiles = entries
-      .filter((e) => e.isFile() && e.name.endsWith('.md') && !EXCLUDED.has(e.name))
-      .map((e) => e.name)
-      .sort();
-
-    if (mdFiles.length === 0) return undefined;
-
-    const sections: string[] = [];
-    let totalLen = 0;
-
-    for (const file of mdFiles) {
-      if (totalLen >= maxTotalLen) break;
-      const filePath = path.join(workspace, file);
-      try {
-        let content = fs.readFileSync(filePath, 'utf-8').trim();
-        if (!content) continue;
-        if (content.length > maxPerFile) {
-          content = content.slice(0, maxPerFile) + '\n\n... (truncated)';
-        }
-        const section = `### ${file}\n\n${content}`;
-        sections.push(section);
-        totalLen += section.length;
-      } catch {
-        // 跳过不可读文件
-      }
-    }
-
-    if (sections.length === 0) return undefined;
-
-    return `<workspace_context>
-Session-persistent context files from the workspace root.
-These were created in previous conversation turns and auto-loaded for continuity.
-You may update or add new files in the workspace root to persist information across turns.
-
-${sections.join('\n\n---\n\n')}
-</workspace_context>`;
-  } catch {
-    return undefined;
-  }
-}
-
-// ==================== AGENTS.md 协议文件读取 ====================
-
-/**
- * 读取并合并二级 AGENTS.md 协议文件
- *
- * 优先级（后者可覆盖前者规则）：
- *   1. 全局 AGENTS.md（{userHome}/AGENTS.md）— 系统级规则（所有 Agent 共享）
- *   2. Agent级 AGENTS.md（homes/{agentId}/AGENTS.md）— Agent 自定义规则（跨会话持久）
- *
- * @param globalPath 全局 AGENTS.md 路径
- * @param agentHome Agent Home 目录路径（可选）
- * @param _workspace 工作空间根路径（已废弃，仅保留参数兼容）
- * @returns `<system_agents_md>` XML 块，或 undefined
- */
-async function readAgentsMdFiles(
-  globalPath: string,
-  agentHome: string | undefined,
-  _workspace: string
-): Promise<string | undefined> {
-  // 🔓 取消截断限制 - 完整加载 AGENTS.md 内容
-  const parts: string[] = [];
-  const seenContent = new Set<string>();
-
-  // 1. 全局 AGENTS.md
-  try {
-    const content = fs.readFileSync(globalPath, 'utf-8').trim();
-    if (content) {
-      parts.push(content);
-      seenContent.add(content);
-    }
-  } catch {
-    // 文件不存在时静默
-  }
-
-  // 2. Agent级 AGENTS.md
-  const agentMdPath = agentHome ? path.join(agentHome, 'AGENTS.md') : undefined;
-  if (agentMdPath) {
-    try {
-      const content = fs.readFileSync(agentMdPath, 'utf-8').trim();
-      if (content && !seenContent.has(content) && !isOnlyComments(content)) {
-        parts.push(`---\n\n<!-- Agent-level rules (${agentMdPath}) -->\n\n${content}`);
-        seenContent.add(content);
-      }
-    } catch {
-      // 文件不存在时静默
-    }
-  }
-
-  if (parts.length === 0) return undefined;
-
-  // 🔓 不再截断，完整加载
-  const merged = parts.join('\n\n');
-
-  const pathLines = [`Global path: ${globalPath}`];
-  if (agentMdPath) pathLines.push(`Agent path: ${agentMdPath}`);
-
-  return `<system_agents_md>
-This is the system-wide AGENTS.md protocol file. It contains identity, rules, and shared context
-that ALL agents MUST follow. You may update the Agent-level copy in your Agent Home directory.
-
-${pathLines.join('\n')}
-
-${merged}
-</system_agents_md>`;
-}
-
-/**
- * 判断内容是否仅包含 Markdown 注释
- */
-function isOnlyComments(content: string): boolean {
-  const stripped = content
-    .split('\n')
-    .filter((line) => {
-      const trimmed = line.trim();
-      return trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('<!--') && !trimmed.endsWith('-->');
-    })
-    .join('')
-    .trim();
-  return stripped.length === 0;
 }
 
 // ==================== Skill 上下文环境变量 ====================

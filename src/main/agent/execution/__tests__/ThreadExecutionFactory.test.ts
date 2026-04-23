@@ -6,7 +6,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ThreadExecutionFactory, type CreateBuilderParams } from '../ThreadExecutionFactory';
 import type { AgentDefinition } from '../../agents/types';
 import type { ThreadDefinition } from '../../threads/types';
-import type { AgentContext } from '../../context/AgentContextResolver';
+import type { AgentContext, AgentContextResolver } from '../../context/AgentContextResolver';
+import type { getAgentExecutor } from '../../AgentExecutor';
+
+type AgentExecutorInstance = ReturnType<typeof getAgentExecutor>;
 
 // Mock dependencies
 vi.mock('@main/common/logger', () => ({
@@ -68,23 +71,23 @@ describe('ThreadExecutionFactory', () => {
 
     // 创建 factory
     factory = ThreadExecutionFactory.getInstance(
-      mockAgentExecutor as any,
-      mockContextResolver as any
+      mockAgentExecutor as unknown as AgentExecutorInstance,
+      mockContextResolver as unknown as AgentContextResolver
     );
   });
 
   describe('单例模式', () => {
     it('应该返回同一个实例', () => {
-      const instance1 = ThreadExecutionFactory.getInstance(mockAgentExecutor as any);
-      const instance2 = ThreadExecutionFactory.getInstance(mockAgentExecutor as any);
+      const instance1 = ThreadExecutionFactory.getInstance(mockAgentExecutor as unknown as AgentExecutorInstance);
+      const instance2 = ThreadExecutionFactory.getInstance(mockAgentExecutor as unknown as AgentExecutorInstance);
 
       expect(instance1).toBe(instance2);
     });
 
     it('resetInstance 应该清空单例', () => {
-      const instance1 = ThreadExecutionFactory.getInstance(mockAgentExecutor as any);
+      const instance1 = ThreadExecutionFactory.getInstance(mockAgentExecutor as unknown as AgentExecutorInstance);
       ThreadExecutionFactory.resetInstance();
-      const instance2 = ThreadExecutionFactory.getInstance(mockAgentExecutor as any);
+      const instance2 = ThreadExecutionFactory.getInstance(mockAgentExecutor as unknown as AgentExecutorInstance);
 
       expect(instance1).not.toBe(instance2);
     });

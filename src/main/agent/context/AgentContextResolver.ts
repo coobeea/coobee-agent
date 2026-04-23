@@ -98,7 +98,9 @@ export class AgentContextResolver {
   /** 缓存有效期（5 分钟） */
   private readonly CACHE_TTL = 5 * 60 * 1000;
 
-  private constructor() {}
+  private constructor() {
+    // Enforce singleton creation through getInstance().
+  }
 
   /**
    * 获取单例实例
@@ -108,6 +110,13 @@ export class AgentContextResolver {
       AgentContextResolver.instance = new AgentContextResolver();
     }
     return AgentContextResolver.instance;
+  }
+
+  /**
+   * 重置单例实例（主要用于测试隔离）
+   */
+  static resetInstance(): void {
+    AgentContextResolver.instance = null;
   }
 
   /**

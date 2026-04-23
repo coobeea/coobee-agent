@@ -12,17 +12,17 @@
 
 `src/main/agent` 不是一个“单纯的 LLM SDK 封装层”，而是 Electron 主进程里的 **Agent 执行内核**。它同时承担了下面几类职责：
 
-| 子模块 | 主要职责 | 关键文件 |
-| --- | --- | --- |
-| 执行编排 | 并发锁、Abort、生命周期、Hook、状态同步 | `AgentExecutor.ts` |
-| 运行时环境 | workspace、Agent Home、Skill、工具、沙箱上下文注入 | `AgentEnvInjector.ts`, `AgentEnv.ts` |
-| Runtime 适配 | PiMono / OpenAI 两套运行时抽象和 Builder | `runtime/` |
-| 工具系统 | 工具注册、统一执行管线、安全检查 | `tools/`, `runtime/shared/ToolExecutionPipeline.ts` |
-| Skill 系统 | Skill 扫描、缓存、按会话暴露给 `skill_list` | `skills/SkillManager.ts` |
-| Agent / Thread 持久化 | Agent 定义、Agent Home、Thread 元数据、恢复 | `agents/`, `threads/` |
-| Provider | 模型选择、API Key、thinkingLevel 注入 | `provider/` |
-| Extension | hook、扩展工具、扩展技能、运行时指令 | `extension/` |
-| 流式持久化 | EventBus 广播、events/history 写盘 | `streaming/` |
+| 子模块                | 主要职责                                           | 关键文件                                            |
+| --------------------- | -------------------------------------------------- | --------------------------------------------------- |
+| 执行编排              | 并发锁、Abort、生命周期、Hook、状态同步            | `AgentExecutor.ts`                                  |
+| 运行时环境            | workspace、Agent Home、Skill、工具、沙箱上下文注入 | `AgentEnvInjector.ts`, `AgentEnv.ts`                |
+| Runtime 适配          | PiMono / OpenAI 两套运行时抽象和 Builder           | `runtime/`                                          |
+| 工具系统              | 工具注册、统一执行管线、安全检查                   | `tools/`, `runtime/shared/ToolExecutionPipeline.ts` |
+| Skill 系统            | Skill 扫描、缓存、按会话暴露给 `skill_list`        | `skills/SkillManager.ts`                            |
+| Agent / Thread 持久化 | Agent 定义、Agent Home、Thread 元数据、恢复        | `agents/`, `threads/`                               |
+| Provider              | 模型选择、API Key、thinkingLevel 注入              | `provider/`                                         |
+| Extension             | hook、扩展工具、扩展技能、运行时指令               | `extension/`                                        |
+| 流式持久化            | EventBus 广播、events/history 写盘                 | `streaming/`                                        |
 
 换句话说，这里已经是一个“小型 agent runtime 平台”，而不是单点模块。
 
@@ -50,6 +50,8 @@ HTTP POST /gateway/chat/threads/:id/messages
   -> agentExecutor.piMono().sessionMode('file')
   -> agentExecutor.stream({ sessionId, message, builder })
 ```
+
+这里还保留着一个后续要讨论的问题：虽然 P1 已经把 Thread 级 Builder 配置收敛到 `ThreadExecutionFactory`，但入口 Runtime 仍然是 `agentExecutor.piMono()` 写死起手。也就是说，当前系统已经有两套 Runtime 抽象，但路由层还没有真正做成“按 Thread / Agent / Provider 策略选择 Runtime”的模型，这一层仍存在硬编码。
 
 进入 `AgentExecutor.executePipeline()` 后，标准路径大致如下：
 
@@ -80,17 +82,19 @@ ChatRoutes
     -> runtime.destroy()
 ```
 
+这里的 `Extension start hooks` / `Extension end hooks` 只是分组写法，不代表扩展点真的只有两个时机。当前实际还存在工具执行中的 Hook；但 Runtime 级别的 handoff、checkpoint、approval、agent_updated 等节点是否也要成为正式扩展点，仍然是后续需要讨论的设计题。
+
 ### 2.3 持久化层分工
 
 当前有 4 类持久化文件同时存在：
 
-| 文件 | 来源 | 作用 |
-| --- | --- | --- |
-| `threads/{id}.json` | `ThreadStore` | Thread 元数据真相源 |
-| `workspaces/{id}/sessions/...` | Runtime / SDK | LLM 会话历史 |
-| `workspaces/{id}/history.jsonl` | `HistoryWriter` | 前端友好的聚合消息 |
-| `workspaces/{id}/events.jsonl` | `EventWriter` | 粒度更细的流式事件 |
-| `workspaces/{id}/context*.json` | Context snapshot | 调试和审计 |
+| 文件                            | 来源             | 作用                |
+| ------------------------------- | ---------------- | ------------------- |
+| `threads/{id}.json`             | `ThreadStore`    | Thread 元数据真相源 |
+| `workspaces/{id}/sessions/...`  | Runtime / SDK    | LLM 会话历史        |
+| `workspaces/{id}/history.jsonl` | `HistoryWriter`  | 前端友好的聚合消息  |
+| `workspaces/{id}/events.jsonl`  | `EventWriter`    | 粒度更细的流式事件  |
+| `workspaces/{id}/context*.json` | Context snapshot | 调试和审计          |
 
 这里的设计意图是合理的：**Thread 元数据、SDK 会话、前端历史、调试事件** 被拆开保存。但实际代码里，这几层的边界已经开始有一些漂移。
 
@@ -166,6 +170,7 @@ ChatRoutes
 - 恢复路径：`src/main/agent/threads/ThreadWaker.ts:165-167`
 
 **修复方案**：
+
 - 在 `ThreadWaker.submitResumeMessage()` 中读取完整的 Thread 和 Agent 数据
 - 配置 Builder 与 ChatRoutes 保持一致：
   - `sessionMode('file')` ✅
@@ -176,12 +181,14 @@ ChatRoutes
 - 增加 TODO 注释，标记需要在 P1 阶段重构
 
 **验证结果**：
+
 - ✅ 编译通过
 - ✅ 恢复路径现在会正确持久化会话
 - ✅ 恢复路径现在会使用正确的 model 和 instructions
 - ⚠️ 建议增加集成测试覆盖（已创建测试文件）
 
 **遗留问题**：
+
 - 代码重复：ChatRoutes 和 ThreadWaker 各有一份配置逻辑（约 15 行）
 - 需要在 P1 阶段抽取 `ThreadExecutionFactory` 消除重复代码
 
@@ -219,7 +226,9 @@ agentExecutor.submit({ sessionId: threadId, message, builder });
 2. `ChatRoutes` 和 `ThreadWaker` 都走同一条 Builder 组装路径。
 3. 把“恢复消息”视为一次正常 run，而不是绕过配置的临时 run。
 
-### P1-1 Agent / Thread / Env 三层都在各自维护目录语义，默认值已经开始漂移
+### ✅ P1-1 Agent / Thread / Env 三层目录语义漂移（已解决）
+
+**状态**：已在 P1 重构中收敛。新增 `AgentContextResolver` 作为运行期上下文解析入口，`AgentStore` / `ThreadStore` 不再各自补运行期 dataDirectory 逻辑，`AgentEnvInjector` 改为从 Resolver 获取 `agentHomePath`、`dataDirectory`、`workspacePath`、`effectiveModel`。
 
 关键文件：
 
@@ -245,17 +254,15 @@ agentExecutor.submit({ sessionId: threadId, message, builder });
 - 测试 mock 更难维护
 - 很多“路径修正”类逻辑会开始出现在多个地方
 
-建议：
+落地结果：
 
-1. 抽一个 `AgentContextResolver`，统一返回：
-   - `agentHomePath`
-   - `dataDirectory`
-   - `workspacePath`
-   - `effectiveModel`
-2. `AgentStore` 只存定义，不负责推导运行期路径。
-3. `ThreadStore` 不再负责补齐 Agent 元数据，只负责持久化 Thread 本身。
+1. `src/main/agent/context/AgentContextResolver.ts` 统一返回 `agentHomePath`、`dataDirectory`、`workspacePath`、`effectiveModel`、`sessionDir`。
+2. `AgentStore` 只负责 Agent 定义与 Agent Home 标准文件初始化。
+3. `ThreadStore` 只负责 Thread 元数据、workspace 目录和 Agent sessions 索引，不再维护 Agent dataDirectory。
 
-### P1-2 流式事件链路现在同时存在两套抽象，文档和代码已经不一致
+### ✅ P1-2 流式事件链路两套抽象（已解决）
+
+**状态**：已明确唯一主链路为 `Runtime/Extension -> EventBus -> StreamConsumers`。`AgentEventWriter` 被保留为 Extension 兼容适配层，不再直接写 `events.jsonl`，也不再持有 `StreamEmitter`。
 
 关键文件：
 
@@ -279,13 +286,15 @@ Runtime yield chunk
 
 这说明模块已经发生过架构迁移，但迁移没有完全收尾。
 
-建议：
+落地结果：
 
-1. 明确“唯一广播出口”。
-2. 如果决定保留 `EventBus -> consumers` 方案，就把 `AgentEventWriter` 收敛成适配层，或彻底删除。
-3. 把 `AgentExecutor`、架构文档、测试里的旧注释统一清理掉。
+1. `AgentExecutor.consumeAndForward()` 仍是 Runtime chunk 的统一广播出口。
+2. Extension 事件通过 `AgentEventWriter.dispatchForSession()` 转成 `stream:message` EventBus 事件。
+3. `EventWriter` / `HistoryWriter` 继续作为 EventBus consumers 负责落盘。
 
-### P1-3 两套 Runtime 的事件模型并不完全一致，OpenAI Runtime 仍在绕过 Executor 直接发事件
+### ✅ P1-3 两套 Runtime 事件模型不一致（已解决）
+
+**状态**：OpenAI Runtime 已移除直接 `streamEmitter.forward()/emit()` 的业务事件路径。`agent_updated` 和工具增量输出都先进入 `StreamChunk`，再由 `AgentExecutor` 统一转发。
 
 关键文件：
 
@@ -307,13 +316,15 @@ Runtime yield chunk
 
 PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做法。
 
-建议：
+落地结果：
 
-1. 统一原则：Runtime 内部不直接广播业务事件。
-2. 所有前端可见事件都先变成 `StreamChunk`，再由 `AgentExecutor` 转发。
-3. Runtime 里只允许保留极少数纯内部观测事件。
+1. OpenAI `agent_updated_stream_event` 现在 yield `agent:updated`。
+2. OpenAI 工具执行 `onUpdate` 产生的进度现在 yield `tool:delta`。
+3. PiMono / OpenAI 都遵守“Runtime 产出 chunk，Executor 广播”的同一模型。
 
-### P1-4 Prompt 拼装链过散、过重，而且 PiMono 上存在技能信息双重注入
+### ✅ P1-4 Prompt 拼装链过散、PiMono 技能双重注入（已解决）
+
+**状态**：新增 `PromptAssemblyService`，集中处理运行期 prompt 附加块、大小限制和预算估算。PiMono Runtime 保留 `resourceLoader.getSkills()`，但不再额外把技能摘要拼进 appendInstructions。
 
 关键文件：
 
@@ -343,17 +354,16 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 另外，`AGENTS.md` 取消截断、`Agent Home` 最多注入 `10000` 字符、workspace 根目录 markdown 自动加载，也都在放大每轮请求的 prompt 成本。
 
-建议：
+落地结果：
 
-1. 抽 `PromptAssemblyService`，统一产出最终注入块及预算统计。
-2. 把注入分成：
-   - 常驻块
-   - 会话块
-   - 调试块
-3. 技能只保留一种曝光方式，避免 PiMono 双注入。
-4. 模板文件默认不要注入完整说明文字，只注入用户真实填写内容。
+1. `src/main/agent/prompt/PromptAssemblyService.ts` 统一装配 runtime paths、AGENTS.md、Agent Home、workspace context、Skill discovery、Extension instructions。
+2. `AgentEnvInjector` 不再内联 AGENTS.md / workspace markdown 拼装逻辑。
+3. AGENTS.md 默认限制 50000 字符，Agent Home 维持 10000 字符，workspace context 维持 6000 字符。
+4. PiMono 不再重复注入技能摘要。
 
-### P1-5 生命周期依赖只写在注释里，没有真正编码到执行顺序里
+### ✅ P1-5 生命周期依赖只写在注释里（已解决）
+
+**状态**：`ReadyGatewayHook.priority` 已调整为 45，执行顺序与注释一致：Gateway(45) -> Agent(50) -> Config(55)。
 
 关键文件：
 
@@ -372,10 +382,7 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 这类问题最危险的点在于：平时可能“碰巧没出事”，但一旦某个 Hook 变慢，就会变成初始化竞态。
 
-建议：
-
-1. 直接修正 priority，保证顺序和注释一致。
-2. 或者给 LifecycleHook 增加 `dependsOn` 语义，不再只靠数字约定。
+后续仍可考虑为 `LifecycleHook` 增加 `dependsOn` 语义，但 P1 阶段的初始化竞态已先通过 priority 收敛。
 
 ### P2-1 主进程里同步文件 IO 太多，流式输出高频时会放大卡顿风险
 
@@ -456,15 +463,15 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 - ✅ 修掉 `AgentEnvInjector` 的 `builderProjectDir` 编译错误
 - ✅ 修正 `ThreadWaker`，让恢复路径走和 `ChatRoutes` 相同的 Builder 装配逻辑
-- ⚠️ 修正 Lifecycle priority，消除 READY 阶段竞态（待处理）
-- ⚠️ 明确当前唯一事件链路，至少先把注释和文档对齐（部分完成）
+- ✅ 修正 Lifecycle priority，消除 READY 阶段竞态
+- ✅ 明确当前唯一事件链路，并同步代码注释与文档
 
-### 第二阶段：拆职责
+### 第二阶段：拆职责（✅ P1 已完成）
 
-- 新增 `ThreadExecutionFactory`
-- 新增 `AgentContextResolver`
-- 新增 `PromptAssemblyService`
-- 把 `injectEnv()` 缩成编排函数，不再承担所有细节
+- ✅ 新增 `ThreadExecutionFactory`
+- ✅ 新增 `AgentContextResolver`
+- ✅ 新增 `PromptAssemblyService`
+- ✅ 把 `injectEnv()` 收敛成编排函数，不再内联 Prompt 装配细节
 
 目标是把下面这 3 个概念彻底拆开：
 
@@ -472,13 +479,13 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 - Prompt 拼装
 - Tool/Sandbox 上下文构建
 
-### 第三阶段：统一 Runtime 行为
+### 第三阶段：统一 Runtime 行为（✅ P1 已完成）
 
-- 规定 Runtime 只能 `yield StreamChunk`
-- 广播、持久化、Thread 状态同步都在 Executor / consumers 做
-- 对齐 PiMono / OpenAI 的工具增量输出和 handoff 事件语义
+- ✅ 规定 Runtime 只能 `yield StreamChunk`
+- ✅ 广播、持久化、Thread 状态同步都在 Executor / consumers 做
+- ✅ 对齐 PiMono / OpenAI 的工具增量输出和 handoff 事件语义
 
-### 第四阶段：性能与维护性
+### 第四阶段：性能与维护性（下一轮优化）
 
 - 流式事件持久化改异步队列
 - Skill cache 与扩展热插拔联动

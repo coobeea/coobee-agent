@@ -46,7 +46,7 @@ import { ChunkQueue } from './ChunkQueue';
 import { convertTools } from './PiMonoToolConverter';
 import { setupEventSubscription } from './PiMonoStreamAdapter';
 import type { ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from '../types';
-import type { PiMonoAgentRuntimeOptions } from './types';
+import type { PiMonoAgentRuntimeOptions, ThinkingLevel } from './types';
 
 /** 默认最大执行轮次（TODO: 接入 maxTurns 配置后启用） */
 // const DEFAULT_MAX_TURNS = 25
@@ -228,19 +228,9 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       source: 'runtime-options',
       disableModelInvocation: false
     }));
-    // Skill 摘要注入：仅注入 name、description、filePath，不注入完整 content
-    // Agent 需要完整内容时，通过 read 工具按需加载 SKILL.md
-    const skillSummaryParts = (this.options.skills || []).map((s) => {
-      const pathAttr = s.filePath ? ` path="${s.filePath}"` : '';
-      return `<skill name="${s.name}"${pathAttr}>\n${s.description}\n</skill>`;
-    });
-    const skillsBlock =
-      skillSummaryParts.length > 0
-        ? [
-            `<skills>\n<!-- To use a skill, read its SKILL.md file with the read tool for full instructions. -->\n${skillSummaryParts.join('\n')}\n</skills>`
-          ]
-        : [];
-    const allAppendParts = [...skillsBlock, ...(this.options.appendInstructions || [])];
+    // Skill 提示由 PromptAssemblyService / AgentEnvInjector 统一注入。
+    // 这里仅保留 getSkills()，供 pi-SDK 识别可用 Skill，避免 prompt 中重复出现技能摘要。
+    const allAppendParts = this.options.appendInstructions || [];
 
     const resourceLoader = {
       getExtensions: () => ({ extensions: [], errors: [], runtime: stubRuntime }),
@@ -319,7 +309,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   }
 
   setThinkingLevel(level: string): void {
-    this.options.thinkingLevel = level as any;
+    this.options.thinkingLevel = level as ThinkingLevel;
   }
 
   // ========== 执行方法 ==========
@@ -417,7 +407,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           if (this.currentSignal) {
             this.currentSignal.removeEventListener('abort', abortListener);
           }
-          
+
           unsubscribe();
           await Promise.resolve();
           queue.push({

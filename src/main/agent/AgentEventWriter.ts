@@ -1,47 +1,35 @@
 /**
- * Agent 事件分发器（统一入口）
+ * @deprecated P1 重构后，事件持久化和前端推送统一走：
+ * Runtime/Extension -> EventBus -> StreamConsumers(EventWriter/HistoryWriter)。
  *
- * 所有 StreamChunk 事件的单一出口，同时完成两件事：
- *   1. 持久化 → 追加写入 events.jsonl
- *   2. 推送前端 → 通过注册的 StreamEmitter 广播到 EventBus
- *
- * 设计原则：
- *   - 单一 seq 计数器：所有事件（Runtime + Extension）共享一个单调递增的 seq，保证唯一性
- *   - 单一入口：调用方只需 dispatch(chunk)，不需要手动同时调用 emitter 和 writer
- *   - 会话级注册表：Extension 等外部模块通过 sessionId 找到对应的 dispatcher
- *
- * 使用方式：
- *   AgentExecutor:
- *     const writer = new AgentEventWriter(workspace)
- *     writer.register(sessionId)
- *     writer.setEmitter(emitter)   // 注册 StreamEmitter
- *     ...
- *     writer.dispatch(chunk)       // 一次调用 = 写文件 + 推前端
- *
- *   Extension:
- *     AgentEventWriter.dispatchForSession(sessionId, chunk)  // 同样一次调用 = 两件事
+ * 本文件仅保留为 Extension API 的兼容适配层：
+ * - 不再直接写 `events.jsonl`
+ * - 不再直接持有 StreamEmitter
+ * - 只把 StreamChunk 包装成 StreamEvent 后投递到 EventBus
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
+import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
-import type { StreamChunk } from './runtime/types';
-import type { IStreamEmitter } from './streaming/StreamEmitter';
+import type { StreamChunk, StreamChunkType } from './runtime/types';
+import { StreamEventType, type StreamEvent, type StreamMessage, type StreamSource } from './streaming/types';
 
 const log = createLogger('event-writer');
 
-/** 会话级 writer 注册表 */
+/** 会话级 writer 注册表：仅为旧 API 兼容保留 */
 const sessionWriters = new Map<string, AgentEventWriter>();
+const sessionSequences = new Map<string, number>();
+
+const LIFECYCLE_EVENT_MAP: Partial<Record<StreamChunkType, StreamEventType>> = {
+  'run:start': StreamEventType.START,
+  'run:done': StreamEventType.END,
+  'run:error': StreamEventType.ERROR
+};
 
 export class AgentEventWriter {
-  private eventsFile: string | null;
-  /** 全局唯一序列号（Runtime + Extension 共用） */
-  private seq = 0;
-  /** 注册的 StreamEmitter — 用于推送前端 */
-  private emitter: IStreamEmitter | null = null;
+  private sessionId: string | null = null;
 
-  constructor(workspace: string | undefined) {
-    this.eventsFile = workspace ? path.join(workspace, 'events', 'events.jsonl') : null;
+  constructor(_workspace: string | undefined) {
+    // workspace 参数为旧版直写 events.jsonl 保留；当前实现不再直接使用。
   }
 
   /** 彻底清理当前实例（供异常销毁时备用） */
@@ -49,14 +37,15 @@ export class AgentEventWriter {
     this.unregister(sessionId);
   }
 
-  /** 注册到会话注册表 + 设置 emitter */
+  /** 注册到会话注册表 */
   register(sessionId: string): void {
+    this.sessionId = sessionId;
     sessionWriters.set(sessionId, this);
   }
 
-  /** 注册 StreamEmitter（推前端） */
-  setEmitter(emitter: IStreamEmitter): void {
-    this.emitter = emitter;
+  /** @deprecated EventBus 已是统一出口，保留 no-op 以兼容旧调用方 */
+  setEmitter(_emitter: unknown): void {
+    // no-op
   }
 
   /** 从注册表中移除 */
@@ -64,105 +53,48 @@ export class AgentEventWriter {
     if (sessionWriters.get(sessionId) === this) {
       sessionWriters.delete(sessionId);
     }
-    this.emitter = null;
+    sessionSequences.delete(sessionId);
+    this.sessionId = null;
   }
 
-  // ==================== 核心方法 ====================
-
   /**
-   * 分发事件（统一入口）
+   * 分发事件到 EventBus。
    *
-   * 一次调用同时完成：
-   *   1. 分配全局唯一 seq
-   *   2. 写入 events.jsonl
-   *   3. 通过 StreamEmitter 推送前端
-   *
-   * @returns 分配的 seq 编号
+   * @returns 分配的 sequence 编号；未注册 session 时返回 0。
    */
   dispatch(chunk: StreamChunk): number {
-    const seq = ++this.seq;
-
-    // 1. 持久化到文件
-    this.writeEvent(chunk, seq);
-
-    // 2. 推送到前端
-    if (this.emitter) {
-      try {
-        this.emitter.forward(chunk);
-      } catch (err) {
-        log.warn(`[AgentEventWriter] Emitter forward failed (seq=${seq}):`, err);
-      }
+    if (!this.sessionId) {
+      log.debug('[AgentEventWriter] dispatch ignored: no registered session');
+      return 0;
     }
-
-    return seq;
+    return AgentEventWriter.dispatchToEventBus(this.sessionId, chunk);
   }
 
-  // ==================== 内部方法 ====================
-
-  private writeEvent(chunk: StreamChunk, seq: number): void {
-    if (!this.eventsFile) return;
-    try {
-      const dir = path.dirname(this.eventsFile);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      const line = JSON.stringify({
-        ts: new Date().toISOString(),
-        seq,
-        type: chunk.type,
-        content: chunk.content,
-        ...(chunk.data ? { data: chunk.data } : {})
-      });
-      fs.appendFileSync(this.eventsFile, line + '\n');
-    } catch (err) {
-      log.warn(`[AgentEventWriter] Write failed (seq=${seq}):`, err);
-    }
-  }
-
-  /** 事件文件路径 */
+  /** 事件文件路径：旧版 API 兼容，当前不再直接管理文件 */
   get filePath(): string | null {
-    return this.eventsFile;
+    return null;
   }
-
-  // ==================== 静态 API（供 Extension 使用） ====================
 
   /**
-   * 通过 sessionId 分发事件
+   * 通过 sessionId 分发事件。
    *
-   * Extension 调用此方法，自动完成：写文件 + 推前端。
-   * 与 dispatch() 行为一致，seq 严格递增。
-   *
-   * **Multi-Agent 支持**：
-   * 如果 sessionId 包含冒号（如 `main:child`），说明是子 Agent 会话，
-   * 会同时将事件转发到主 sessionId，并在 data 中标记 `subSessionId`，
-   * 这样前端订阅主 thread 时也能收到子 Agent 的 HITL 审批事件。
+   * Extension 调用此方法后，事件进入统一 EventBus 链路，由 StreamConsumers
+   * 负责写盘和前端推送。子会话事件会额外转发到主 thread。
    */
   static dispatchForSession(sessionId: string, chunk: StreamChunk): void {
-    const writer = sessionWriters.get(sessionId);
-    if (writer) {
-      writer.dispatch(chunk);
-    } else {
-      log.debug(`[AgentEventWriter] No writer for session ${sessionId}, event dropped`);
-    }
+    AgentEventWriter.dispatchToEventBus(sessionId, chunk);
 
-    // Multi-Agent: 如果是子会话，转发到主 thread
     if (sessionId.includes(':')) {
       const mainThreadId = sessionId.split(':')[0];
-      const mainWriter = sessionWriters.get(mainThreadId);
-
-      if (mainWriter && mainWriter !== writer) {
-        // 避免重复转发（主会话本身不需要转发给自己）
-        const modifiedChunk: StreamChunk = {
-          ...chunk,
-          data: {
-            ...(chunk.data ?? {}),
-            subSessionId: sessionId // 标记来源子会话
-          }
-        };
-        mainWriter.dispatch(modifiedChunk);
-        log.debug(`[AgentEventWriter] Forwarded event from ${sessionId} to ${mainThreadId}`);
-      }
+      const modifiedChunk: StreamChunk = {
+        ...chunk,
+        data: {
+          ...(chunk.data ?? {}),
+          subSessionId: sessionId
+        }
+      };
+      AgentEventWriter.dispatchToEventBus(mainThreadId, modifiedChunk);
+      log.debug(`[AgentEventWriter] Forwarded event from ${sessionId} to ${mainThreadId}`);
     }
   }
 
@@ -170,4 +102,58 @@ export class AgentEventWriter {
   static getWriter(sessionId: string): AgentEventWriter | undefined {
     return sessionWriters.get(sessionId);
   }
+
+  private static dispatchToEventBus(sessionId: string, chunk: StreamChunk): number {
+    const sequence = nextSequence(sessionId);
+    const message = buildMessage(sessionId, sequence, chunk);
+
+    const event: StreamEvent = {
+      type: StreamEventType.MESSAGE,
+      sessionId,
+      message,
+      timestamp: Date.now()
+    };
+    eventBus.emit(StreamEventType.MESSAGE, event);
+
+    const lifecycleType = LIFECYCLE_EVENT_MAP[chunk.type];
+    if (lifecycleType) {
+      eventBus.emit(lifecycleType, {
+        type: lifecycleType,
+        sessionId,
+        source: message.source,
+        ...(chunk.type === 'run:error' ? { error: chunk.content } : {}),
+        timestamp: Date.now()
+      } satisfies StreamEvent);
+    }
+
+    return sequence;
+  }
+}
+
+function nextSequence(sessionId: string): number {
+  const next = (sessionSequences.get(sessionId) ?? 0) + 1;
+  sessionSequences.set(sessionId, next);
+  return next;
+}
+
+function buildMessage(sessionId: string, sequence: number, chunk: StreamChunk): StreamMessage {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    sessionId,
+    sequence,
+    type: chunk.type,
+    content: chunk.content,
+    data: chunk.data as Record<string, unknown> | undefined,
+    timestamp: Date.now(),
+    source: getSource(chunk)
+  };
+}
+
+function getSource(chunk: StreamChunk): StreamSource {
+  const data = chunk.data as Record<string, unknown> | undefined;
+  return {
+    type: 'agent',
+    id: typeof data?.agentId === 'string' ? data.agentId : 'extension',
+    name: typeof data?.agentName === 'string' ? data.agentName : 'Extension'
+  };
 }
