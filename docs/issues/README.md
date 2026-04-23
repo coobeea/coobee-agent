@@ -15,6 +15,33 @@
      - **问题2**: Agent 的 name 和 description 未正确记录到 context.jsonl
      - **问题3**: 核心 Skills 自动注入未在 Agent 配置中说明
 
+2. **[Agent Runtime 选择被硬编码为 PiMono 的问题](./hardcoded-runtime-selection.md)** - 2026-04-23
+   - 优先级: 高
+   - 类型: 架构设计 / 可扩展性
+   - 影响: Chat 主链路 / Thread 恢复 / IPC / Extension 执行入口
+   - 问题:
+     - **问题1**: 多个入口直接写死 `agentExecutor.piMono()`
+     - **问题2**: runtime 选择没有进入 Agent / Thread 领域模型
+     - **问题3**: runtime 选择和 `sessionMode` / `lightweight` 等执行语义耦合在调用方
+
+3. **[Extension Hook 生命周期时机过粗且语义不一致](./extension-hook-lifecycle-gaps.md)** - 2026-04-23
+   - 优先级: 高
+   - 类型: 架构设计 / 扩展系统契约
+   - 影响: Extension 生命周期理解 / 清理收尾 / lightweight 路径一致性
+   - 问题:
+     - **问题1**: `AgentExecutor` 主链路仍主要暴露 start/end 两段集中时机
+     - **问题2**: `session_start` / `session_end` 的名字和真实执行语义不一致
+     - **问题3**: end hooks 不覆盖失败路径，且部分公开 Hook 已声明但未接线
+
+4. **[Thread / Session / History / Events 持久化边界漂移](./persistence-boundary-drift.md)** - 2026-04-23
+   - 优先级: 高
+   - 类型: 架构设计 / 持久化边界
+   - 影响: Thread 创建链路 / 历史展示 / 事件落盘 / 目录迁移
+   - 问题:
+     - **问题1**: `ThreadStore` 已越过 Thread 元数据边界，承担 Agent/Workspace 副作用
+     - **问题2**: `history.jsonl` 不是纯投影，依赖入口手工补用户消息
+     - **问题3**: 事件层新旧两套抽象并存，session/history/events 语义开始混用
+
 ### ✅ 已修复
 
 暂无

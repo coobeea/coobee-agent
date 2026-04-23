@@ -8,6 +8,11 @@
 
 系统架构设计和核心机制说明：
 
+- **[`src/main/agent` 模块梳理与优化建议](./architecture/agent-module-review.md)**
+  - `src/main/agent` 的真实职责边界和执行链路
+  - 当前不合理点、遗留层、可优化方向
+  - 推荐的收敛和重构顺序
+
 - **[核心 Skills 自动注入机制](./architecture/core-skills-injection.md)**
   - 为什么 Agent 配置的 skills 是空数组，但运行时有 5 个 Skills？
   - 核心 Skills 注入流程和设计原理
@@ -25,6 +30,21 @@
 
 已知问题和 Bug 记录：
 
+- **[Agent Runtime 选择被硬编码为 PiMono 的问题](./issues/hardcoded-runtime-selection.md)**
+  - `piMono()` 在多个主入口被直接写死
+  - runtime 选择尚未进入 Agent / Thread 配置模型
+  - `runtime` 与 `sessionMode` / `lightweight` 语义耦合
+
+- **[Extension Hook 生命周期时机过粗且语义不一致](./issues/extension-hook-lifecycle-gaps.md)**
+  - 主执行链路仍主要是 start/end 两段 Hook
+  - `session_*` 的命名和真实触发语义存在偏差
+  - 失败路径、lightweight 路径、已声明未接线 Hook 之间不一致
+
+- **[Thread / Session / History / Events 持久化边界漂移](./issues/persistence-boundary-drift.md)**
+  - `ThreadStore` 已开始承担 Agent/Workspace 副作用
+  - `history.jsonl` 依赖入口手工补写用户消息
+  - 事件层仍有新旧两套落盘链路共存
+
 - **[Context Snapshot Agent 信息问题](./issues/context-snapshot-agent-info-issues.md)**
   - 问题 1: Instructions 默认值覆盖
   - 问题 2: Name/Description 未正确记录
@@ -38,7 +58,7 @@
 
 ### 理解 Agent 执行流程
 
-1. 阅读 [核心 Skills 自动注入机制](./architecture/core-skills-injection.md) 了解 Skills 系统
+1. 阅读 [`src/main/agent` 模块梳理与优化建议](./architecture/agent-module-review.md) 了解真实执行链路和当前结构问题
 2. 阅读 [AppendInstructions 内容说明](./architecture/append-instructions-content.md) 了解 System Prompt 构成
 3. 查看 [架构文档总览](./architecture/) 了解整体架构
 
@@ -62,10 +82,14 @@ docs/
 ├── README.md                           # 本文件，文档中心首页
 ├── architecture/                       # 架构文档
 │   ├── README.md                          架构文档索引
+│   ├── agent-module-review.md             src/main/agent 模块梳理与优化建议
 │   ├── core-skills-injection.md           核心 Skills 注入机制
 │   └── append-instructions-content.md     AppendInstructions 内容
 ├── issues/                             # 问题追踪
 │   ├── README.md                          问题列表索引
+│   ├── extension-hook-lifecycle-gaps.md  Extension Hook 生命周期问题
+│   ├── hardcoded-runtime-selection.md     runtime 选择被硬编码问题
+│   ├── persistence-boundary-drift.md      持久化边界漂移问题
 │   └── context-snapshot-agent-info-issues.md
 ├── api/                                # API 文档 (待创建)
 └── development/                        # 开发指南 (待创建)
@@ -92,6 +116,18 @@ docs/
 ### Q5: workspace 目录结构是怎样的？
 
 **A**: 扁平化结构，包含 sessions/、history.jsonl、events.jsonl、context.jsonl。查看 [目录简化实施总结](../DIRECTORY_SIMPLIFICATION.md)
+
+### Q6: 明明系统里已经有两个 runtime，为什么主链路看起来还是固定跑 PiMono？
+
+**A**: 因为当前多个入口直接写死了 `agentExecutor.piMono()`，runtime 选择还没有被抽到统一配置和统一组装层。查看 [Agent Runtime 选择被硬编码为 PiMono 的问题](./issues/hardcoded-runtime-selection.md)
+
+### Q7: Extension Hook 现在是不是基本只有 start / end 两个时机？
+
+**A**: 从 `AgentExecutor` 主执行链路看，确实主要是前后两段集中触发；虽然系统里还有 tool / turn / compaction / model 相关 Hook，但它们分散在不同模块里，而且还存在语义不一致和未接线的问题。查看 [Extension Hook 生命周期时机过粗且语义不一致](./issues/extension-hook-lifecycle-gaps.md)
+
+### Q8: 为什么说 Thread / session / history / events 这几层的边界已经有点漂移了？
+
+**A**: 因为 `ThreadStore` 已经不只是存 Thread 元数据，`history.jsonl` 也不再是纯事件投影，事件落盘还同时存在新旧两套链路。查看 [Thread / Session / History / Events 持久化边界漂移](./issues/persistence-boundary-drift.md)
 
 ## 🔗 相关资源
 
@@ -136,6 +172,6 @@ docs/
 
 ---
 
-**最后更新**: 2026-04-22  
+**最后更新**: 2026-04-23  
 **维护者**: Coobee Team  
 **文档版本**: 1.0

@@ -19,26 +19,31 @@
    - 动态内容说明
    - System Prompt 结构
 
-3. **[核心 Skills 自动注入机制](./core-skills-injection.md)** ⚠️ **已过时**
+3. **[`src/main/agent` 模块梳理与优化建议](./agent-module-review.md)** ⭐
+   - 执行链路、模块边界、真实职责图
+   - 当前不合理点与优化优先级
+   - 推荐的收敛和重构顺序
+
+4. **[核心 Skills 自动注入机制](./core-skills-injection.md)** ⚠️ **已过时**
    - 核心 Skills 列表和说明
    - 运行时注入流程（旧版本）
    - **注意**: 此机制已于 2026-04-22 废除
 
 ### Workspace 目录结构
 
-3. **[目录简化实施总结](../../DIRECTORY_SIMPLIFICATION.md)** *(根目录)*
+5. **[目录简化实施总结](../../DIRECTORY_SIMPLIFICATION.md)** *(根目录)*
    - 旧结构 vs 新结构对比
    - 修改的文件列表
    - 测试验证方法
 
-4. **[Workspace 修复总结](../../WORKSPACE_FIX_SUMMARY.md)** *(根目录)*
+6. **[Workspace 修复总结](../../WORKSPACE_FIX_SUMMARY.md)** *(根目录)*
    - 问题诊断和修复过程
    - PiMono Session 文件说明
    - Runtime 对比
 
 ### Context Snapshot
 
-5. **Context Snapshot 相关**
+7. **Context Snapshot 相关**
    - [Context Snapshot Agent 信息问题](../issues/context-snapshot-agent-info-issues.md) *(Issues 目录)*
      - Instructions 默认值问题
      - Name/Description 未记录问题
