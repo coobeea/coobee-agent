@@ -207,8 +207,12 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
 
       // 8. 构建工具执行上下文（由 Runtime 的 convertTools 注入到每个工具）
       //    包含沙箱信息 + Agent/Session 上下文
-      //    有工程目录时，工具操作的根目录指向工程目录
-      const effectiveCwd = builderProjectDir || workspace;
+      //    注意：当前不区分 projectDir 和 workspace，统一使用 workspace
+      //    如果未来需要支持"一个 Agent 操作多个项目目录"，应在 Builder 中增加 projectDir() 方法
+      const effectiveCwd = workspace;
+      if (!effectiveCwd) {
+        throw new Error('[EnvInjector] workspace is undefined, cannot build tool execution context');
+      }
       const envVars = buildSkillEnvVars(agentEnv);
       const toolCtx = await buildToolExecutionContext(effectiveCwd, sessionId, envVars, {
         agentId: agentId || undefined,
@@ -223,9 +227,8 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
     // 9. 设置会话存储目录（扁平化结构，直接使用 workspace）
     builder.sessionDir(workspace);
 
-    // 10. 工作目录：有工程目录时优先使用工程目录，否则用 workspace
-    const effectiveCwdShared = builderProjectDir || workspace;
-    builder.workspaceRoot(effectiveCwdShared);
+    // 10. 工作目录：统一使用 workspace（当前不区分 workspace 和 projectDir）
+    builder.workspaceRoot(workspace);
 
     // 11. 设置上下文快照目录（扁平化结构，直接使用 workspace）
     builder.contextDir(workspace);

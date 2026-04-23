@@ -162,8 +162,54 @@ export class ThreadWaker {
 
       log.info(`[ThreadWaker] Resuming thread ${threadId} with message: ${message.slice(0, 100)}...`);
 
-      // 使用 submit 直接提交
-      const builder = agentExecutor.piMono();
+      // 读取 Thread 和 Agent 数据
+      // IMPORTANT: Builder 配置逻辑应与 ChatRoutes.sendMessage() 保持一致
+      // Reference: ChatRoutes.sendMessage():170-181
+      // TODO: 在 P1 阶段抽取 ThreadExecutionFactory 消除重复代码
+      const { ThreadStore } = await import('./ThreadStore');
+      const threadStore = await ThreadStore.getInstance();
+      const thread = await threadStore.get(threadId);
+      
+      if (!thread) {
+        log.error(`[ThreadWaker] Thread ${threadId} not found`);
+        return;
+      }
+
+      const { AgentStore } = await import('../agents/AgentStore');
+      const agentStore = await AgentStore.getInstance();
+      const agent = await agentStore.get(thread.agentId);
+      
+      if (!agent) {
+        log.error(`[ThreadWaker] Agent ${thread.agentId} not found for thread ${threadId}`);
+        return;
+      }
+
+      // 配置 Builder（与 ChatRoutes 保持一致）
+      const builder = agentExecutor.piMono().sessionMode('file').name(agent.id);
+
+      // 如果指定了模型，通过 ProviderInjector 重新注入配置
+      const modelSpec = thread.overrideModel || agent.model;
+      if (modelSpec) {
+        agentExecutor.applyProviderConfig(builder, { 
+          modelOverride: modelSpec,
+          sessionId: threadId,
+          agentId: agent.id
+        });
+      }
+
+      // 设置 instructions（包括空字符串）
+      if (agent.instructions !== undefined) {
+        builder.instructions(agent.instructions);
+      }
+
+      log.info(`[ThreadWaker] Resuming with config:`, {
+        threadId,
+        agentId: agent.id,
+        model: modelSpec,
+        hasInstructions: !!agent.instructions
+      });
+
+      // 提交执行
       const result = agentExecutor.submit({ sessionId: threadId, message, builder });
 
       if (result.status === 'busy') {
