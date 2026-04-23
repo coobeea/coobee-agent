@@ -8,10 +8,14 @@ vi.mock('@main/common/env', () => {
         userAgentsDir: path.join(process.cwd(), '.test-home/agents'),
         builtinAgentsDir: path.join(process.cwd(), 'resources/agents'),
         userHome: path.join(process.cwd(), '.test-home'),
-        secretsDir: path.join(process.cwd(), '.test-home/secrets')
+        userData: path.join(process.cwd(), '.test-home/userData'),
+        secretsDir: path.join(process.cwd(), '.test-home/secrets'),
+        homesDir: path.join(process.cwd(), '.test-home/agents'),
+        threadsDir: path.join(process.cwd(), '.test-home/threads'),
+        workspacesDir: path.join(process.cwd(), '.test-home/workspaces')
       },
       getAgentWorkspaceDir: async () => path.join(process.cwd(), '.test-home/workspace'),
-      getAgentHomeDir: async (id: string) => path.join(process.cwd(), '.test-home/homes', id),
+      getAgentHomeDir: async (id: string) => path.join(process.cwd(), '.test-home/agents', id),
       getSkillSearchPaths: async () => [path.join(process.cwd(), 'resources/skills')]
     }
   };
@@ -19,16 +23,16 @@ vi.mock('@main/common/env', () => {
 
 vi.mock('@main/common/logger', () => ({
   createLogger: () => ({
-    info: console.log,
-    warn: console.warn,
-    error: console.error,
-    debug: console.log
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }),
   log: {
-    info: console.log,
-    warn: console.warn,
-    error: console.error,
-    debug: console.log
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
@@ -50,6 +54,27 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
     on: vi.fn()
+  }
+}));
+
+vi.mock('../runtime/pimono', () => ({
+  PiMonoAgentRuntime: class MockPiMonoAgentRuntime {
+    readonly type = 'agent' as const;
+    readonly id = 'mock-pimono-runtime';
+    readonly name = 'mock-app-copilot';
+    readonly options = { name: 'mock-app-copilot', instructions: 'test' };
+
+    async initialize(): Promise<void> {}
+    async destroy(): Promise<void> {}
+    async getSession(): Promise<{ sessionId: string; createdAt: number; updatedAt: number; messageCount: number }> {
+      return { sessionId: 'mock-session', createdAt: 0, updatedAt: 0, messageCount: 0 };
+    }
+    async clearSession(): Promise<void> {}
+
+    async *stream(): AsyncGenerator<{ type: 'text:delta'; content: string }, { output: string }, unknown> {
+      yield { type: 'text:delta', content: '测试成功' };
+      return { output: '测试成功' };
+    }
   }
 }));
 
@@ -102,7 +127,6 @@ describe('AgentExecutor Integration', () => {
       }
     }
 
-    console.log('Assistant Output:', output);
     expect(output.length).toBeGreaterThan(0);
   }, 60000); // 60s timeout
 });

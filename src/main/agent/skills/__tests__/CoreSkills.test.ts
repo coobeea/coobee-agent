@@ -80,7 +80,7 @@ describe('loadCoreSkillDefinitions', () => {
   });
 
   it('Env 不可用时返回空数组', () => {
-    vi.mock('@main/common/env', () => {
+    vi.doMock('@main/common/env', () => {
       throw new Error('Env not available');
     });
 

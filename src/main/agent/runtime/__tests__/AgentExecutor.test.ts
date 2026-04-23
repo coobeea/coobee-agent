@@ -79,12 +79,25 @@ vi.mock('@main/common/env', () => ({
   Env: {
     paths: {
       userData: '/mock/userData',
+      userHome: '/mock/home',
       sessionsDir: '/mock/sessions',
       sandboxDir: '/mock/sandbox',
       resourcesDir: '/mock/resources',
+      homesDir: '/mock/home/agents',
+      workspacesDir: '/mock/home/workspaces',
+      threadsDir: '/mock/home/threads',
+      userAgentsDir: '/mock/home/agents',
+      builtinAgentsDir: '/mock/resources/agents',
+      modelsDir: '/mock/home/models',
       builtinExtensionsDir: '/mock/builtin',
       userExtensionsDir: '/mock/user'
     },
+    main: {
+      serverHost: '127.0.0.1'
+    },
+    isDev: true,
+    isWindows: false,
+    isMac: true,
     getAgentWorkspaceDir: vi.fn(async () => '/mock/workspace')
   }
 }));

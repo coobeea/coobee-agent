@@ -28,6 +28,7 @@ import type { SessionItem, SummaryMeta } from './types';
  */
 export class FileSession implements Session {
   private readonly filePath: string;
+  private readonly legacyFilePath: string;
   private initialized = false;
 
   /**
@@ -43,6 +44,7 @@ export class FileSession implements Session {
 
     // 会话文件放在 sessions 子目录下
     this.filePath = join(dir, 'sessions', 'session.jsonl');
+    this.legacyFilePath = join(dir, this.sessionId, 'sessions', 'session.jsonl');
   }
 
   /**
@@ -175,6 +177,9 @@ export class FileSession implements Session {
 
     try {
       await truncate(this.filePath, 0);
+      if (this.legacyFilePath !== this.filePath && existsSync(this.legacyFilePath)) {
+        await truncate(this.legacyFilePath, 0);
+      }
     } catch {
       // 文件可能不存在，忽略
       await writeFile(this.filePath, '', 'utf-8');
@@ -259,7 +264,7 @@ export class FileSession implements Session {
     await this.ensureFile();
 
     try {
-      const content = await readFile(this.filePath, 'utf-8');
+      const content = await this.readSessionContent();
       const lines = content.split('\n').filter((line) => line.trim());
 
       if (lines.length === 0) return [];
@@ -286,6 +291,17 @@ export class FileSession implements Session {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * 读取当前会话文件，并兼容旧目录布局：{root}/{sessionId}/sessions/session.jsonl。
+   */
+  private async readSessionContent(): Promise<string> {
+    const content = await readFile(this.filePath, 'utf-8');
+    if (content.trim() || !existsSync(this.legacyFilePath) || this.legacyFilePath === this.filePath) {
+      return content;
+    }
+    return readFile(this.legacyFilePath, 'utf-8');
   }
 
   /**

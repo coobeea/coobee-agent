@@ -30,7 +30,36 @@ let workspacesDir: string;
 
 vi.mock('@main/common/env', () => ({
   get Env() {
-    return { paths: { threadsDir: tmpDir, workspacesDir } };
+    return {
+      paths: {
+        threadsDir: tmpDir,
+        workspacesDir,
+        homesDir: path.join(tmpDir, '..', 'agents'),
+        userHome: tmpDir,
+        userAgentsDir: path.join(tmpDir, '..', 'agent-defs'),
+        builtinAgentsDir: path.join(tmpDir, '..', 'builtin-agents')
+      },
+      getAgentHomeDir: async (agentId: string) => path.join(tmpDir, '..', 'agents', agentId),
+      getAgentWorkspaceDir: async (_agentId: string, threadId: string) => path.join(workspacesDir, threadId)
+    };
+  }
+}));
+
+vi.mock('../../agents/AgentStore', () => ({
+  AgentStore: {
+    getInstance: vi.fn(() => ({
+      get: vi.fn(async (id: string) => ({ id, name: id }))
+    }))
+  }
+}));
+
+vi.mock('@main/config/threads', () => ({
+  Threads: {
+    getWorkspaceDir: vi.fn(async (threadId: string) => {
+      const workspaceDir = path.join(workspacesDir, threadId);
+      fs.mkdirSync(workspaceDir, { recursive: true });
+      return workspaceDir;
+    })
   }
 }));
 

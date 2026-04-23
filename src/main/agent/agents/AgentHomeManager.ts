@@ -382,7 +382,8 @@ ${merged}
  * 判断文件内容是否仅包含模板注释（无实质内容）
  */
 function isTemplateOnly(content: string): boolean {
-  const stripped = content
+  const withoutDefaultSkillBlock = content.replace(/<skills_system\b[^>]*>[\s\S]*?<\/skills_system>/g, '');
+  const stripped = withoutDefaultSkillBlock
     .split('\n')
     .filter((line) => {
       const trimmed = line.trim();

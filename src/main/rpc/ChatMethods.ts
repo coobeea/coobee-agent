@@ -15,6 +15,7 @@ import type { MethodGroup } from '@main/common/gateway/types';
 import { GatewayErrorCode, GatewayMethodError } from '@main/common/gateway/errors';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { agentExecutor } from '@main/agent/AgentExecutor';
+import { ThreadExecutionFactory } from '@main/agent/execution/ThreadExecutionFactory';
 import { createLogger } from '@main/common/logger';
 
 const log = createLogger('chat-methods');
@@ -117,38 +118,29 @@ export const chatMethods: MethodGroup = {
 
       log.info(`发送消息: threadId=${threadId}, message="${message.substring(0, 50)}..."`);
 
-      // 1. 从 Thread 加载 Agent 配置
-      const { AgentStore } = await import('@main/agent/agents');
-      const agentStore = await AgentStore.getInstance();
-      const agent = await agentStore.get(thread.agentId);
-
-      if (!agent) {
-        throw new GatewayMethodError(GatewayErrorCode.NOT_FOUND, `Agent not found: ${thread.agentId}`);
+      // 1. 通过统一工厂创建 Builder，保持 RPC / HTTP / 恢复路径配置一致
+      let builder: Awaited<ReturnType<ThreadExecutionFactory['createBuilder']>>;
+      try {
+        const factory = ThreadExecutionFactory.getInstance(agentExecutor);
+        builder = await factory.createBuilder({
+          threadId: thread.id,
+          sessionMode: 'file'
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('Agent not found')) {
+          throw new GatewayMethodError(GatewayErrorCode.NOT_FOUND, `Agent not found: ${thread.agentId}`);
+        }
+        throw error;
       }
 
-      // 2. 创建 Builder
-      const builder = agentExecutor.piMono().sessionMode('file').name(agent.id);
-
-      // 应用 Agent 配置
-      // 如果指定了模型，通过 ProviderInjector 重新注入配置（会正确解析 providerId/modelId）
-      const modelSpec = thread.overrideModel || agent.model;
-      if (modelSpec) {
-        agentExecutor.applyProviderConfig(builder, { modelOverride: modelSpec });
-      }
-
-      // 设置 instructions（包括空字符串）
-      if (agent.instructions !== undefined) {
-        builder.instructions(agent.instructions);
-      }
-
-      // 3. 启动流式执行（Agent 结果会通过 WebSocket 事件推送）
+      // 2. 启动流式执行（Agent 结果会通过 WebSocket 事件推送）
       const gen = agentExecutor.stream({
         sessionId: thread.id,
         message: message as string,
         builder
       });
 
-      // 4. 异步消费流（触发 WebSocket 事件推送）
+      // 3. 异步消费流（触发 WebSocket 事件推送）
       (async () => {
         try {
           for await (const _chunk of gen) {

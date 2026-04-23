@@ -110,8 +110,7 @@ export class ThreadStore {
     // 立即创建工作空间目录结构（sessions、contexts、events 等）
     await this.createWorkspaceDirectories(id);
 
-    // 确保智能体的数据目录存在
-    await this.ensureAgentDataDirectory(params.agentId);
+    // P1 重构：移除 dataDirectory 初始化，由 AgentContextResolver 在运行时处理
 
     // 追加到 agent home 的 sessions.jsonl 索引
     await this.appendToAgentSessionIndex(definition.agentId, {
@@ -138,45 +137,8 @@ export class ThreadStore {
     }
   }
 
-  /** 确保智能体的数据目录存在 */
-  private async ensureAgentDataDirectory(agentId: string): Promise<void> {
-    try {
-      const { AgentStore } = await import('../agents/AgentStore');
-      const { Env } = await import('@main/common/env');
-      const store = await AgentStore.getInstance();
-      const agent = await store.get(agentId);
-
-      if (!agent) {
-        log.warn(`[ThreadStore] Agent not found for dataDirectory check: ${agentId}`);
-        return;
-      }
-
-      let dataDirectory = agent.metadata?.dataDirectory as string | undefined;
-
-      // 如果智能体没有配置数据目录，自动初始化一个默认的
-      if (!dataDirectory) {
-        dataDirectory = path.join(Env.paths.userHome, 'data', agentId);
-
-        // 更新 Agent 定义
-        await store.update(agentId, {
-          metadata: {
-            ...agent.metadata,
-            dataDirectory
-          }
-        });
-
-        log.info(`[ThreadStore] Auto-initialized dataDirectory for agent ${agentId}: ${dataDirectory}`);
-      }
-
-      // 创建目录（如果不存在）
-      if (!fs.existsSync(dataDirectory)) {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-        log.info(`[ThreadStore] Created dataDirectory: ${dataDirectory}`);
-      }
-    } catch (err) {
-      log.warn(`[ThreadStore] Failed to ensure dataDirectory for agent ${agentId}:`, err);
-    }
-  }
+  // P1 重构：已移除 ensureAgentDataDirectory() 方法
+  // 路径初始化现在由 AgentContextResolver 在运行时统一处理
 
   /** 获取 Thread 完整定义 */
   async get(threadId: string): Promise<ThreadDefinition | null> {

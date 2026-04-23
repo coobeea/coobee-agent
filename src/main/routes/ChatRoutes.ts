@@ -26,6 +26,7 @@ import { createLogger } from '@main/common/logger';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { AgentStore } from '@main/agent/agents/AgentStore';
 import { agentExecutor } from '@main/agent/AgentExecutor';
+import { ThreadExecutionFactory } from '@main/agent/execution/ThreadExecutionFactory';
 import type { ApiResponse } from '@shared/api';
 import type { ThreadIndexEntry, ThreadDefinition } from '@main/agent/threads/types';
 
@@ -167,18 +168,12 @@ export function registerChatRoutes(router: Router): void {
       //   import { Models } from '@main/config';
       //   const { provider, model } = Models.resolveModel(thread.overrideModel || agent.model);
       //   // provider.baseUrl, model.maxOutputTokens 等完整信息
-      const builder = agentExecutor.piMono().sessionMode('file').name(agent.id);
-
-      // 如果指定了模型，通过 ProviderInjector 重新注入配置（会正确解析 providerId/modelId）
-      const modelSpec = thread.overrideModel || agent.model;
-      if (modelSpec) {
-        agentExecutor.applyProviderConfig(builder, { modelOverride: modelSpec });
-      }
-
-      // 设置 instructions（包括空字符串）
-      if (agent.instructions !== undefined) {
-        builder.instructions(agent.instructions);
-      }
+      // P1 重构：使用 ThreadExecutionFactory 统一 Builder 配置
+      const factory = ThreadExecutionFactory.getInstance(agentExecutor);
+      const builder = await factory.createBuilder({
+        threadId: thread.id,
+        sessionMode: 'file'
+      });
 
       // 启动 AgentExecutor（完整流程：持久化 + WebSocket + SSE）
       const gen = agentExecutor.stream({

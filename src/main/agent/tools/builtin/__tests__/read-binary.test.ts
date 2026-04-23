@@ -124,6 +124,12 @@ async function detectBinaryFile(filePath: string): Promise<boolean> {
         }
       }
 
+      const decoded = buffer.subarray(0, sampleSize).toString('utf8');
+      const replacementCount = decoded.match(/\uFFFD/g)?.length ?? 0;
+      if (decoded.length > 0 && replacementCount / decoded.length > 0.1) {
+        return true;
+      }
+
       const nonTextRatio = nonTextBytes / sampleSize;
       return nonTextRatio > 0.3;
     } finally {

@@ -17,11 +17,31 @@ vi.mock('../../../common/env', () => ({
     main: {
       logLevel: 'debug'
     },
-    getAgentWorkspaceDir: vi.fn().mockResolvedValue('/tmp/test-workspace'),
+    getAgentHomeDir: vi.fn(async (agentId: string) => `/tmp/coobee-agent-test-agents/${agentId}`),
+    getAgentWorkspaceDir: vi.fn(async (_agentId: string, threadId: string) => `/tmp/test-workspace/${threadId}`),
     paths: {
       logPath: '/tmp/test.log',
-      userHome: '/tmp'
+      userHome: '/tmp',
+      homesDir: '/tmp/coobee-agent-test-agents',
+      workspacesDir: '/tmp/test-workspaces',
+      threadsDir: '/tmp/test-threads',
+      userAgentsDir: '/tmp/test-agent-defs',
+      builtinAgentsDir: '/tmp/test-builtin-agents'
     }
+  }
+}));
+
+vi.mock('../../agents/AgentStore', () => ({
+  AgentStore: {
+    getInstance: vi.fn(() => ({
+      get: vi.fn(async (id: string) => ({ id, name: id }))
+    }))
+  }
+}));
+
+vi.mock('@main/config/threads', () => ({
+  Threads: {
+    getWorkspaceDir: vi.fn(async (threadId: string) => `/tmp/test-workspaces/${threadId}`)
   }
 }));
 

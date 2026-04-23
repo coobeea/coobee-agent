@@ -6,6 +6,9 @@
  *   2. Gateway（WebSocket + HTTP 业务层）
  *      - 自动扫描 bridges/ → WebSocket 事件桥接
  *      - 自动扫描 routes/ → HTTP REST 路由
+ *
+ * 执行顺序：
+ *   ReadyGatewayHook (45) → ReadyAgentSystemHook (50) → ReadyConfigHook (55)
  */
 
 import { LifecyclePhase, LifecycleContext, LifecycleHook } from '@main/common/types';
@@ -14,7 +17,7 @@ import { log } from '@main/common/logger';
 export const ReadyGatewayHook: LifecycleHook = {
   name: 'ready-gateway',
   phase: LifecyclePhase.READY,
-  priority: 50, // 合并后统一优先级
+  priority: 45, // 必须在 Agent System (50) 之前初始化
   critical: false, // 非关键 Hook，失败不阻断应用启动
 
   async execute(_context: LifecycleContext): Promise<void> {

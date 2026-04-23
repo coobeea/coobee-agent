@@ -20,6 +20,10 @@ import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk
 import { saveContextSnapshot } from './ContextSnapshot';
 import { defaultRecoveryChain } from './ErrorRecoveryChain';
 
+type RecoveryRuntime = Pick<AgentRuntime, 'thinkingLevel' | 'setThinkingLevel' | 'compressSession'> & {
+  compressor?: unknown;
+};
+
 // ==================== Logger 工具 ====================
 
 /** Runtime 内部日志接口 */
@@ -146,7 +150,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
           attempt,
           maxAttempts,
           sessionId: config?.sessionId as string | undefined,
-          runtime: this
+          runtime: this.buildRecoveryRuntime() as AgentRuntime
         });
 
         if (recovery.action === 'retry') {
@@ -168,6 +172,42 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
         throw error;
       }
     }
+  }
+
+  /**
+   * 为错误恢复链提供最小能力门面，避免策略层依赖完整 Runtime 实例。
+   */
+  protected buildRecoveryRuntime(): RecoveryRuntime {
+    const runtime = this as AbstractAgentRuntime &
+      Partial<AgentRuntime> & {
+        compressor?: unknown;
+        sessionCompressor?: {
+          compress?: () => Promise<unknown>;
+        };
+      };
+    const options = this.options as AgentRuntimeOptions & { thinkingLevel?: string };
+    const compressor = runtime.compressor ?? runtime.sessionCompressor;
+    const compressSession =
+      typeof runtime.compressSession === 'function'
+        ? runtime.compressSession.bind(this)
+        : typeof runtime.sessionCompressor?.compress === 'function'
+          ? async () => runtime.sessionCompressor!.compress!()
+          : undefined;
+
+    return {
+      compressor,
+      compressSession,
+      get thinkingLevel() {
+        return runtime.thinkingLevel ?? options.thinkingLevel;
+      },
+      setThinkingLevel(level: string) {
+        if (typeof runtime.setThinkingLevel === 'function') {
+          runtime.setThinkingLevel(level);
+          return;
+        }
+        options.thinkingLevel = level;
+      }
+    };
   }
 
   // ========== 默认实现：run ==========

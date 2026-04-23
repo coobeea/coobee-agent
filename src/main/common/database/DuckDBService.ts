@@ -1,4 +1,4 @@
-import { DuckDBInstance } from '@duckdb/node-api';
+import { DuckDBInstance, DuckDBConnection as NativeDuckDBConnection } from '@duckdb/node-api';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -29,10 +29,12 @@ export async function ensureDuckDBDir(dbPath: string): Promise<void> {
  */
 export class DuckDBConnection {
   private instance: DuckDBInstance;
+  private connection: NativeDuckDBConnection;
   private dbPath: string;
 
-  private constructor(instance: DuckDBInstance, dbPath: string) {
+  private constructor(instance: DuckDBInstance, connection: NativeDuckDBConnection, dbPath: string) {
     this.instance = instance;
+    this.connection = connection;
     this.dbPath = dbPath;
   }
 
@@ -42,8 +44,9 @@ export class DuckDBConnection {
   static async create(dbPath: string): Promise<DuckDBConnection> {
     try {
       const instance = await DuckDBInstance.create(dbPath);
+      const connection = await instance.connect();
       log.info('[DuckDB] 数据库连接已创建:', dbPath);
-      return new DuckDBConnection(instance, dbPath);
+      return new DuckDBConnection(instance, connection, dbPath);
     } catch (error) {
       throw new SqlError(`Failed to create DuckDB connection: ${error}`);
     }
@@ -53,13 +56,9 @@ export class DuckDBConnection {
    * 执行 SQL 查询（返回结果）
    */
   async query(sql: string): Promise<unknown[]> {
-    // @duckdb/node-api 的连接是内部池化管理的，不需要手动关闭
-    // 参考: https://github.com/duckdb/duckdb-node/issues/52
     try {
-      const connection = await this.instance.connect();
-      const result = await connection.run(sql);
-      const rows = result.getRows();
-      return rows;
+      const result = await this.connection.runAndReadAll(sql);
+      return result.getRowObjects();
     } catch (error) {
       throw new SqlError(`Query failed: ${error}`);
     }
@@ -69,11 +68,8 @@ export class DuckDBConnection {
    * 执行 SQL（INSERT/UPDATE/DELETE，不返回结果）
    */
   async execute(sql: string): Promise<void> {
-    // @duckdb/node-api 的连接是内部池化管理的，不需要手动关闭
-    // 参考: https://github.com/duckdb/duckdb-node/issues/52
     try {
-      const connection = await this.instance.connect();
-      await connection.run(sql);
+      await this.connection.run(sql);
     } catch (error) {
       throw new SqlError(`Execute failed: ${error}`);
     }
@@ -97,7 +93,11 @@ export class DuckDBConnection {
       await this.execute('COMMIT');
       return result;
     } catch (error) {
-      await this.execute('ROLLBACK');
+      try {
+        await this.execute('ROLLBACK');
+      } catch (rollbackError) {
+        log.error('[DuckDB] 回滚失败:', rollbackError);
+      }
       throw new SqlError(`Transaction failed: ${error}`);
     }
   }
@@ -152,6 +152,7 @@ export class DuckDBConnection {
    */
   close(): void {
     try {
+      this.connection.closeSync();
       this.instance.closeSync();
       log.info('[DuckDB] 数据库连接已关闭:', this.dbPath);
     } catch (error) {

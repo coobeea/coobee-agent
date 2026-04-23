@@ -156,12 +156,38 @@ ChatRoutes
 2. 不再在这个函数里直接探测 Builder 私有字段。
 3. 把 “workspaceRoot / projectRoot / dataDirectory” 三个概念先定义清楚，再落代码。
 
-### P0-2 Thread 恢复路径和正常执行路径不是同一套建模，恢复出来的 Agent 很可能不对
+### ✅ P0-2 Thread 恢复路径和正常执行路径不是同一套建模，恢复出来的 Agent 很可能不对（已修复）
+
+**状态**：已修复（commit `6651d2e`）
 
 关键文件：
 
 - 正常路径：`src/main/routes/ChatRoutes.ts:170-181`
 - 恢复路径：`src/main/agent/threads/ThreadWaker.ts:165-167`
+
+**修复方案**：
+- 在 `ThreadWaker.submitResumeMessage()` 中读取完整的 Thread 和 Agent 数据
+- 配置 Builder 与 ChatRoutes 保持一致：
+  - `sessionMode('file')` ✅
+  - `name(agent.id)` ✅
+  - `applyProviderConfig(...)` ✅
+  - `instructions(...)` ✅
+- 增加错误处理和日志输出
+- 增加 TODO 注释，标记需要在 P1 阶段重构
+
+**验证结果**：
+- ✅ 编译通过
+- ✅ 恢复路径现在会正确持久化会话
+- ✅ 恢复路径现在会使用正确的 model 和 instructions
+- ⚠️ 建议增加集成测试覆盖（已创建测试文件）
+
+**遗留问题**：
+- 代码重复：ChatRoutes 和 ThreadWaker 各有一份配置逻辑（约 15 行）
+- 需要在 P1 阶段抽取 `ThreadExecutionFactory` 消除重复代码
+
+---
+
+### P0-2 原始描述（已修复）
 
 正常执行时，`ChatRoutes` 会把这些信息都装进 Builder：
 
@@ -426,12 +452,12 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 
 如果后面要真正动这个模块，我建议按下面顺序收：
 
-### 第一阶段：先止血
+### 第一阶段：先止血（✅ P0 已完成）
 
-- 修掉 `AgentEnvInjector` 的 `builderProjectDir` 编译错误
-- 修正 `ThreadWaker`，让恢复路径走和 `ChatRoutes` 相同的 Builder 装配逻辑
-- 修正 Lifecycle priority，消除 READY 阶段竞态
-- 明确当前唯一事件链路，至少先把注释和文档对齐
+- ✅ 修掉 `AgentEnvInjector` 的 `builderProjectDir` 编译错误
+- ✅ 修正 `ThreadWaker`，让恢复路径走和 `ChatRoutes` 相同的 Builder 装配逻辑
+- ⚠️ 修正 Lifecycle priority，消除 READY 阶段竞态（待处理）
+- ⚠️ 明确当前唯一事件链路，至少先把注释和文档对齐（部分完成）
 
 ### 第二阶段：拆职责
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import path from 'path';
 import Koa from 'koa';
 import Router from '@koa/router';
@@ -13,12 +13,14 @@ vi.mock('@main/common/env', () => {
         userAgentsDir: path.join(process.cwd(), '.test-home/agents'),
         builtinAgentsDir: path.join(process.cwd(), 'resources/agents'),
         userHome: path.join(process.cwd(), '.test-home'),
+        userData: path.join(process.cwd(), '.test-home/userData'),
         secretsDir: path.join(process.cwd(), '.test-home/secrets'),
+        homesDir: path.join(process.cwd(), '.test-home/agents'),
         threadsDir: path.join(process.cwd(), '.test-home/threads'),
         workspacesDir: path.join(process.cwd(), '.test-home/workspaces')
       },
       getAgentWorkspaceDir: async () => path.join(process.cwd(), '.test-home/workspace'),
-      getAgentHomeDir: async (id: string) => path.join(process.cwd(), '.test-home/homes', id),
+      getAgentHomeDir: async (id: string) => path.join(process.cwd(), '.test-home/agents', id),
       getSkillSearchPaths: async () => [path.join(process.cwd(), 'resources/skills')]
     }
   };
@@ -26,16 +28,16 @@ vi.mock('@main/common/env', () => {
 
 vi.mock('@main/common/logger', () => ({
   createLogger: () => ({
-    info: console.log,
-    warn: console.warn,
-    error: console.error,
-    debug: console.log
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }),
   log: {
-    info: console.log,
-    warn: console.warn,
-    error: console.error,
-    debug: console.log
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
@@ -57,6 +59,26 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
     on: vi.fn()
+  }
+}));
+
+vi.mock('@main/agent/execution/ThreadExecutionFactory', () => ({
+  ThreadExecutionFactory: {
+    getInstance: vi.fn(() => ({
+      createBuilder: vi.fn(async () => ({ mock: 'builder' }))
+    }))
+  }
+}));
+
+vi.mock('@main/agent/AgentExecutor', () => ({
+  agentExecutor: {
+    stream: vi.fn(() =>
+      (async function* () {
+        yield { type: 'text:delta', content: '测试成功' };
+        yield { type: 'run:done', content: '' };
+        return { output: '测试成功' };
+      })()
+    )
   }
 }));
 
@@ -96,6 +118,10 @@ describe('ChatRoutes Integration', () => {
         resolve();
       });
     });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
   it('should create a thread, list it, and send a message with SSE', async () => {
@@ -159,7 +185,6 @@ describe('ChatRoutes Integration', () => {
           });
 
           res.on('end', () => {
-            console.log('SSE Output:', output);
             expect(output.length).toBeGreaterThan(0);
             resolve();
           });

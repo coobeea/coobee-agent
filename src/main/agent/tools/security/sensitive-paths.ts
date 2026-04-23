@@ -31,15 +31,16 @@ const SENSITIVE_DIRS = [
  * @returns 如果是敏感路径，返回 { sensitive: true, reason: string }；否则返回 { sensitive: false }
  */
 export function checkSensitivePath(absolutePath: string): { sensitive: false } | { sensitive: true; reason: string } {
-  const userHome = Env.paths.userHome;
+  const roots = getSensitiveRoots();
+  const root = roots.find((candidate) => absolutePath === candidate || absolutePath.startsWith(candidate + path.sep));
 
-  // 如果路径不在用户目录下，不做限制（例如 workspace 内的文件）
-  if (!absolutePath.startsWith(userHome)) {
+  // 如果路径不在受保护目录下，不做限制（例如 workspace 内的文件）
+  if (!root) {
     return { sensitive: false };
   }
 
   // 获取相对于用户目录的路径
-  const relativePath = path.relative(userHome, absolutePath);
+  const relativePath = path.relative(root, absolutePath);
 
   // 检查是否匹配敏感文件
   for (const sensitiveFile of SENSITIVE_FILES) {
@@ -62,6 +63,21 @@ export function checkSensitivePath(absolutePath: string): { sensitive: false } |
   }
 
   return { sensitive: false };
+}
+
+function getSensitiveRoots(): string[] {
+  const roots = new Set<string>();
+
+  if (Env.paths.userHome) {
+    roots.add(Env.paths.userHome);
+  }
+
+  if (Env.paths.home) {
+    roots.add(path.join(Env.paths.home, '.coobee-ai'));
+    roots.add(path.join(Env.paths.home, '.coobee-agent'));
+  }
+
+  return Array.from(roots);
 }
 
 /**

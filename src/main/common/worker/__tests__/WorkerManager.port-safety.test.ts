@@ -16,6 +16,8 @@ import os from 'node:os';
 
 vi.mock('electron', () => ({
   app: {
+    isPackaged: false,
+    getAppPath: () => process.cwd(),
     getPath: () => '/tmp'
   }
 }));

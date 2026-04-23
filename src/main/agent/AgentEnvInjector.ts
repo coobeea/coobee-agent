@@ -30,6 +30,7 @@ import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
 import type { AgentBuilder } from './AgentExecutor';
+import { AgentContextResolver } from './context/AgentContextResolver';
 
 const log = createLogger('ai');
 
@@ -76,30 +77,32 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
     }
 
 
-    // 6. 从 Agent 定义中读取配置（dataDirectory、skills 等）
+    // 6. P1 重构：使用 AgentContextResolver 解析运行时上下文
     let agentDefinedSkills: string[] | undefined;
     if (agentId) {
       try {
+        // 使用 AgentContextResolver 统一解析路径和上下文
+        const resolver = AgentContextResolver.getInstance();
+        const context = await resolver.resolve({
+          agentId,
+          sessionId,
+          workspace: workspace
+        });
+
+        // 注入 dataDirectory（由 resolver 统一处理默认值）
+        agentEnv.dataDirectory = context.dataDirectory;
+        log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
+
+        // 读取 Agent 定义以获取 skills 配置
         const { AgentStore } = await import('./agents/AgentStore');
         const store = await AgentStore.getInstance();
         const agentDef = await store.get(agentId);
         if (agentDef) {
-          // 读取数据目录，如果未设置则使用默认路径
-          let dataDirectory = agentDef.metadata?.dataDirectory as string | undefined;
-          if (!dataDirectory) {
-            // 使用默认数据目录：.home/data/{agentId}
-            dataDirectory = path.join(Env.paths.userHome, 'data', agentId);
-            log.debug(`[EnvInjector] Using default dataDirectory: ${dataDirectory}`);
-          }
-          agentEnv.dataDirectory = dataDirectory;
-          log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
-          
-          // 读取 skills 配置（用于后续注入）
           agentDefinedSkills = agentDef.skills;
           log.debug(`[EnvInjector] Agent defined skills: ${agentDefinedSkills?.join(', ') || '(none)'}`);
         }
       } catch (error) {
-        log.warn(`[EnvInjector] Failed to load agent definition for ${agentId}:`, error);
+        log.warn(`[EnvInjector] Failed to resolve agent context for ${agentId}:`, error);
       }
     }
 

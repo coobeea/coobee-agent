@@ -26,6 +26,8 @@ describe('Agent Home Sessions Index', () => {
     fs.mkdirSync(homesDir, { recursive: true });
 
     ThreadStore.resetInstance();
+    const { AgentStore } = await import('@main/agent/agents/AgentStore');
+    AgentStore.resetInstance();
   });
 
   afterEach(() => {
@@ -45,7 +47,10 @@ describe('Agent Home Sessions Index', () => {
       get: () => ({
         homesDir,
         threadsDir,
-        workspacesDir
+        workspacesDir,
+        userHome: tempDir,
+        userAgentsDir: path.join(tempDir, 'agent-defs'),
+        builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
     });
@@ -87,7 +92,10 @@ describe('Agent Home Sessions Index', () => {
       get: () => ({
         homesDir,
         threadsDir,
-        workspacesDir
+        workspacesDir,
+        userHome: tempDir,
+        userAgentsDir: path.join(tempDir, 'agent-defs'),
+        builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
     });
@@ -126,7 +134,10 @@ describe('Agent Home Sessions Index', () => {
       get: () => ({
         homesDir,
         threadsDir,
-        workspacesDir
+        workspacesDir,
+        userHome: tempDir,
+        userAgentsDir: path.join(tempDir, 'agent-defs'),
+        builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
     });

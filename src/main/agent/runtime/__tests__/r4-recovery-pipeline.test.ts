@@ -5,13 +5,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock logger
-vi.mock('@main/common/logger', () => ({
-  createLogger: vi.fn(() => ({
+vi.mock('@main/common/logger', () => {
+  const log = {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn()
-  }))
+  };
+  return {
+    log,
+    createLogger: vi.fn(() => log)
+  };
+});
+
+// Mock ExtensionManager（无 runner，模拟 Extension 未加载的场景）
+vi.mock('../../../common/extension', () => ({
+  ExtensionManager: {
+    getHookRunner: () => null
+  }
+}));
+
+// Mock sandbox
+vi.mock('../../sandbox', () => ({
+  isToolAllowed: (_name: string, _policy: unknown) => true,
+  formatToolBlockedMessage: (name: string) => `Tool ${name} is blocked`
 }));
 
 import { AbstractAgentRuntime, generateRuntimeId } from '../AbstractAgentRuntime';
@@ -175,19 +192,6 @@ describe('S-2: ErrorRecoveryChain runtime injection', () => {
 // ==================== M-4: ToolExecutionPipeline ====================
 
 describe('M-4: ToolExecutionPipeline', () => {
-  // Mock ExtensionManager（无 runner，模拟 Extension 未加载的场景）
-  vi.mock('../../../common/extension', () => ({
-    ExtensionManager: {
-      getHookRunner: () => null
-    }
-  }));
-
-  // Mock sandbox
-  vi.mock('../../sandbox', () => ({
-    isToolAllowed: (_name: string, _policy: unknown) => true,
-    formatToolBlockedMessage: (name: string) => `Tool ${name} is blocked`
-  }));
-
   // 延迟导入（在 mock 之后）
   let executeToolPipeline: typeof import('../shared/ToolExecutionPipeline').executeToolPipeline;
   let createFallbackToolContext: typeof import('../shared/ToolExecutionPipeline').createFallbackToolContext;

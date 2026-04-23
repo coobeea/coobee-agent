@@ -189,6 +189,12 @@ async function isBinaryFile(filePath: string): Promise<boolean> {
         }
       }
 
+      const decoded = buffer.subarray(0, sampleSize).toString('utf8');
+      const replacementCount = decoded.match(/\uFFFD/g)?.length ?? 0;
+      if (decoded.length > 0 && replacementCount / decoded.length > 0.1) {
+        return true;
+      }
+
       // 如果超过 30% 的字节是非文本字符，认为是二进制
       const nonTextRatio = nonTextBytes / sampleSize;
       return nonTextRatio > 0.3;

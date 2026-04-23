@@ -5,33 +5,34 @@
  */
 
 import { Env } from '@main/common/env';
+import { checkSensitivePath } from './sensitive-paths';
 
 /**
  * 危险命令模式（正则表达式）
  */
 const DANGEROUS_PATTERNS = [
   // 访问敏感文件
-  /secrets\.json5/,
-  /skills\.json5/,
-  /\.env(\s|$)/,
+  { pattern: /secrets\.json5/, label: 'secrets.json5' },
+  { pattern: /skills\.json5/, label: 'skills.json5' },
+  { pattern: /\.env(\s|$)/, label: '.env' },
 
   // 访问敏感目录
-  /[/\\]secrets[/\\]/,
-  /\.coobee-ai[/\\]secrets/,
-  /\.home[/\\]secrets/,
+  { pattern: /[/\\]secrets[/\\]/, label: 'secrets' },
+  { pattern: /\.coobee-ai[/\\]secrets/, label: 'secrets' },
+  { pattern: /\.home[/\\]secrets/, label: 'secrets' },
 
   // 危险的系统操作
-  /rm\s+-rf\s+\//, // 删除根目录
-  /chmod\s+777/, // 过度开放权限
-  /sudo\s+/, // 提权操作
-  /su\s+/, // 切换用户
+  { pattern: /rm\s+-rf\s+\//, label: 'rm -rf' }, // 删除根目录
+  { pattern: /chmod\s+777/, label: 'chmod 777' }, // 过度开放权限
+  { pattern: /sudo\s+/, label: 'sudo' }, // 提权操作
+  { pattern: /su\s+/, label: 'su' }, // 切换用户
 
   // 网络渗透工具
-  /\b(nmap|metasploit|sqlmap|hydra|john)\b/,
+  { pattern: /\b(nmap|metasploit|sqlmap|hydra|john)\b/, label: 'network attack tool' },
 
   // 恶意文件操作
-  />\s*\/dev\/sda/, // 直接写入磁盘
-  /dd\s+if=.*of=\/dev/ // 危险的 dd 操作
+  { pattern: />\s*\/dev\/sda/, label: '/dev/sda' }, // 直接写入磁盘
+  { pattern: /dd\s+if=.*of=\/dev/, label: 'dd to /dev' } // 危险的 dd 操作
 ];
 
 /**
@@ -64,6 +65,16 @@ const SAFE_COMMAND_PREFIXES = [
  * @returns 如果安全返回 null，否则返回错误消息
  */
 export function scanCommand(command: string, workingDir?: string): string | null {
+  // 即使命令本身在白名单里，也不允许在敏感目录中执行。
+  if (workingDir) {
+    const check = checkSensitivePath(workingDir);
+    const secretsDir = Env.paths.secretsDir;
+
+    if (check.sensitive || (secretsDir && workingDir.startsWith(secretsDir))) {
+      return `Cannot execute commands in sensitive directory: ${workingDir}/. Operation blocked.`;
+    }
+  }
+
   // 检查是否为白名单命令（宽松检查，允许参数）
   const firstToken = command.trim().split(/\s+/)[0];
   const isWhitelisted = SAFE_COMMAND_PREFIXES.some((prefix) => {
@@ -76,18 +87,9 @@ export function scanCommand(command: string, workingDir?: string): string | null
   }
 
   // 检查危险模式
-  for (const pattern of DANGEROUS_PATTERNS) {
+  for (const { pattern, label } of DANGEROUS_PATTERNS) {
     if (pattern.test(command)) {
-      return `Dangerous command pattern detected: ${pattern.source}. Operation blocked for security.`;
-    }
-  }
-
-  // 检查是否在敏感目录下执行
-  if (workingDir) {
-    const secretsDir = Env.paths.secretsDir;
-
-    if (workingDir.startsWith(secretsDir)) {
-      return `Cannot execute commands in sensitive directory: ${secretsDir}/. Operation blocked.`;
+      return `Dangerous command pattern detected: ${label}. Operation blocked for security.`;
     }
   }
 

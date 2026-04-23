@@ -1086,8 +1086,8 @@ describe('execTool', () => {
 // ═══════════════════════════════════════════
 
 describe('builtinTools 集合', () => {
-  it('包含 13 个内置工具（5 个工具已迁移到 Skill）', () => {
-    expect(builtinTools).toHaveLength(13);
+  it('包含 12 个内置工具（部分工具已迁移到 Skill）', () => {
+    expect(builtinTools).toHaveLength(12);
   });
 
   it('按正确顺序包含所有工具', () => {

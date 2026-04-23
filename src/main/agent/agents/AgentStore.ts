@@ -181,13 +181,9 @@ export class AgentStore {
 
     const now = new Date().toISOString();
 
-    // 如果用户没有设置数据目录，自动初始化默认路径
+    // P1 重构：移除路径初始化逻辑，由 AgentContextResolver 在运行时处理
+    // dataDirectory 现在只作为可选的用户配置存储在 metadata 中
     const metadata = params.metadata || {};
-    if (!metadata.dataDirectory) {
-      const defaultDataDir = path.join(Env.paths.userHome, 'data', params.id);
-      metadata.dataDirectory = defaultDataDir;
-      log.debug(`[AgentStore] Auto-initialized dataDirectory: ${defaultDataDir}`);
-    }
 
     const definition: AgentDefinition = {
       id: params.id,
@@ -204,18 +200,8 @@ export class AgentStore {
       metadata
     };
 
-    // 1. 创建工作空间
+    // 创建工作空间（仅创建 Agent home 目录）
     this.homeManager.initHome(params.id);
-
-    // 2. 创建数据目录（如果不存在）
-    if (metadata.dataDirectory && !fs.existsSync(metadata.dataDirectory as string)) {
-      try {
-        fs.mkdirSync(metadata.dataDirectory as string, { recursive: true });
-        log.info(`[AgentStore] Created dataDirectory: ${metadata.dataDirectory}`);
-      } catch (err) {
-        log.warn(`[AgentStore] Failed to create dataDirectory ${metadata.dataDirectory}:`, err);
-      }
-    }
 
     // 3. 如果提供了 instructions，写入 SOUL.md
     if (params.instructions) {

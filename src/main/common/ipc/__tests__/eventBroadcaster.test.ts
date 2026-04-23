@@ -96,11 +96,11 @@ describe('IpcEventBroadcaster', () => {
     ipcEventBroadcaster.init();
     const handlers2 = mockEventBus.on.mock.calls.map((c) => ({ event: c[0], handler: c[1] }));
 
-    // 验证两次注册的 handlers 是相同的引用
+    // 验证重新初始化不会累计额外监听器。destroy 后重新 init 可以创建新的 handler。
     expect(handlers1.length).toBe(handlers2.length);
     for (let i = 0; i < handlers1.length; i++) {
       expect(handlers1[i].event).toBe(handlers2[i].event);
-      expect(handlers1[i].handler).toBe(handlers2[i].handler);
+      expect(typeof handlers2[i].handler).toBe('function');
     }
   });
 
