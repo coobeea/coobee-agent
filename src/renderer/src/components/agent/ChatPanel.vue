@@ -38,6 +38,7 @@ const chatComposerRef = ref<InstanceType<typeof ChatComposer> | null>(null);
 
 const agentGreeting = ref<string>('');
 const agentStarterPrompts = ref<string[]>([]);
+const agentDisplayName = ref<string>('');
 
 // ==================== Computed ====================
 // 直接从 store 读取消息（自动响应式）
@@ -53,6 +54,11 @@ const currentThread = computed(() => threadsStore.threads.find((t) => t.id === p
 // 从 agent metadata 中获取开场白和快捷问题
 const greeting = computed(() => agentGreeting.value);
 const starterPrompts = computed(() => agentStarterPrompts.value);
+const assistantName = computed(() => {
+  const thread = currentThread.value;
+  const listName = agentsStore.agents.find((agent) => agent.id === thread?.agentId)?.name;
+  return thread?.agentName || agentDisplayName.value || listName || '智能体';
+});
 
 // ==================== Methods ====================
 function scrollToBottom(force = false): void {
@@ -121,15 +127,22 @@ async function handleStop(): Promise<void> {
 
 async function loadAgentDetails(): Promise<void> {
   const thread = currentThread.value;
+  agentDisplayName.value = '';
   if (!thread || !thread.agentId) return;
 
   try {
     const agentDetail = await agentsStore.getAgentDetail(thread.agentId);
-    if (agentDetail && agentDetail.metadata) {
-      agentGreeting.value = (agentDetail.metadata.greeting as string) || '';
-      agentStarterPrompts.value = Array.isArray(agentDetail.metadata.starterPrompts)
-        ? agentDetail.metadata.starterPrompts
-        : [];
+    if (agentDetail) {
+      agentDisplayName.value = agentDetail.name || '';
+      if (agentDetail.metadata) {
+        agentGreeting.value = (agentDetail.metadata.greeting as string) || '';
+        agentStarterPrompts.value = Array.isArray(agentDetail.metadata.starterPrompts)
+          ? agentDetail.metadata.starterPrompts
+          : [];
+      } else {
+        agentGreeting.value = '';
+        agentStarterPrompts.value = [];
+      }
     } else {
       agentGreeting.value = '';
       agentStarterPrompts.value = [];
@@ -162,7 +175,7 @@ async function loadThreadHistory(): Promise<void> {
     // 直接处理聚合好的消息（来自 history.jsonl）
     for (const msg of history.messages) {
       const msgData = msg as any; // 临时使用 any，因为聚合消息格式不同
-      
+
       if (msgData.role === 'user') {
         // 用户消息
         chatStore.addUserMessage(props.threadId, msgData.content || '');
@@ -216,8 +229,8 @@ async function loadThreadHistory(): Promise<void> {
             totalTokens: msgData.metadata.totalTokens || 0,
             llmCalls: msgData.metadata.llmCalls || 0,
             toolCalls: Array.isArray(msgData.tools) ? msgData.tools.length : 0,
-            startTime: msgData.metadata.startTime 
-              ? new Date(msgData.metadata.startTime).getTime() 
+            startTime: msgData.metadata.startTime
+              ? new Date(msgData.metadata.startTime).getTime()
               : new Date(msgData.timestamp).getTime(),
             endTime: msgData.metadata.endTime ? new Date(msgData.metadata.endTime).getTime() : undefined,
             duration: msgData.metadata.duration,
@@ -263,33 +276,37 @@ defineExpose({
 <template>
   <aside class="chat-panel" :class="props.borderVariant === 'stacked' ? 'chat-panel--stacked' : ''">
     <!-- 消息区域 -->
-    <ChatMessages ref="chatMessagesRef" :messages="messages" :is-streaming="isStreaming">
+    <ChatMessages
+      ref="chatMessagesRef"
+      :messages="messages"
+      :is-streaming="isStreaming"
+      :assistant-name="assistantName">
       <template v-if="greeting || starterPrompts.length > 0" #empty>
-        <div class="flex flex-col items-center justify-center w-full max-w-2xl mx-auto px-6 py-12">
+        <div class="mx-auto flex w-full max-w-xl flex-col items-center justify-center px-4 py-8">
           <!-- 图标 -->
-          <div class="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-6">
-            <span class="i-mdi-star-four-points inline-block h-7 w-7" />
+          <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <span class="i-mdi-star-four-points inline-block h-5 w-5" />
           </div>
 
           <!-- 开场白 -->
-          <div v-if="greeting" class="text-center mb-8">
-            <p class="text-base text-foreground leading-relaxed">{{ greeting }}</p>
+          <div v-if="greeting" class="mb-5 text-center">
+            <p class="text-sm leading-6 text-foreground/90">{{ greeting }}</p>
           </div>
 
           <!-- 快捷问题 -->
-          <div v-if="starterPrompts.length > 0" class="w-full flex flex-col gap-3">
-            <p class="text-xs text-muted-foreground text-center mb-2">试试这些问题</p>
-            <div class="grid grid-cols-1 gap-2">
+          <div v-if="starterPrompts.length > 0" class="flex w-full flex-col gap-2">
+            <p class="text-center text-[11px] text-muted-foreground/75">试试这些问题</p>
+            <div class="grid grid-cols-1 gap-1.5">
               <button
                 v-for="(prompt, index) in starterPrompts"
                 :key="index"
                 type="button"
-                class="group flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all text-left cursor-pointer"
+                class="group flex cursor-pointer items-center gap-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
                 :disabled="isStreaming"
                 @click="handleStarterPromptClick(prompt)">
                 <span
-                  class="i-carbon-chevron-right text-muted-foreground/60 group-hover:text-primary transition-colors shrink-0 text-base"></span>
-                <span class="text-sm text-foreground/85 group-hover:text-foreground transition-colors">{{
+                  class="i-carbon-chevron-right shrink-0 text-sm text-muted-foreground/55 transition-colors group-hover:text-primary"></span>
+                <span class="text-[13px] leading-5 text-foreground/85 transition-colors group-hover:text-foreground">{{
                   prompt
                 }}</span>
               </button>
@@ -317,7 +334,7 @@ defineExpose({
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 12px;
+  padding: 10px;
   background: hsl(var(--background));
   border-left: 1px solid hsl(var(--border) / 0.4);
 }

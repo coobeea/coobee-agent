@@ -135,7 +135,6 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
       const promptAssembly = new PromptAssemblyService();
       const promptBlocks = promptAssembly.assemble({
         runtimePathsBlock,
-        globalAgentsMdPath: Env.paths.agentsMdPath,
         agentHome,
         agentId,
         agentHomeManager: homeManager,

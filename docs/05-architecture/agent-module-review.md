@@ -338,7 +338,7 @@ PiMono 路径更接近目标架构，OpenAI 路径则还保留了一部分旧做
 - `instructions`
 - `appendInstructions`
 - `runtime_paths`
-- `system_agents_md`
+- `agent_rules`
 - `agent_home`
 - `workspace_context`
 - `skill_discovery`

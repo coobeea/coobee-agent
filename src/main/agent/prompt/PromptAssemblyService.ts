@@ -20,6 +20,7 @@ export interface PromptBlock {
 
 export interface PromptAssemblyParams {
   runtimePathsBlock?: string;
+  /** @deprecated 全局 AGENTS.md 不再注入 prompt，仅保留字段兼容旧调用点 */
   globalAgentsMdPath?: string;
   agentHome?: string;
   agentId?: string;
@@ -50,10 +51,10 @@ export class PromptAssemblyService {
     this.addBlock(blocks, 'runtime_paths', 'Runtime paths', params.runtimePathsBlock);
     this.addBlock(
       blocks,
-      'agents_md',
-      'AGENTS.md rules',
-      this.readAgentsMdFiles(params.globalAgentsMdPath, params.agentHome, limits.agentsMdChars),
-      params.globalAgentsMdPath
+      'agent_rules',
+      'Agent rules',
+      this.readAgentRulesFile(params.agentHome, limits.agentsMdChars),
+      params.agentHome ? path.join(params.agentHome, 'AGENTS.md') : undefined
     );
     this.addBlock(
       blocks,
@@ -106,44 +107,15 @@ export class PromptAssemblyService {
     return content ? truncate(content, maxChars) : undefined;
   }
 
-  private readAgentsMdFiles(
-    globalPath: string | undefined,
-    agentHome: string | undefined,
-    maxChars: number
-  ): string | undefined {
-    if (!globalPath) return undefined;
-
-    const parts: string[] = [];
-    const seenContent = new Set<string>();
-
-    const globalContent = readText(globalPath);
-    if (globalContent) {
-      parts.push(globalContent);
-      seenContent.add(globalContent);
-    }
-
+  private readAgentRulesFile(agentHome: string | undefined, maxChars: number): string | undefined {
     const agentMdPath = agentHome ? path.join(agentHome, 'AGENTS.md') : undefined;
     const agentContent = agentMdPath ? readText(agentMdPath) : undefined;
-    if (agentContent && !seenContent.has(agentContent) && !isOnlyComments(agentContent)) {
-      parts.push(`---\n\n<!-- Agent-level rules (${agentMdPath}) -->\n\n${agentContent}`);
+
+    if (!agentMdPath || !agentContent || isOnlyComments(agentContent)) {
+      return undefined;
     }
 
-    if (parts.length === 0) return undefined;
-
-    const pathLines = [`Global path: ${globalPath}`];
-    if (agentMdPath) pathLines.push(`Agent path: ${agentMdPath}`);
-
-    return truncate(
-      `<system_agents_md>
-This is the system-wide AGENTS.md protocol file. It contains identity, rules, and shared context
-that ALL agents MUST follow. You may update the Agent-level copy in your Agent Home directory.
-
-${pathLines.join('\n')}
-
-${parts.join('\n\n')}
-</system_agents_md>`,
-      maxChars
-    );
+    return truncate(`<agent_rules path="${agentMdPath}">\n${agentContent}\n</agent_rules>`, maxChars);
   }
 
   private readWorkspaceContextFiles(

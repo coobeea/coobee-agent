@@ -39,15 +39,15 @@ function decisionLabel(decision: HitlApprovalDecision): string {
       class="inline-block h-2.5 w-2.5"
       :class="props.approval.decision === 'reject' ? 'i-carbon-close-filled' : 'i-carbon-checkmark-filled'" />
     <span>{{ decisionLabel(props.approval.decision) }}</span>
-    <span class="font-mono text-gray-400">{{ props.approval.toolName }}</span>
+    <span class="font-mono text-muted-foreground/65">{{ props.approval.toolName }}</span>
   </div>
 
   <!-- 未决策 — 完整展开 -->
   <div v-else class="hitl-pending">
     <div class="hitl-pending-header">
-      <span class="i-carbon-locked inline-block h-3 w-3 text-amber-600" />
+      <span class="i-carbon-locked inline-block h-3 w-3 text-warning" />
       <span class="hitl-pending-title">需要审批</span>
-      <span class="font-mono text-[10px] text-gray-400">{{ props.approval.toolName }}</span>
+      <span class="font-mono text-[10px] text-muted-foreground/65">{{ props.approval.toolName }}</span>
     </div>
 
     <div class="hitl-pending-actions">
@@ -62,51 +62,51 @@ function decisionLabel(decision: HitlApprovalDecision): string {
 .hitl-decided {
   display: flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
+  gap: 5px;
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 11.5px;
 }
 
 .hitl-decided--approved {
-  background: rgb(236 253 245 / 0.4);
-  color: rgb(16 185 129);
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
 }
 
 .hitl-decided--rejected {
-  background: rgb(254 242 242 / 0.4);
-  color: rgb(239 68 68);
+  background: hsl(var(--error) / 0.1);
+  color: hsl(var(--error));
 }
 
 .hitl-pending {
   border-radius: 6px;
-  border-left: 2px solid rgb(251 191 36);
-  background: rgb(255 251 235 / 0.6);
-  padding: 8px;
+  border-left: 2px solid hsl(var(--warning));
+  background: hsl(var(--warning) / 0.08);
+  padding: 7px;
 }
 
 .hitl-pending-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   margin-bottom: 4px;
 }
 
 .hitl-pending-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: rgb(55 65 81);
+  color: hsl(var(--foreground) / 0.82);
 }
 
 .hitl-pending-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 7px;
 }
 
 .hitl-btn {
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 2px 7px;
   font-size: 10px;
   font-weight: 500;
   color: white;
@@ -115,23 +115,23 @@ function decisionLabel(decision: HitlApprovalDecision): string {
 }
 
 .hitl-btn--approve {
-  background: rgb(16 185 129);
+  background: hsl(var(--success));
 }
 .hitl-btn--approve:hover {
-  background: rgb(5 150 105);
+  background: hsl(var(--success) / 0.86);
 }
 
 .hitl-btn--always {
-  background: rgb(59 130 246);
+  background: hsl(var(--primary));
 }
 .hitl-btn--always:hover {
-  background: rgb(37 99 235);
+  background: hsl(var(--primary) / 0.9);
 }
 
 .hitl-btn--reject {
-  background: rgb(239 68 68);
+  background: hsl(var(--error));
 }
 .hitl-btn--reject:hover {
-  background: rgb(220 38 38);
+  background: hsl(var(--error) / 0.9);
 }
 </style>

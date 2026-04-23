@@ -11,9 +11,15 @@ import BlockAudio from '../blocks/BlockAudio.vue';
 import BlockStats from '../blocks/BlockStats.vue';
 import HitlApprovalCard from '../HitlApprovalCard.vue';
 
-defineProps<{
-  message: ChatMessage;
-}>();
+withDefaults(
+  defineProps<{
+    message: ChatMessage;
+    assistantName?: string;
+  }>(),
+  {
+    assistantName: '智能体'
+  }
+);
 
 const emit = defineEmits<{
   decide: [approval: PendingApproval, decision: HitlApprovalDecision];
@@ -26,7 +32,7 @@ const emit = defineEmits<{
       <span class="msg-role-icon msg-role-assistant">
         <span class="inline-block h-3 w-3 i-mdi-star-four-points" />
       </span>
-      <span class="msg-role-name">管家</span>
+      <span class="msg-role-name">{{ assistantName }}</span>
       <span class="msg-time">{{
         new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
       }}</span>
@@ -68,9 +74,9 @@ const emit = defineEmits<{
       </div>
 
       <!-- 执行统计 -->
-      <BlockStats 
-        v-if="message.status === 'done' && message.stats" 
-        :stats="message.stats" 
+      <BlockStats
+        v-if="message.status === 'done' && message.stats"
+        :stats="message.stats"
         :message-content="message.content" />
     </div>
   </div>
@@ -79,22 +85,22 @@ const emit = defineEmits<{
 <style scoped>
 /* 消息块 */
 .msg-block {
-  padding: 6px 16px;
+  padding: 5px 12px;
 }
 
 .msg-role-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 5px;
+  margin-bottom: 3px;
 }
 
 .msg-role-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
 }
 
@@ -104,13 +110,13 @@ const emit = defineEmits<{
 }
 
 .msg-role-name {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 600;
   color: hsl(var(--foreground));
 }
 
 .msg-time {
-  font-size: 12px;
+  font-size: 11px;
   color: hsl(var(--muted-foreground));
   margin-left: auto;
 }
@@ -118,7 +124,7 @@ const emit = defineEmits<{
 .msg-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 /* 错误与状态 */
@@ -129,7 +135,7 @@ const emit = defineEmits<{
   font-size: 12px;
   color: hsl(var(--destructive));
   background: hsl(var(--destructive) / 0.1);
-  padding: 6px 10px;
+  padding: 5px 9px;
   border-radius: 6px;
 }
 

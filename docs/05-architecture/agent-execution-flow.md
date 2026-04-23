@@ -118,7 +118,7 @@ AgentEnvInjector
 `PromptAssemblyService` 固定 prompt 附加块顺序：
 
 1. `runtime_paths`
-2. `agents_md`
+2. `agent_rules`
 3. `agent_home`
 4. `workspace_context`
 5. `skill_discovery`
@@ -129,7 +129,7 @@ AgentEnvInjector
 | 块                     | 默认限制   |
 | ---------------------- | ---------- |
 | Agent Home             | 10000 字符 |
-| AGENTS.md              | 50000 字符 |
+| Agent rules            | 50000 字符 |
 | Workspace context 总量 | 6000 字符  |
 | Workspace 单文件       | 3000 字符  |
 

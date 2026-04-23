@@ -45,7 +45,7 @@ function toggle(): void {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 7px;
   font-size: 11.5px;
   font-weight: 500;

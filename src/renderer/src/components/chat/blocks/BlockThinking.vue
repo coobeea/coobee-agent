@@ -8,8 +8,10 @@ const props = defineProps<{
 
 const collapsed = ref(true); // 默认折叠
 
-const lineCount = computed(() => {
-  return props.block.text?.split('\n').length ?? 0;
+const previewText = computed(() => {
+  const text = props.block.text?.replace(/\s+/g, ' ').trim();
+  if (!text) return '正在整理思路...';
+  return text.length > 96 ? `${text.slice(0, 96)}...` : text;
 });
 
 function toggleCollapse(): void {
@@ -19,11 +21,12 @@ function toggleCollapse(): void {
 
 <template>
   <div class="msg-thinking">
-    <div class="thinking-header" @click="toggleCollapse">
+    <div class="thinking-row" @click="toggleCollapse">
       <span class="i-carbon-idea inline-block h-3 w-3 shrink-0" />
       <span class="thinking-label">思考</span>
-      <span class="thinking-line-count">{{ lineCount }} 行</span>
-      <button class="collapse-btn">
+      <span v-if="collapsed" class="thinking-preview">{{ previewText }}</span>
+      <span v-else class="thinking-spacer" />
+      <button type="button" class="collapse-btn">
         <span
           class="inline-block h-3 w-3 transition-transform duration-200"
           :class="collapsed ? 'i-carbon-chevron-right' : 'i-carbon-chevron-down'" />
@@ -34,46 +37,51 @@ function toggleCollapse(): void {
         {{ block.text }}
       </div>
     </div>
-    <div v-if="collapsed" class="collapsed-preview" @click="toggleCollapse">
-      {{ block.text?.split('\n').slice(0, 2).join(' ').substring(0, 80) }}...
-    </div>
   </div>
 </template>
 
 <style scoped>
 .msg-thinking {
-  font-size: 13px;
+  font-size: 12.5px;
   color: hsl(var(--muted-foreground));
-  background: hsl(var(--muted) / 0.3);
+  background: hsl(var(--muted) / 0.16);
+  border: 1px solid hsl(var(--border) / 0.45);
   border-radius: 6px;
-  border-left: 2px solid hsl(var(--muted-foreground) / 0.3);
   overflow: hidden;
 }
 
-.thinking-header {
+.thinking-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 8px;
   cursor: pointer;
   user-select: none;
 }
 
-.thinking-header:hover {
-  background: hsl(var(--muted) / 0.5);
+.thinking-row:hover {
+  background: hsl(var(--muted) / 0.28);
 }
 
 .thinking-label {
   font-weight: 500;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: hsl(var(--foreground) / 0.68);
 }
 
-.thinking-line-count {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground) / 0.6);
-  margin-left: auto;
+.thinking-preview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: hsl(var(--muted-foreground) / 0.72);
+}
+
+.thinking-spacer {
+  flex: 1;
 }
 
 .collapse-btn {
@@ -87,29 +95,16 @@ function toggleCollapse(): void {
 }
 
 .thinking-body {
-  padding: 0 10px 6px;
+  border-top: 1px solid hsl(var(--border) / 0.35);
+  padding: 6px 8px;
+  background: hsl(var(--background) / 0.55);
 }
 
 .msg-thinking-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   white-space: pre-wrap;
   word-break: break-all;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.collapsed-preview {
-  padding: 0 10px 5px;
   font-size: 12px;
-  color: hsl(var(--muted-foreground) / 0.5);
-  font-style: italic;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.collapsed-preview:hover {
-  color: hsl(var(--muted-foreground) / 0.8);
+  line-height: 1.45;
 }
 </style>

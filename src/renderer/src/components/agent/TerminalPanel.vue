@@ -22,7 +22,7 @@ const execOutputs = inject<Ref<Array<{ id: string; command: string; output: stri
   <div class="terminal-panel">
     <div v-if="execOutputs.length === 0" class="terminal-empty">
       <span class="i-carbon-terminal inline-block h-5 w-5 opacity-20" />
-      <span class="text-xs text-gray-400">暂无执行输出</span>
+      <span class="text-xs text-muted-foreground/60">暂无执行输出</span>
     </div>
 
     <div v-else class="terminal-content">
@@ -47,7 +47,7 @@ const execOutputs = inject<Ref<Array<{ id: string; command: string; output: stri
   flex: 1;
   min-height: 0;
   background: hsl(var(--background));
-  border-top: 1px solid hsl(var(--border) / 0.3);
+  border-top: 1px solid hsl(var(--border) / 0.35);
 }
 
 .terminal-empty {
@@ -55,7 +55,7 @@ const execOutputs = inject<Ref<Array<{ id: string; command: string; output: stri
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   color: hsl(var(--muted-foreground) / 0.4);
 }
@@ -63,15 +63,15 @@ const execOutputs = inject<Ref<Array<{ id: string; command: string; output: stri
 .terminal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 10px;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 12px;
 }
 
 .terminal-item {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   border-radius: 6px;
-  border: 1px solid hsl(var(--border) / 0.3);
+  border: 1px solid hsl(var(--border) / 0.4);
   background: hsl(var(--muted) / 0.1);
   overflow: hidden;
 }
@@ -79,16 +79,16 @@ const execOutputs = inject<Ref<Array<{ id: string; command: string; output: stri
 .terminal-command {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: hsl(var(--muted) / 0.2);
+  gap: 5px;
+  padding: 6px 10px;
+  background: hsl(var(--muted) / 0.18);
   color: hsl(var(--foreground) / 0.8);
   font-weight: 500;
   border-bottom: 1px solid hsl(var(--border) / 0.2);
 }
 
 .terminal-output {
-  padding: 12px;
+  padding: 10px;
   margin: 0;
   color: hsl(var(--foreground) / 0.7);
   white-space: pre-wrap;
@@ -96,7 +96,7 @@ const execOutputs = inject<Ref<Array<{ id: string; command: string; output: stri
 }
 
 .terminal-exit {
-  padding: 6px 12px;
+  padding: 5px 10px;
   background: hsl(var(--muted) / 0.15);
   color: hsl(var(--muted-foreground) / 0.6);
   font-size: 11px;

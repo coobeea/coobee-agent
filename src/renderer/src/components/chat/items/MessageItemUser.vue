@@ -27,22 +27,22 @@ defineProps<{
 <style scoped>
 /* 消息块 */
 .msg-block {
-  padding: 6px 16px;
+  padding: 5px 12px;
 }
 
 .msg-role-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 5px;
+  margin-bottom: 3px;
 }
 
 .msg-role-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
 }
 
@@ -52,13 +52,13 @@ defineProps<{
 }
 
 .msg-role-name {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 600;
   color: hsl(var(--foreground));
 }
 
 .msg-time {
-  font-size: 12px;
+  font-size: 11px;
   color: hsl(var(--muted-foreground));
   margin-left: auto;
 }
@@ -66,12 +66,12 @@ defineProps<{
 .msg-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .msg-text {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.55;
   color: hsl(var(--foreground));
   white-space: pre-wrap;
   word-break: break-word;

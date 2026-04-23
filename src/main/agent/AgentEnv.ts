@@ -227,120 +227,30 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
  * 注入到 appendInstructions 中，让 LLM 了解可用路径。
  */
 export function formatRuntimePaths(env: AgentEnv): string {
-  // 格式化扩展列表
   const extensionsList = env.loadedExtensions.length > 0 ? env.loadedExtensions.join(', ') : 'none';
 
-  const agentHomeSection = env.agentHome
-    ? `
-**Agent Home (Your Root Directory)**: ${env.agentHome}/
-  ├── IDENTITY.md                           — 身份名片：名字、风格、签名
-  ├── SOUL.md                               — 核心灵魂：行为原则、风格定调
-  ├── USER.md                               — 主人档案：用户称呼、偏好
-  ├── NOTES.md                              — 环境工具备注：特殊配置
-  ├── HEARTBEAT.md                          — 心跳任务清单：定期任务
-  ├── AGENTS.md                             — Agent 级规则 + 技能配置
-  └── BOOTSTRAP.md                          — 引导文件（初始化配置）
-
-  **PURPOSE**: Agent 的人格配置和记忆文件。这些 Markdown 文件定义了 Agent 的身份、
-  行为原则、用户偏好等。系统会将这些文件的内容注入到 System Prompt 中。
-`
-    : '';
-
-  const dataDirectorySection = env.dataDirectory
-    ? `
-📂 **数据目录 / Data Directory (IMPORTANT)**: \`${env.dataDirectory}/\`
-  
-  ⚠️ **这是你的专属数据存储区，非常重要！**
-  
-  **用途**：
-  - 持久化存储所有业务数据（客户信息、进销存记录、知识库、文档等）
-  - 跨任务、跨会话的数据共享（今天保存的数据，明天仍可访问）
-  - 这是固定的目录，不会因为任务结束而清理
-  
-  **何时使用**：
-  - 用户要求保存、记录、存储任何业务数据时 → 保存到数据目录
-  - 用户询问"之前的记录""历史数据""上次的文件"时 → 从数据目录读取
-  - 生成报表、分析结果、知识文档时 → 保存到数据目录
-  
-  **路径**: \`${env.dataDirectory}\`
-`
-    : '';
-
   return `<runtime_environment>
-Your Runtime Environment:
-${env.agentId ? `- Agent ID: ${env.agentId}` : ''}
-${env.agentName ? `- Agent Name: ${env.agentName}` : ''}
+Agent:
+${env.agentId ? `- id: ${env.agentId}` : ''}
+${env.agentName ? `- name: ${env.agentName}` : ''}
 - Session: ${env.sessionId}
-${env.dataDirectory ? `- 数据目录 (Data Dir): ${env.dataDirectory}` : ''}
-- Internal Workspace: ${env.workspace}
-- Platform: ${env.platform}/${env.arch} (${env.isDev ? 'dev' : 'prod'})
-- Security: sandbox=${env.sandboxMode}, exec=${env.execApproval}
-- Model: ${env.defaultModel} (thinking=${env.thinkingLevel})
-- Extensions: ${extensionsList}
+- model: ${env.defaultModel} (thinking=${env.thinkingLevel})
+- platform: ${env.platform}/${env.arch} (${env.isDev ? 'dev' : 'prod'})
+- security: sandbox=${env.sandboxMode}, exec=${env.execApproval}
+- extensions: ${extensionsList}
 
-Directory Structure:
-${dataDirectorySection}
-${agentHomeSection}
-**Current Task Workspace (Internal/Temporary)**: ${env.workspace}/
-  ├── sessions/                             — SDK session files
-  │   ├── session.jsonl                         (OpenAI)
-  │   └── {timestamp}_{uuid}.jsonl              (PiMono)
-  ├── history.jsonl                         — Aggregated message history (frontend display)
-  ├── events.jsonl                          — Debug event logs
-  ├── context.jsonl                         — Context snapshots (append-only)
-  └── tasks/                                — Multi-agent collaboration area
+Paths:
+${env.dataDirectory ? `- data_directory: ${env.dataDirectory} (persistent business data)` : ''}
+${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)` : ''}
+- workspace: ${env.workspace} (temporary files for the current task)
+- config: ${env.configDir}
+- skills: builtin=${env.builtinSkillsDir}, user=${env.userSkillsDir}
+- agents_definitions: ${env.userAgentsDir}
 
-  **PURPOSE**: This is the internal sandbox for the CURRENT task.
-  Files here are task-specific and may be cleaned up after task completion.
-
-Key System Directories:
-- Data Directory: ${env.dataDirectory || '{dataDirectory}'}          — Agent 专属数据目录（业务数据持久化）
-- Agent Home: ${env.agentHome || '{agentHome}'}            — Agent 配置和记忆文件
-- Config: ${env.configDir}                          — 全局配置
-- Skills: builtin=${env.builtinSkillsDir}, user=${env.userSkillsDir}  — Skills 搜索路径
-- Agents Definitions: ${env.userAgentsDir}              — Agent 定义文件目录
-
-File Output Guidelines:
-
-**Where to save files?**
-${
-  env.dataDirectory
-    ? `
-1. **数据目录（首选！业务数据持久化）** → ${env.dataDirectory}/
-   ⚠️ 优先级最高！所有业务数据都应保存到这里！
-   - 客户信息、进销存记录、知识库、分析报告、文档等
-   - 跨任务的持久化数据，下次开启新任务时可以继续访问
-   - 这是智能体专属的固定数据存储位置
-   - 用户要求"保存数据""记录信息""生成报告"时，默认使用此目录
-`
-    : ''
-}
-
-${env.dataDirectory ? '2' : '1'}. **Agent Home（配置和记忆）** → ${env.agentHome || '{agentHome}'}/
-   - IDENTITY.md      — 身份名片
-   - SOUL.md          — 核心灵魂和行为原则
-   - USER.md          — 用户偏好和使用习惯
-   - NOTES.md         — 环境备注和特殊配置
-   - HEARTBEAT.md     — 定期检查任务
-   - AGENTS.md        — Agent 级规则和技能配置
-
-${env.dataDirectory ? '3' : '2'}. **Temporary Task Files** → Current Task Workspace
-   - ${env.workspace}/  — 临时文件、中间结果
-   - 任务结束后可能被清理
-
-${env.dataDirectory ? '4' : '3'}. **System Files** (DO NOT manually modify)
-   - {workspace}/sessions/         — Session data (managed by system)
-   - {workspace}/history.jsonl     — Aggregated history (managed by system)
-   - {workspace}/events.jsonl      — Event logs (managed by system)
-   - {workspace}/context.jsonl     — Context snapshots (managed by system)
-${
-  env.dataDirectory
-    ? `
-
-**重要提示**：你有专属的数据目录 \`${env.dataDirectory}\`，所有业务数据都应保存到这里！`
-    : `
-
-**IMPORTANT**: When user asks "check our root directory" or similar, they usually mean ${env.agentHome ? `Agent Home (${env.agentHome})` : 'the current workspace'}.`
-}
+File usage:
+${env.dataDirectory ? '- Save durable business data, records, reports, and knowledge documents in data_directory.' : ''}
+- Use agent_home only for Agent identity, memory, preferences, rules, and configuration.
+- Use workspace for temporary task files and intermediate outputs.
+- Do not manually edit system-managed workspace files: sessions/, history.jsonl, events.jsonl, context.jsonl.
 </runtime_environment>`;
 }

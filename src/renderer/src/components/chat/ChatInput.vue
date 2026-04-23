@@ -222,39 +222,37 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 120px;
-  border: 1px solid hsl(var(--border) / 0.25);
-  border-radius: 12px;
+  min-height: 98px;
+  border: 1px solid hsl(var(--border) / 0.45);
+  border-radius: 10px;
   background: #ffffff;
-  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.06);
-  transition: all 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
   /* 允许模型下拉等浮层向外展开，避免被卡片边界裁掉 */
   overflow: visible;
 }
 
 .chat-input-wrapper:focus-within {
   border-color: hsl(var(--primary) / 0.4);
-  box-shadow:
-    0 0 0 3px hsl(var(--primary) / 0.08),
-    0 2px 6px hsl(var(--foreground) / 0.08);
+  background: #ffffff;
 }
 
 /* 暗色模式适配 */
 @media (prefers-color-scheme: dark) {
   .chat-input-wrapper {
-    background: hsl(var(--surface) / 0.4);
-    border-color: hsl(var(--border) / 0.3);
-    box-shadow: 0 1px 3px hsl(var(--foreground) / 0.1);
+    background: hsl(var(--surface) / 0.25);
+    border-color: hsl(var(--border) / 0.35);
   }
 }
 
 .chat-input {
   flex: 1;
   min-height: 0;
-  max-height: 240px;
+  max-height: 220px;
   overflow-y: auto;
-  padding: 14px 16px;
-  padding-bottom: 50px;
+  padding: 11px 13px;
+  padding-bottom: 42px;
 }
 
 .chat-input-toolbar {
@@ -266,9 +264,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: transparent;
-  border-top: 1px solid hsl(var(--border) / 0.12);
+  border-top: 1px solid hsl(var(--border) / 0.14);
 }
 
 .toolbar-left {
@@ -291,9 +289,11 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  transition: all 0.15s ease;
+  height: 30px;
+  border-radius: 7px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
   cursor: pointer;
   border: none;
   outline: none;
@@ -311,7 +311,6 @@ onUnmounted(() => {
 
 .toolbar-btn-send:hover:not(:disabled) {
   background: hsl(var(--primary) / 0.9);
-  transform: scale(1.05);
 }
 
 .toolbar-btn-stop {
@@ -321,16 +320,15 @@ onUnmounted(() => {
 
 .toolbar-btn-stop:hover {
   background: hsl(var(--error) / 0.9);
-  transform: scale(1.05);
 }
 
 /* Tiptap 编辑器样式 */
 .chat-input :deep(.tiptap-editor) {
   width: 100%;
-  min-height: 60px;
+  min-height: 48px;
   color: hsl(var(--foreground));
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.55;
   outline: none;
 }
 
@@ -351,13 +349,13 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 9px;
+  padding: 2px 8px;
   margin: 0 2px;
   border-radius: 6px;
   background: hsl(var(--primary) / 0.1);
   border: 1px solid hsl(var(--primary) / 0.15);
   color: hsl(var(--primary));
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   white-space: nowrap;
   user-select: all;

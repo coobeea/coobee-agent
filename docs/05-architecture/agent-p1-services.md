@@ -92,7 +92,6 @@ const builder = await ThreadExecutionFactory.getInstance().createBuilder({
 ```typescript
 const blocks = promptAssembly.assemble({
   runtimePathsBlock,
-  globalAgentsMdPath,
   agentHome,
   agentId,
   agentHomeManager,
@@ -107,7 +106,7 @@ builder.appendInstructions(...promptAssembly.toInstructions(blocks));
 固定顺序：
 
 1. `runtime_paths`
-2. `agents_md`
+2. `agent_rules`
 3. `agent_home`
 4. `workspace_context`
 5. `skill_discovery`
@@ -118,13 +117,14 @@ builder.appendInstructions(...promptAssembly.toInstructions(blocks));
 | 内容                   | 默认限制   |
 | ---------------------- | ---------- |
 | Agent Home             | 10000 字符 |
-| AGENTS.md              | 50000 字符 |
+| Agent rules            | 50000 字符 |
 | Workspace context 总量 | 6000 字符  |
 | Workspace 单文件       | 3000 字符  |
 
 使用约束：
 
 - `AgentEnvInjector` 只准备上下文，不再内联读取 AGENTS.md 或 workspace markdown 的拼装逻辑。
+- 全局 `.home/agents.md` 不再注入 prompt；Agent 级规则只读取当前 Agent Home 下的 `AGENTS.md`。
 - PiMono Runtime 保留 `resourceLoader.getSkills()` 给 SDK 使用，但不再额外把技能摘要拼进 appendInstructions。
 - Extension 如需注入运行期指令，应通过 `extensionInstructions` 进入统一排序，而不是直接改 Runtime prompt。
 

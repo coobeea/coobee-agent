@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
 <style scoped>
 /* 自定义 prose 样式微调 */
 .prose :deep(p) {
-  margin: 0.5rem 0;
+  margin: 0.4rem 0;
 }
 
 .prose :deep(p:first-child) {
@@ -108,14 +108,14 @@ onBeforeUnmount(() => {
 .prose :deep(h5),
 .prose :deep(h6) {
   margin-top: 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   font-weight: 600;
 }
 
 .prose :deep(ul),
 .prose :deep(ol) {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
   list-style-position: outside;
 }
 
@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
 }
 
 .prose :deep(li) {
-  margin: 0.25rem 0;
+  margin: 0.18rem 0;
   display: list-item;
 }
 
@@ -145,20 +145,20 @@ onBeforeUnmount(() => {
 }
 
 .prose :deep(hr) {
-  margin: 1rem 0;
+  margin: 0.75rem 0;
   border-color: hsl(var(--border));
 }
 
 .prose :deep(blockquote) {
-  margin: 0.5rem 0;
-  padding-left: 1rem;
+  margin: 0.45rem 0;
+  padding-left: 0.75rem;
   border-left: 3px solid hsl(var(--border));
   color: hsl(var(--muted-foreground));
   font-style: italic;
 }
 
 .prose :deep(table) {
-  margin: 0.5rem 0;
+  margin: 0.45rem 0;
   border-collapse: collapse;
   width: 100%;
 }
@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
 .prose :deep(table th),
 .prose :deep(table td) {
   border: 1px solid hsl(var(--border));
-  padding: 0.5rem;
+  padding: 0.4rem;
 }
 
 .prose :deep(table th) {
@@ -187,11 +187,11 @@ onBeforeUnmount(() => {
 /* 代码块容器 */
 .prose :deep(.markdown-code-block) {
   position: relative;
-  margin: 0.75rem 0;
+  margin: 0.55rem 0;
   border-radius: 0.5rem;
-  background: hsl(var(--muted) / 0.3);
+  background: hsl(var(--muted) / 0.24);
   overflow: hidden;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid hsl(var(--border) / 0.7);
 }
 
 /* 代码块顶部工具栏 */
@@ -199,10 +199,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  background: hsl(var(--muted) / 0.5);
-  border-bottom: 1px solid hsl(var(--border));
-  font-size: 0.75rem;
+  padding: 0.4rem 0.65rem;
+  background: hsl(var(--muted) / 0.36);
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  font-size: 0.7rem;
 }
 
 .prose :deep(.code-language) {
@@ -217,9 +217,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.45rem;
   background: transparent;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid hsl(var(--border) / 0.7);
   border-radius: 0.25rem;
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
@@ -261,7 +261,7 @@ onBeforeUnmount(() => {
 
 .prose :deep(.code-content pre) {
   margin: 0 !important;
-  padding: 1rem !important;
+  padding: 0.75rem !important;
   background: transparent !important;
   border: none !important;
   overflow-x: auto;
@@ -269,8 +269,8 @@ onBeforeUnmount(() => {
 
 .prose :deep(.code-content pre code) {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: 0.82rem;
+  line-height: 1.55;
   background: transparent;
   padding: 0;
 }

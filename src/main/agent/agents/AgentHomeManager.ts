@@ -26,10 +26,18 @@ import { createLogger } from '@main/common/logger';
 const log = createLogger('agent-home');
 
 /** Agent Home 中的标准文件 */
-const HOME_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md', 'AGENTS.md', 'BOOTSTRAP.md'] as const;
+const HOME_FILES = [
+  'IDENTITY.md',
+  'SOUL.md',
+  'USER.md',
+  'NOTES.md',
+  'HEARTBEAT.md',
+  'AGENTS.md',
+  'BOOTSTRAP.md'
+] as const;
 
 /** 需要注入到 system prompt 的文件（按优先级排序） */
-const INJECTABLE_FILES = ['BOOTSTRAP.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md', 'AGENTS.md'] as const;
+const INJECTABLE_FILES = ['BOOTSTRAP.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'NOTES.md', 'HEARTBEAT.md'] as const;
 
 /** 每个文件的用途说明（模板状态时展示） */
 const FILE_PURPOSES: Record<string, string> = {
@@ -167,7 +175,7 @@ export class AgentHomeManager {
    *
    * 如果目录已存在，不会覆盖已有文件。
    * 仅在文件缺失时写入默认模板。
-   * 
+   *
    * BOOTSTRAP.md 只在首次初始化时创建（即其他标准文件都不存在时）。
    */
   initHome(agentId: string): string {
@@ -180,20 +188,18 @@ export class AgentHomeManager {
     fs.mkdirSync(skillsDir, { recursive: true });
 
     // 检查是否是首次初始化（除 BOOTSTRAP.md 外的标准文件都不存在）
-    const standardFiles = HOME_FILES.filter(f => f !== 'BOOTSTRAP.md');
-    const hasExistingFiles = standardFiles.some(file => 
-      fs.existsSync(path.join(homeDir, file))
-    );
+    const standardFiles = HOME_FILES.filter((f) => f !== 'BOOTSTRAP.md');
+    const hasExistingFiles = standardFiles.some((file) => fs.existsSync(path.join(homeDir, file)));
 
     // 写入缺失的标准文件
     for (const file of HOME_FILES) {
       const filePath = path.join(homeDir, file);
-      
+
       // BOOTSTRAP.md 只在首次初始化时创建
       if (file === 'BOOTSTRAP.md' && hasExistingFiles) {
         continue;
       }
-      
+
       if (!fs.existsSync(filePath)) {
         const templateFn = TEMPLATES[file];
         if (templateFn) {

@@ -14,8 +14,8 @@ function formatNumber(num: number): string {
 
 // 格式化时间（HH:mm:ss）
 function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
+  return new Date(timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
     minute: '2-digit',
     second: '2-digit'
   });
@@ -113,10 +113,10 @@ async function copyMessage(): Promise<void> {
 .stats-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 4px;
   padding: 2px 0;
-  min-height: 24px;
+  min-height: 22px;
 }
 
 .stats-actions {
@@ -130,8 +130,8 @@ async function copyMessage(): Promise<void> {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: none;
   background: transparent;
@@ -143,8 +143,8 @@ async function copyMessage(): Promise<void> {
 }
 
 .stats-btn span {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   display: block;
 }
 
@@ -156,14 +156,14 @@ async function copyMessage(): Promise<void> {
 .stats-divider {
   color: hsl(var(--muted-foreground) / 0.3);
   font-size: 11px;
-  line-height: 20px;
+  line-height: 18px;
   flex-shrink: 0;
 }
 
 .stats-metrics {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
@@ -177,8 +177,8 @@ async function copyMessage(): Promise<void> {
 
 .stats-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  line-height: 20px;
+  font-size: 10.5px;
+  line-height: 18px;
   color: hsl(var(--muted-foreground) / 0.8);
   white-space: nowrap;
 }

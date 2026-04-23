@@ -86,7 +86,7 @@ function enterWorkspaceForThread(id: string): void {
 
 function goBackToAgents(): void {
   closeAllFiles();
-  threadsStore.selectThread(null);
+  threadsStore.clearSelection();
   router.push('/agents');
 }
 
@@ -110,24 +110,24 @@ watch(threadId, (newId) => {
 </script>
 
 <template>
-  <div class="flex h-full w-full flex-col bg-background">
+  <div class="thread-workspace flex h-full w-full flex-col bg-background">
     <!-- Thread 不存在 -->
     <div
       v-if="!currentThread && threadsStore.threads.length > 0"
       class="flex flex-1 items-center justify-center bg-background">
-      <div class="flex max-w-[360px] flex-col items-center px-10 text-center">
-        <div class="mb-6 flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-error/10 text-error/50">
-          <span class="i-carbon-warning-alt inline-block h-8 w-8" />
+      <div class="flex max-w-[320px] flex-col items-center px-6 text-center">
+        <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-error/10 text-error/50">
+          <span class="i-carbon-warning-alt inline-block h-6 w-6" />
         </div>
-        <h2 class="mb-2 text-[17px] font-semibold text-foreground">任务不存在</h2>
-        <p class="mb-7 text-[13px] leading-7 text-muted-foreground/75">
+        <h2 class="mb-1.5 text-[15px] font-semibold text-foreground">任务不存在</h2>
+        <p class="mb-5 text-[12px] leading-6 text-muted-foreground/75">
           未找到任务 ID: {{ threadId }}<br />
           可能已被删除或不存在
         </p>
         <button
-          class="inline-flex h-9 items-center gap-2 rounded-[9px] bg-primary px-5 text-[13px] font-medium text-primary-foreground transition-all hover:bg-primary-hover hover:shadow-[0_2px_12px_hsl(var(--primary)/0.2)]"
+          class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-4 text-[12px] font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
           @click="goBackToAgents">
-          <span class="i-carbon-arrow-left inline-block h-4 w-4" />
+          <span class="i-carbon-arrow-left inline-block h-3.5 w-3.5" />
           <span>返回列表</span>
         </button>
       </div>
@@ -138,7 +138,7 @@ watch(threadId, (newId) => {
       <!-- 左侧折叠时的展开条 -->
       <div
         v-if="leftCollapsed"
-        class="flex w-6 flex-shrink-0 cursor-pointer items-center justify-center border-r border-border/40 bg-surface/50 text-muted-foreground/30 transition-all hover:bg-surface hover:text-muted-foreground/60"
+        class="flex w-6 flex-shrink-0 cursor-pointer items-center justify-center border-r border-border/45 bg-muted/10 text-muted-foreground/35 transition-colors hover:bg-muted/25 hover:text-muted-foreground/70"
         title="展开文件面板"
         @click="leftCollapsed = false">
         <span class="i-carbon-chevron-right inline-block h-3 w-3"></span>
@@ -156,7 +156,7 @@ watch(threadId, (newId) => {
           class="flex min-h-0 flex-shrink-0 flex-col transition-[height] duration-150"
           :class="terminalCollapsed ? 'h-auto' : 'h-[200px]'">
           <button
-            class="flex h-6 w-full flex-shrink-0 items-center gap-1 border-t border-border/30 bg-muted/20 px-2.5 text-[11px] text-muted-foreground/50 transition-all hover:bg-muted/40 hover:text-foreground/70"
+            class="flex h-6 w-full flex-shrink-0 items-center gap-1 border-t border-border/35 bg-muted/15 px-2.5 text-[11px] text-muted-foreground/55 transition-colors hover:bg-muted/25 hover:text-foreground/75"
             @click="terminalCollapsed = !terminalCollapsed">
             <span
               class="inline-block h-3 w-3 transition-transform"
@@ -168,9 +168,15 @@ watch(threadId, (newId) => {
         </div>
       </div>
 
-      <div class="flex w-[400px] flex-shrink-0 min-h-0 flex-col">
+      <div class="flex min-h-0 w-[380px] flex-shrink-0 flex-col border-l border-border/45">
         <ChatPanel ref="chatPanelRef" :thread-id="threadId" />
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.thread-workspace {
+  font-family: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+</style>

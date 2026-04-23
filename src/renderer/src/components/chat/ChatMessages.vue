@@ -6,7 +6,7 @@
  */
 
 import { ref, computed, watch, nextTick, onMounted } from 'vue';
-import type { ContentBlock, PendingApproval } from '@/types/chat';
+import type { ContentBlock, ExecutionStats, PendingApproval } from '@/types/chat';
 import type { HitlApprovalDecision } from '@shared/stream-protocol';
 import MessageItemUser from './items/MessageItemUser.vue';
 import MessageItemAssistant from './items/MessageItemAssistant.vue';
@@ -21,15 +21,18 @@ export interface ChatMessage {
   timestamp: number;
   error?: string;
   pendingApprovals?: PendingApproval[];
+  stats?: ExecutionStats;
 }
 
 const props = withDefaults(
   defineProps<{
     messages: ChatMessage[];
     isStreaming?: boolean;
+    assistantName?: string;
   }>(),
   {
-    isStreaming: false
+    isStreaming: false,
+    assistantName: '智能体'
   }
 );
 
@@ -132,7 +135,7 @@ onMounted(() => {
       <div v-if="messages.length === 0" class="panel-empty">
         <slot name="empty">
           <div class="panel-empty-icon">
-            <span class="i-mdi-star-four-points inline-block h-8 w-8" />
+            <span class="i-mdi-star-four-points inline-block h-5 w-5" />
           </div>
           <p class="panel-empty-title">有什么可以帮您？</p>
           <p class="panel-empty-sub">输入消息开始对话</p>
@@ -145,6 +148,7 @@ onMounted(() => {
         <MessageItemAssistant
           v-else
           :message="msg"
+          :assistant-name="assistantName"
           @decide="(approval, decision) => emit('decide', approval, decision)" />
       </template>
 
@@ -175,8 +179,8 @@ onMounted(() => {
 .panel-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 0;
-  padding-right: 24px;
+  padding: 10px 0;
+  padding-right: 16px;
   display: flex;
   flex-direction: column;
 }
@@ -188,7 +192,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 32px;
+  padding: 0 24px;
   opacity: 0.8;
 }
 
@@ -196,31 +200,31 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   background: hsl(var(--primary) / 0.1);
   color: hsl(var(--primary));
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .panel-empty-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: hsl(var(--foreground));
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .panel-empty-sub {
-  font-size: 14px;
+  font-size: 12px;
   color: hsl(var(--muted-foreground));
   text-align: center;
-  line-height: 1.6;
-  margin-bottom: 24px;
+  line-height: 1.5;
+  margin-bottom: 16px;
 }
 
 .stream-indicator {
-  padding: 6px 16px 12px;
+  padding: 4px 12px 8px;
   display: flex;
   align-items: center;
   color: hsl(var(--muted-foreground) / 0.5);

@@ -9,10 +9,14 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import type { ChatMessage } from '../ChatMessages.vue';
+
+interface NavigatorMessage {
+  id: string;
+  role: 'user' | 'assistant';
+}
 
 const props = defineProps<{
-  messages: ChatMessage[];
+  messages: NavigatorMessage[];
   containerRef: HTMLElement | null;
 }>();
 
@@ -21,9 +25,7 @@ const currentIndex = ref<number>(0);
 
 // 只显示用户消息
 const userMessages = computed(() => {
-  return props.messages
-    .map((msg, originalIndex) => ({ msg, originalIndex }))
-    .filter(({ msg }) => msg.role === 'user');
+  return props.messages.map((msg, originalIndex) => ({ msg, originalIndex })).filter(({ msg }) => msg.role === 'user');
 });
 
 // 获取消息颜色（统一使用 primary 颜色）
@@ -41,7 +43,7 @@ function getMessageElement(index: number): HTMLElement | null {
 // 跳转到指定消息（修复定位准确性）
 function scrollToMessage(originalIndex: number): void {
   if (!props.containerRef) return;
-  
+
   const element = getMessageElement(originalIndex);
   if (!element) {
     console.warn('[MessageNavigator] 找不到消息元素，索引:', originalIndex);
@@ -52,7 +54,7 @@ function scrollToMessage(originalIndex: number): void {
   const container = props.containerRef;
   const containerRect = container.getBoundingClientRect();
   const elementRect = element.getBoundingClientRect();
-  
+
   // 计算目标滚动位置：让消息居中显示
   const targetScrollTop =
     container.scrollTop + // 当前滚动位置
@@ -128,7 +130,7 @@ function isMessageNearCenter(originalIndex: number): boolean {
     <div class="navigator-track">
       <!-- 消息标记（只显示用户消息，均匀分布） -->
       <div
-        v-for="({ msg, originalIndex }, idx) in userMessages"
+        v-for="{ msg, originalIndex } in userMessages"
         :key="msg.id"
         class="navigator-marker"
         :class="{
@@ -146,10 +148,10 @@ function isMessageNearCenter(originalIndex: number): boolean {
 <style scoped>
 .message-navigator {
   position: absolute;
-  top: 16px;
-  right: 4px;
-  bottom: 16px;
-  width: 12px;
+  top: 12px;
+  right: 3px;
+  bottom: 12px;
+  width: 8px;
   pointer-events: none;
   z-index: 10;
 }
@@ -160,39 +162,35 @@ function isMessageNearCenter(originalIndex: number): boolean {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding: 2px 0;
 }
 
 .navigator-marker {
   position: relative;
   width: 100%;
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
-  opacity: 0.5;
+  opacity: 0.42;
   cursor: pointer;
   pointer-events: auto;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .navigator-marker:hover {
   opacity: 0.9;
   transform: scaleX(1.4);
-  height: 5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  height: 4px;
 }
 
 .navigator-marker--active {
   opacity: 0.75;
-  height: 6px;
+  height: 5px;
 }
 
 .navigator-marker--hovered {
   opacity: 1;
   transform: scaleX(1.6);
-  height: 6px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  height: 5px;
 }
-
 </style>

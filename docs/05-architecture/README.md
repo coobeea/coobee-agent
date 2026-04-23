@@ -138,10 +138,10 @@ Stream 输出
   基础 instructions (用户配置)
   + appendInstructions (系统注入)
     ├─ runtime_environment
-    ├─ skill_discovery
-    ├─ agents_md (AGENTS.md)
+    ├─ agent_rules (Agent Home/AGENTS.md)
     ├─ agent_home (SOUL.md, USER.md 等)
     ├─ workspace_context
+    ├─ skill_discovery
     └─ extension_instructions
 ```
 

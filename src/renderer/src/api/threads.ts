@@ -20,6 +20,7 @@ export interface ThreadEntry {
   workspacePath: string;
   agentHomePath: string;
   overrideModel?: string | null;
+  enableThinking?: boolean;
 }
 
 /** Thread 列表响应 */

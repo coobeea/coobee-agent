@@ -248,7 +248,7 @@ function getFileIcon(file: OpenFile): string {
     case 'jsonl':
       return 'i-carbon-json text-amber-600';
     case 'md':
-      return 'i-carbon-document text-gray-500';
+      return 'i-carbon-document text-muted-foreground';
     case 'css':
     case 'scss':
     case 'less':
@@ -256,7 +256,7 @@ function getFileIcon(file: OpenFile): string {
     case 'html':
       return 'i-carbon-html text-orange-500';
     default:
-      return 'i-carbon-document-blank text-gray-400';
+      return 'i-carbon-document-blank text-muted-foreground';
   }
 }
 </script>
@@ -265,17 +265,17 @@ function getFileIcon(file: OpenFile): string {
   <main class="flex h-full min-w-0 flex-1 flex-col bg-background">
     <!-- 无打开文件 — 空状态 -->
     <template v-if="openFiles.length === 0">
-      <div class="flex h-10 shrink-0 items-center border-b border-border/40 px-4 bg-surface/40">
+      <div class="flex h-9 shrink-0 items-center border-b border-border/45 bg-surface/30 px-3.5">
         <div class="flex items-center gap-1.5">
           <span class="i-carbon-workspace inline-block h-3.5 w-3.5 text-muted-foreground/60"></span>
           <span class="text-xs font-semibold text-muted-foreground/80">工作台</span>
         </div>
       </div>
       <div class="flex flex-1 flex-col items-center justify-center">
-        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface">
-          <span class="i-carbon-document-view inline-block h-8 w-8 text-muted-foreground/30"></span>
+        <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface">
+          <span class="i-carbon-document-view inline-block h-6 w-6 text-muted-foreground/35"></span>
         </div>
-        <p class="mb-1 text-sm font-medium text-muted-foreground/70">点击左侧文件查看内容</p>
+        <p class="mb-1 text-[13px] font-medium text-muted-foreground/70">点击左侧文件查看内容</p>
         <p class="text-xs text-muted-foreground/40">支持语法高亮、多标签页浏览</p>
       </div>
     </template>
@@ -283,7 +283,7 @@ function getFileIcon(file: OpenFile): string {
     <!-- 有打开文件 — 标签页 + 编辑器 -->
     <template v-else>
       <!-- 标签页栏 -->
-      <div class="flex h-9 shrink-0 items-end overflow-x-auto border-b border-border/40 bg-surface/60">
+      <div class="flex h-8 shrink-0 items-end overflow-x-auto border-b border-border/45 bg-surface/45">
         <div
           v-for="file in openFiles"
           :key="file.path"
@@ -301,21 +301,21 @@ function getFileIcon(file: OpenFile): string {
 
       <!-- 加载中（覆盖层） -->
       <div v-if="activeFile?.loading" class="flex flex-1 items-center justify-center">
-        <span class="i-carbon-renew inline-block h-5 w-5 animate-spin text-gray-300"></span>
+        <span class="i-carbon-renew inline-block h-5 w-5 animate-spin text-muted-foreground/35"></span>
       </div>
 
       <!-- 错误提示（覆盖层） -->
-      <div v-if="activeFile?.error" class="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-        <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50">
-          <span class="i-carbon-warning-alt inline-block h-8 w-8 text-amber-500"></span>
+      <div v-if="activeFile?.error" class="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10">
+          <span class="i-carbon-warning-alt inline-block h-6 w-6 text-warning"></span>
         </div>
         <div class="text-center">
-          <p class="mb-1 text-sm font-medium text-gray-700">无法预览此文件</p>
-          <p class="max-w-md text-xs leading-relaxed text-gray-500">
+          <p class="mb-1 text-[13px] font-medium text-foreground/80">无法预览此文件</p>
+          <p class="max-w-md text-xs leading-relaxed text-muted-foreground">
             {{ activeFile.error }}
           </p>
         </div>
-        <div class="flex items-center gap-3 text-xs text-gray-400">
+        <div class="flex items-center gap-2 text-xs text-muted-foreground/65">
           <span class="i-carbon-document inline-block h-3.5 w-3.5"></span>
           <span>{{ activeFile.name }}</span>
         </div>
@@ -337,23 +337,23 @@ function getFileIcon(file: OpenFile): string {
         </Transition>
 
         <!-- Monaco Editor（代码文件） -->
-        <div v-if="!previewComponent" ref="editorContainer" class="min-h-0 flex-1 bg-white"></div>
+        <div v-if="!previewComponent" ref="editorContainer" class="min-h-0 flex-1 bg-background"></div>
 
         <!-- 大文件加载提示（底部浮动） -->
         <div
           v-if="activeFile && activeFile.chunked && (activeFile.hasMore || activeFile.loadingMore)"
-          class="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs shadow-lg">
+          class="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-lg border border-border/65 bg-background px-3 py-1.5 text-[11px]">
           <template v-if="activeFile.loadingMore">
             <span class="i-carbon-renew inline-block h-3.5 w-3.5 animate-spin text-primary"></span>
-            <span class="text-gray-600">加载中...</span>
+            <span class="text-muted-foreground">加载中...</span>
           </template>
           <template v-else-if="activeFile.hasMore">
-            <span class="text-gray-500">
+            <span class="text-muted-foreground">
               已加载 {{ ((activeFile.offset ?? 0) + (activeFile.limit ?? 0)).toLocaleString() }} /
               {{ activeFile.totalLines?.toLocaleString() }} 行
             </span>
             <button
-              class="ml-2 rounded bg-primary px-3 py-1 font-medium text-white transition hover:bg-primary-hover"
+              class="ml-1.5 rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
               @click="handleLoadMore">
               加载更多
             </button>
@@ -368,12 +368,12 @@ function getFileIcon(file: OpenFile): string {
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  height: 36px;
+  gap: 5px;
+  padding: 0 10px;
+  height: 32px;
   cursor: pointer;
   color: hsl(var(--muted-foreground) / 0.7);
-  border-right: 1px solid hsl(var(--border) / 0.3);
+  border-right: 1px solid hsl(var(--border) / 0.25);
   white-space: nowrap;
   transition: all 0.15s ease;
   position: relative;
@@ -382,7 +382,7 @@ function getFileIcon(file: OpenFile): string {
 
 .tab-item:hover {
   color: hsl(var(--foreground) / 0.9);
-  background: hsl(var(--surface));
+  background: hsl(var(--surface) / 0.75);
 }
 
 .tab-item.active {
@@ -397,7 +397,7 @@ function getFileIcon(file: OpenFile): string {
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 1.5px;
   background-color: hsl(var(--primary));
 }
 
@@ -405,10 +405,10 @@ function getFileIcon(file: OpenFile): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
-  margin-left: 4px;
+  margin-left: 2px;
   opacity: 0;
   color: hsl(var(--muted-foreground) / 0.5);
   transition: all 0.15s ease;

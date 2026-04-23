@@ -30,34 +30,34 @@ defineProps<{
 
 <style scoped>
 .audio-block {
-  margin: 8px 0;
-  padding: 12px;
-  background: hsl(var(--muted) / 0.5);
-  border-radius: 8px;
-  border: 1px solid hsl(var(--border));
+  margin: 6px 0;
+  padding: 10px;
+  background: hsl(var(--muted) / 0.32);
+  border-radius: 7px;
+  border: 1px solid hsl(var(--border) / 0.65);
 }
 
 .audio-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .audio-icon {
   color: hsl(var(--primary));
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .audio-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   color: hsl(var(--foreground));
 }
 
 .audio-player {
   width: 100%;
-  height: 40px;
+  height: 36px;
   border-radius: 4px;
 }
 

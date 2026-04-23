@@ -84,7 +84,7 @@ onUnmounted(() => {
   <div ref="rootRef" class="relative z-50 min-w-0 shrink-0">
     <button
       type="button"
-      class="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/40 bg-background/80 px-2.5 py-1.5 text-left text-xs font-medium text-muted-foreground shadow-sm transition hover:border-primary/20 hover:bg-muted/60 hover:text-foreground hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
+      class="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/45 bg-background/80 px-2.5 py-1.5 text-left text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-primary/25 hover:bg-muted/45 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
       :disabled="disabled"
       @click="toggle">
       <span class="min-w-0 truncate">{{ displayLabel }}</span>
@@ -95,7 +95,7 @@ onUnmounted(() => {
 
     <div
       v-if="open"
-      class="absolute bottom-full left-0 z-[60] mb-1 max-h-80 min-w-[240px] max-w-[min(100vw-2rem,320px)] overflow-y-auto rounded-lg border border-border bg-background shadow-lg outline-none">
+      class="absolute bottom-full left-0 z-[60] mb-1 max-h-80 min-w-[240px] max-w-[min(100vw-2rem,320px)] overflow-y-auto rounded-lg border border-border/70 bg-background outline-none">
       <!-- 默认模型选项 -->
       <div class="p-1">
         <button

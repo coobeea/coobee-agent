@@ -9,11 +9,12 @@
 以下是一个真实的 `appendInstructions` 示例（来自 `context.jsonl`）：
 
 > **📁 路径说明**
-> 
+>
 > 文档中的路径分为两部分：
+>
 > - **项目根目录**: `/Users/lifeng/git/git-coobee/coobee-agent/`
 > - **相对路径**: 从项目根目录开始的相对路径（如 `.home/workspaces/...`）
-> 
+>
 > 完整路径 = 项目根目录 + 相对路径
 
 ### 1. Runtime Environment（运行时环境）
@@ -37,19 +38,19 @@ Directory Structure:
 
 📂 **数据目录 / Data Directory (IMPORTANT)**: .home/data/agent-mo04s0eg/
   (如果 Agent 配置了 dataDirectory)
-  
+
   ⚠️ **这是你的专属数据存储区，非常重要！**
-  
+
   **用途**：
   - 持久化存储所有业务数据（客户信息、进销存记录、知识库、文档等）
   - 跨任务、跨会话的数据共享（今天保存的数据，明天仍可访问）
   - 这是固定的目录，不会因为任务结束而清理
-  
+
   **何时使用**：
   - 用户要求保存、记录、存储任何业务数据时 → 保存到数据目录
   - 用户询问"之前的记录""历史数据""上次的文件"时 → 从数据目录读取
   - 生成报表、分析结果、知识文档时 → 保存到数据目录
-  
+
   **路径**: .home/data/agent-mo04s0eg
 
 **Agent Home (Your Root Directory)**: .home/agents/agent-mo04s0eg/
@@ -150,7 +151,7 @@ const agentEnv = await buildAgentEnv(sessionId, workspace, agentHome);
 const runtimePathsBlock = formatRuntimePaths(agentEnv);
 
 // 3. 生成 Skill 发现提示
-const skillDiscoveryHint = 
+const skillDiscoveryHint =
   skillManager.size > 0
     ? `<skill_discovery>\n` +
       `You have ${skillManager.size} Skills available. Use the \`skill_list\` tool to discover them.\n\n` +
@@ -164,7 +165,7 @@ const skillDiscoveryHint =
 // 4. 注入到 Builder
 builder.appendInstructions(
   runtimePathsBlock,
-  skillDiscoveryHint,
+  skillDiscoveryHint
   // ... 其他内容
 );
 ```
@@ -175,23 +176,24 @@ builder.appendInstructions(
 
 #### 基础信息
 
-| 字段 | 示例值 | 说明 |
-|------|--------|------|
-| Agent ID | `agent-mo04s0eg` | Agent 的唯一标识符（可选） |
-| Agent Name | `增值税` | Agent 的显示名称（可选） |
-| Session | `305265776047321088` | 当前会话的 Snowflake ID |
-| 数据目录 (Data Dir) | `.home/data/agent-mo04s0eg` | Agent 专属数据存储目录 |
-| Internal Workspace | `.home/workspaces/{sessionId}` | 当前任务的工作空间路径（相对于项目根目录） |
-| Platform | `darwin/arm64 (dev)` | 操作系统/架构/环境 |
-| Security | `sandbox=path-only, exec=auto` | 沙箱模式和命令审批策略 |
-| Model | `ollama/gemma4:e4b (thinking=medium)` | 使用的模型和思维链级别 |
-| Extensions | `none` 或扩展列表 | 已加载的 Extension |
+| 字段                | 示例值                                | 说明                                       |
+| ------------------- | ------------------------------------- | ------------------------------------------ |
+| Agent ID            | `agent-mo04s0eg`                      | Agent 的唯一标识符（可选）                 |
+| Agent Name          | `增值税`                              | Agent 的显示名称（可选）                   |
+| Session             | `305265776047321088`                  | 当前会话的 Snowflake ID                    |
+| 数据目录 (Data Dir) | `.home/data/agent-mo04s0eg`           | Agent 专属数据存储目录                     |
+| Internal Workspace  | `.home/workspaces/{sessionId}`        | 当前任务的工作空间路径（相对于项目根目录） |
+| Platform            | `darwin/arm64 (dev)`                  | 操作系统/架构/环境                         |
+| Security            | `sandbox=path-only, exec=auto`        | 沙箱模式和命令审批策略                     |
+| Model               | `ollama/gemma4:e4b (thinking=medium)` | 使用的模型和思维链级别                     |
+| Extensions          | `none` 或扩展列表                     | 已加载的 Extension                         |
 
 #### 目录结构
 
 **Data Directory (数据目录)**: Agent 专属的持久化数据存储 ⚠️ **非常重要！**
+
 - 路径: `.home/data/{agentId}/`
-- 用途: 
+- 用途:
   - 持久化存储所有业务数据（客户信息、进销存记录、知识库、文档等）
   - 跨任务、跨会话的数据共享（今天保存的数据，明天仍可访问）
   - 这是固定的目录，不会因为任务结束而清理
@@ -203,6 +205,7 @@ builder.appendInstructions(
 - 优先级: **最高**！所有业务数据首选此目录
 
 **Agent Home**: Agent 的人格配置和记忆文件
+
 - 路径: `.home/agents/{agentId}/`
 - 包含文件（全部为 Markdown 格式）:
   - `IDENTITY.md` - 身份名片：名字、风格、签名
@@ -212,10 +215,11 @@ builder.appendInstructions(
   - `HEARTBEAT.md` - 心跳任务清单：定期任务
   - `AGENTS.md` - Agent 级规则 + 技能配置
   - `BOOTSTRAP.md` - 引导文件（初始化配置）
-- 注入机制: 系统会读取这些文件（除了 AGENTS.md 和 BOOTSTRAP.md），并将内容注入到 System Prompt 的 `<agent_home>` 块中
-- 优先级: IDENTITY → SOUL → USER → NOTES → HEARTBEAT
+- 注入机制: `BOOTSTRAP.md`、`IDENTITY.md`、`SOUL.md`、`USER.md`、`NOTES.md`、`HEARTBEAT.md` 注入到 `<agent_home>`；`AGENTS.md` 通过独立的 `<agent_rules>` 注入
+- 优先级: BOOTSTRAP → IDENTITY → SOUL → USER → NOTES → HEARTBEAT
 
 **Current Task Workspace**: 当前任务的临时工作空间
+
 - 路径: `.home/workspaces/{sessionId}/`
 - `sessions/` - SDK 会话文件（OpenAI/PiMono）
 - `history.jsonl` - 聚合的消息历史（供前端展示）
@@ -224,6 +228,7 @@ builder.appendInstructions(
 - `tasks/` - 多 Agent 协作区（可选，由 task_plan 工具创建）
 
 **Key System Directories**: 关键系统目录
+
 - `Config` - 全局配置文件目录
 - `Skills` - Skill 搜索路径（builtin + user）
 - `Agents Definitions` - Agent 定义文件目录（JSON 配置）
@@ -258,6 +263,7 @@ builder.appendInstructions(
 ### Skill Discovery 说明
 
 这是一个简化的提示，告诉 Agent：
+
 1. 有多少个 Skills 可用（示例中是 27 个）
 2. 如何使用 Skills（3 步流程）
 
@@ -272,12 +278,11 @@ builder.appendInstructions(
 **功能**: 将 `AgentEnv` 对象格式化为 XML 格式的运行时环境说明
 
 **关键逻辑**:
+
 ```typescript
 export function formatRuntimePaths(env: AgentEnv): string {
   // 格式化扩展列表
-  const extensionsList = env.loadedExtensions.length > 0 
-    ? env.loadedExtensions.join(', ') 
-    : 'none';
+  const extensionsList = env.loadedExtensions.length > 0 ? env.loadedExtensions.join(', ') : 'none';
 
   // Agent Home 部分（如果有）
   const agentHomeSection = env.agentHome ? `...` : '';
@@ -320,15 +325,18 @@ Runtime 构建时包含在 System Prompt 中
 以下内容会根据实际情况动态生成：
 
 ### 1. 会话相关
+
 - Session ID（每次执行不同）
 - Workspace 路径（基于 Session ID）
 
 ### 2. 平台相关
+
 - Platform（darwin/linux/win32）
 - Architecture（arm64/x64）
 - Environment（dev/prod）
 
 ### 3. Agent 相关（如果有 agentId）
+
 - Agent ID
 - Agent Name
 - Agent Home 路径
@@ -336,9 +344,11 @@ Runtime 构建时包含在 System Prompt 中
 - Project Directory（如果配置了）
 
 ### 4. Extension 相关
+
 - 已加载的 Extension 列表
 
 ### 5. Skills 相关
+
 - 可用 Skills 数量（示例中是 27 个）
 
 ## 用途
@@ -346,6 +356,7 @@ Runtime 构建时包含在 System Prompt 中
 ### 1. 提供上下文感知
 
 让 Agent 了解自己运行的环境：
+
 - 当前工作目录
 - 可用的系统目录
 - 文件保存位置
@@ -353,6 +364,7 @@ Runtime 构建时包含在 System Prompt 中
 ### 2. 指导文件操作
 
 明确告诉 Agent 在不同场景下应该把文件保存到哪里：
+
 - 持久化数据 → Agent Home 或 Data Directory
 - 临时文件 → Workspace
 - 系统文件 → 不要手动修改
@@ -360,6 +372,7 @@ Runtime 构建时包含在 System Prompt 中
 ### 3. 支持调试
 
 提供完整的环境信息，方便：
+
 - 理解 Agent 的执行上下文
 - 追溯文件路径
 - 分析路径相关问题
@@ -384,7 +397,17 @@ Your Runtime Environment:
 ...
 </runtime_environment>
 
-[appendInstructions[1] - skill_discovery]
+[appendInstructions[1] - agent_rules]
+<agent_rules>
+Agent-level rules...
+</agent_rules>
+
+[appendInstructions[2] - agent_home]
+<agent_home>
+Agent identity and memory files...
+</agent_home>
+
+[appendInstructions[3] - skill_discovery]
 <skill_discovery>
 You have 27 Skills available...
 </skill_discovery>
@@ -414,6 +437,7 @@ You have 27 Skills available...
 ### Q1: 为什么要使用 XML 标签？
 
 A: XML 标签（如 `<runtime_environment>`）可以：
+
 - 结构化内容，让 LLM 更容易理解
 - 明确区分不同类型的信息
 - 支持未来的解析和提取
@@ -421,6 +445,7 @@ A: XML 标签（如 `<runtime_environment>`）可以：
 ### Q2: appendInstructions 可以自定义吗？
 
 A: 部分可以。用户可以通过：
+
 - Extension 系统注入自定义指令
 - Agent Home 中的特殊文件（SOUL.md, USER.md 等）
 - Workspace 上下文文件

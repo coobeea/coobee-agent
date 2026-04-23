@@ -20,17 +20,17 @@ defineProps<{
 .msg-delegate {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 5px;
+  font-size: 10.5px;
   color: hsl(var(--primary));
   background: hsl(var(--primary) / 0.08);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 3px 7px;
+  border-radius: 5px;
   align-self: flex-start;
 }
 
 .msg-delegate-status {
   opacity: 0.7;
-  font-size: 10px;
+  font-size: 9.5px;
 }
 </style>

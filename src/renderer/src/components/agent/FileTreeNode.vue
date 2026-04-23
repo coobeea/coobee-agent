@@ -232,15 +232,15 @@ function getFileIcon(name: string): string {
   <div>
     <!-- 行 -->
     <div
-      class="file-tree-node flex cursor-pointer items-center gap-1.5 py-1 pr-2 text-sm transition-all"
+      class="file-tree-node flex cursor-pointer items-center gap-1 py-0.5 pr-1.5 text-[12.5px] transition-colors"
       :class="{
         'font-medium': node.type === 'directory',
         'file-tree-node-selected': isSelected(node.path),
         'file-tree-node-drag-over': isNodeDragOver,
-        'text-gray-600': !isSelected(node.path),
-        'text-gray-800': isSelected(node.path)
+        'text-muted-foreground': !isSelected(node.path),
+        'text-foreground': isSelected(node.path)
       }"
-      :style="{ paddingLeft: `${depth * 12 + 8}px` }"
+      :style="{ paddingLeft: `${depth * 11 + 7}px` }"
       @click="handleNodeClick(node)"
       @contextmenu="handleContextMenu($event, node)"
       @dragenter="handleDragEnter"
@@ -262,7 +262,7 @@ function getFileIcon(name: string): string {
             ? isExpanded(node.path)
               ? 'i-carbon-folder-open text-amber-500'
               : 'i-carbon-folder text-amber-500'
-            : `${getFileIcon(node.name)} text-gray-400`
+            : `${getFileIcon(node.name)} text-muted-foreground`
         ]" />
 
       <!-- 文件名 -->
@@ -298,7 +298,7 @@ function getFileIcon(name: string): string {
     <Transition name="toast-fade">
       <div
         v-if="copySuccess"
-        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-xl flex items-center gap-2">
+        class="fixed bottom-4 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground">
         <span class="i-carbon-checkmark-filled inline-block h-4 w-4" />
         <span>路径已复制</span>
       </div>
@@ -320,24 +320,24 @@ function getFileIcon(name: string): string {
   bottom: 0;
   background: transparent;
   transition: background-color 0.15s ease;
-  border-radius: 4px;
-  margin: 0 4px;
+  border-radius: 5px;
+  margin: 0 3px;
 }
 
 .file-tree-node:hover::before {
-  background: hsl(var(--muted) / 0.5);
+  background: hsl(var(--muted) / 0.42);
 }
 
 .file-tree-node-selected::before {
-  background: hsl(var(--primary) / 0.2);
+  background: hsl(var(--primary) / 0.14);
 }
 
 .file-tree-node-selected:hover::before {
-  background: hsl(var(--primary) / 0.26);
+  background: hsl(var(--primary) / 0.2);
 }
 
 .file-tree-node-drag-over::before {
-  background: hsl(var(--primary) / 0.3);
+  background: hsl(var(--primary) / 0.22);
   border: 1px dashed hsl(var(--primary));
 }
 

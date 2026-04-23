@@ -120,7 +120,7 @@ async function enterWorkspaceForThread(id: string): Promise<void> {
 
 function goBackToAgents(): void {
   closeAllFiles();
-  threadsStore.selectThread(null);
+  threadsStore.clearSelection();
   router.push('/agents');
 }
 
@@ -191,24 +191,24 @@ watch(
 
 <template>
   <!-- 包裹所有内容，确保只有一个根节点 -->
-  <div class="flex h-full w-full flex-col bg-background">
+  <div class="thread-workspace flex h-full w-full flex-col bg-background">
     <!-- Thread 不存在 -->
     <div
       v-if="!currentThread && threadsStore.threads.length > 0"
       class="flex flex-1 items-center justify-center bg-background">
-      <div class="flex max-w-[360px] flex-col items-center px-10 text-center">
-        <div class="mb-6 flex h-[72px] w-[72px] items-center justify-center rounded-[20px] bg-error/10 text-error/50">
-          <span class="i-carbon-warning-alt inline-block h-8 w-8" />
+      <div class="flex max-w-[320px] flex-col items-center px-6 text-center">
+        <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-error/10 text-error/50">
+          <span class="i-carbon-warning-alt inline-block h-6 w-6" />
         </div>
-        <h2 class="mb-2 text-[17px] font-semibold text-foreground">任务不存在</h2>
-        <p class="mb-7 text-[13px] leading-7 text-muted-foreground/75">
+        <h2 class="mb-1.5 text-[15px] font-semibold text-foreground">任务不存在</h2>
+        <p class="mb-5 text-[12px] leading-6 text-muted-foreground/75">
           未找到任务 ID: {{ threadId }}<br />
           可能已被删除或不存在
         </p>
         <button
-          class="inline-flex h-9 items-center gap-2 rounded-[9px] bg-primary px-5 text-[13px] font-medium text-primary-foreground transition-all hover:bg-primary-hover hover:shadow-[0_2px_12px_hsl(var(--primary)/0.2)]"
+          class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-4 text-[12px] font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
           @click="goBackToAgents">
-          <span class="i-carbon-arrow-left inline-block h-4 w-4" />
+          <span class="i-carbon-arrow-left inline-block h-3.5 w-3.5" />
           <span>返回列表</span>
         </button>
       </div>
@@ -225,34 +225,34 @@ watch(
       <!-- 右侧：折叠态窄轨 -->
       <div
         v-if="!rightDrawerOpen"
-        class="flex w-11 shrink-0 flex-col items-center gap-1.5 border-l border-border/40 bg-muted/15 py-3 transition-colors duration-200">
+        class="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-border/45 bg-muted/10 py-2 transition-colors duration-200">
         <button
           type="button"
           title="智能体"
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('agent-home')">
-          <span class="i-carbon-user-avatar inline-block h-5 w-5" />
+          <span class="i-carbon-user-avatar inline-block h-4 w-4" />
         </button>
         <button
           type="button"
           title="任务空间"
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('workspace')">
-          <span class="i-carbon-folder-shared inline-block h-5 w-5" />
+          <span class="i-carbon-folder-shared inline-block h-4 w-4" />
         </button>
         <button
           type="button"
           title="工程目录"
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('project')">
-          <span class="i-carbon-folder-details inline-block h-5 w-5" />
+          <span class="i-carbon-folder-details inline-block h-4 w-4" />
         </button>
         <button
           type="button"
           title="终端"
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('terminal')">
-          <span class="i-carbon-terminal inline-block h-5 w-5" />
+          <span class="i-carbon-terminal inline-block h-4 w-4" />
         </button>
       </div>
 
@@ -261,15 +261,15 @@ watch(
         <aside
           v-if="rightDrawerOpen"
           key="thread-right-drawer"
-          class="flex h-full w-[min(100%,420px)] shrink-0 flex-col border-l border-border/40 bg-background shadow-[inset_1px_0_0_hsl(var(--border)/0.35)]">
+          class="flex h-full w-[min(100%,390px)] shrink-0 flex-col border-l border-border/45 bg-background">
           <!-- 标签栏 -->
-          <div class="flex h-11 shrink-0 items-center gap-0.5 border-b border-border/40 px-1.5">
+          <div class="flex h-10 shrink-0 items-center gap-0.5 border-b border-border/45 px-1.5">
             <button
               type="button"
-              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors"
               :class="
                 rightTab === 'agent-home'
-                  ? 'bg-primary/12 text-primary'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
               "
               @click="openRightPanel('agent-home')">
@@ -278,10 +278,10 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors"
               :class="
                 rightTab === 'workspace'
-                  ? 'bg-primary/12 text-primary'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
               "
               @click="openRightPanel('workspace')">
@@ -290,10 +290,10 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors"
               :class="
                 rightTab === 'project'
-                  ? 'bg-primary/12 text-primary'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
               "
               @click="openRightPanel('project')">
@@ -302,10 +302,10 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
+              class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors"
               :class="
                 rightTab === 'terminal'
-                  ? 'bg-primary/12 text-primary'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
               "
               @click="openRightPanel('terminal')">
@@ -315,9 +315,9 @@ watch(
             <button
               type="button"
               title="收起侧栏"
-              class="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+              class="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
               @click="rightDrawerOpen = false">
-              <span class="i-carbon-chevron-right inline-block h-4 w-4" />
+              <span class="i-carbon-chevron-right inline-block h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -351,6 +351,10 @@ watch(
 </template>
 
 <style scoped>
+.thread-workspace {
+  font-family: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
 .thread-drawer-enter-active,
 .thread-drawer-leave-active {
   transition:

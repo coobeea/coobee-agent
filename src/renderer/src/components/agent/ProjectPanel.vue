@@ -309,45 +309,45 @@ defineExpose({ selectDirectory });
 <template>
   <aside
     v-show="!isCollapsed"
-    class="flex h-full flex-col border-r border-gray-200/80 bg-gray-50/50"
+    class="flex h-full flex-col border-r border-border/60 bg-muted/10"
     :class="props.embedded ? 'w-full min-w-0 flex-1' : 'w-64 shrink-0'"
     tabindex="0"
     @keydown="handlePaste">
-    <div v-if="showHeader" class="flex h-11 shrink-0 items-center border-b border-gray-200/60 px-2">
+    <div v-if="showHeader" class="flex h-9 shrink-0 items-center border-b border-border/50 px-2">
       <!-- 左侧：目录模式切换（点击循环切换） -->
       <button
         v-if="projectPath && showModeSwitcher"
-        class="flex flex-1 items-center gap-1.5 rounded px-1 py-0.5 transition hover:bg-gray-100"
+        class="flex flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-muted/35"
         title="点击切换目录模式"
         @click="toggleDirectoryMode">
-        <span :class="directoryIcon" class="inline-block h-4 w-4 text-gray-500"></span>
-        <span class="truncate text-sm font-semibold text-gray-700">{{ directoryTitle }}</span>
-        <span class="i-carbon-chevron-sort inline-block h-3 w-3 shrink-0 text-gray-400"></span>
+        <span :class="directoryIcon" class="inline-block h-3.5 w-3.5 text-muted-foreground"></span>
+        <span class="truncate text-[13px] font-semibold text-foreground/85">{{ directoryTitle }}</span>
+        <span class="i-carbon-chevron-sort inline-block h-3 w-3 shrink-0 text-muted-foreground/55"></span>
       </button>
       <div v-else class="flex flex-1 items-center gap-1.5 px-1">
-        <span :class="directoryIcon" class="inline-block h-4 w-4 text-gray-500"></span>
-        <span class="text-sm font-semibold text-gray-700">{{ directoryTitle }}</span>
+        <span :class="directoryIcon" class="inline-block h-3.5 w-3.5 text-muted-foreground"></span>
+        <span class="text-[13px] font-semibold text-foreground/85">{{ directoryTitle }}</span>
       </div>
 
       <!-- 右侧：操作按钮 -->
       <div class="flex items-center">
         <button
           v-if="projectPath"
-          class="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition hover:bg-gray-200 hover:text-gray-600"
+          class="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/45 hover:text-foreground/75"
           title="指定数据目录"
           @click="setProjectDir">
           <span class="i-carbon-folder-add inline-block h-3.5 w-3.5"></span>
         </button>
         <button
           v-if="projectPath"
-          class="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition hover:bg-gray-200 hover:text-gray-600"
+          class="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/45 hover:text-foreground/75"
           title="刷新"
           @click="() => loadTree(false)">
           <span class="i-carbon-renew inline-block h-3.5 w-3.5" :class="{ 'animate-spin': loading }"></span>
         </button>
         <button
           v-if="showCollapse"
-          class="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition hover:bg-gray-200 hover:text-gray-600"
+          class="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/45 hover:text-foreground/75"
           title="折叠面板"
           @click="isCollapsed = true">
           <span class="i-carbon-chevron-left inline-block h-3 w-3"></span>
@@ -358,16 +358,16 @@ defineExpose({ selectDirectory });
     <!-- 内容区域 -->
     <div class="flex-1 overflow-y-auto">
       <!-- 未选择目录 -->
-      <div v-if="!projectPath" class="flex flex-col items-center p-3 pt-12">
-        <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100">
-          <span class="i-carbon-folder-add inline-block h-6 w-6 text-gray-400"></span>
+      <div v-if="!projectPath" class="flex flex-col items-center p-3 pt-8">
+        <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-muted/45">
+          <span class="i-carbon-folder-add inline-block h-5 w-5 text-muted-foreground/60"></span>
         </div>
-        <p class="mb-1 text-sm font-medium text-gray-500">选择项目目录</p>
-        <p class="mb-4 text-center text-xs leading-relaxed text-gray-400">
+        <p class="mb-1 text-[13px] font-medium text-muted-foreground">选择项目目录</p>
+        <p class="mb-3 text-center text-xs leading-relaxed text-muted-foreground/65">
           Agent 将以此目录下的文件<br />作为工作上下文
         </p>
         <button
-          class="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/20"
+          class="flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           @click="selectDirectory">
           <span class="i-carbon-folder-add inline-block h-4 w-4"></span>
           选择目录
@@ -377,26 +377,32 @@ defineExpose({ selectDirectory });
       <!-- 已选择目录 -->
       <template v-else>
         <!-- 加载中 -->
-        <div v-if="loading && tree.length === 0" class="flex items-center gap-2 px-3 py-4 text-sm text-gray-400">
+        <div
+          v-if="loading && tree.length === 0"
+          class="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground/70">
           <span class="i-carbon-renew inline-block h-4 w-4 animate-spin"></span>
           <span>加载中...</span>
         </div>
 
         <!-- 错误 -->
-        <div v-else-if="error" class="px-3 py-4">
+        <div v-else-if="error" class="px-3 py-3">
           <div class="flex items-center gap-1.5 text-sm text-red-500">
             <span class="i-carbon-warning-alt inline-block h-4 w-4 shrink-0"></span>
             <span class="truncate">{{ error }}</span>
           </div>
-          <button class="mt-2 text-xs text-gray-400 transition hover:text-primary" @click="() => loadTree(false)">
+          <button
+            class="mt-2 text-xs text-muted-foreground transition-colors hover:text-primary"
+            @click="() => loadTree(false)">
             重试
           </button>
         </div>
 
         <!-- 文件树 -->
-        <div v-else class="py-1">
+        <div v-else class="py-0.5">
           <FileTreeNodeVue v-for="node in tree" :key="node.path" :node="node" :depth="0" />
-          <div v-if="tree.length === 0 && !loading" class="px-3 py-4 text-center text-sm text-gray-400"> 空目录 </div>
+          <div v-if="tree.length === 0 && !loading" class="px-3 py-3 text-center text-xs text-muted-foreground/65">
+            空目录
+          </div>
         </div>
       </template>
     </div>

@@ -17,12 +17,12 @@ defineProps<{
 .msg-quality {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 5px;
+  font-size: 10.5px;
   color: hsl(var(--chart-4, 270 60% 50%));
   background: hsl(var(--chart-4, 270 60% 50%) / 0.08);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 3px 7px;
+  border-radius: 5px;
   align-self: flex-start;
 }
 

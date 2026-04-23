@@ -150,6 +150,16 @@ describe('AgentHomeManager', () => {
       expect(result).toContain('首次引导');
     });
 
+    it('should not include AGENTS.md because Agent rules use a dedicated prompt block', () => {
+      const homeDir = manager.initHome('rules-agent');
+      fs.writeFileSync(path.join(homeDir, 'AGENTS.md'), '# Agent Rules\n\n- Keep rules separate', 'utf-8');
+
+      const result = manager.readInjectableFiles('rules-agent');
+      expect(result).toBeDefined();
+      expect(result).not.toContain('### AGENTS.md');
+      expect(result).not.toContain('Keep rules separate');
+    });
+
     it('should truncate content exceeding maxLen', () => {
       const homeDir = manager.initHome('verbose-agent');
       const longContent = '# Soul\n\n' + 'A'.repeat(11000);

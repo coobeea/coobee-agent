@@ -41,9 +41,10 @@ const canExpand = computed(() => {
 const formattedArgs = computed(() => {
   if (!props.block.tool.arguments) return null;
   try {
-    const args = typeof props.block.tool.arguments === 'string'
-      ? JSON.parse(props.block.tool.arguments)
-      : props.block.tool.arguments;
+    const args =
+      typeof props.block.tool.arguments === 'string'
+        ? JSON.parse(props.block.tool.arguments)
+        : props.block.tool.arguments;
     return JSON.stringify(args, null, 2);
   } catch {
     return props.block.tool.arguments;
@@ -58,8 +59,8 @@ const fullResult = computed(() => {
 
 <template>
   <div class="tool-wrapper">
-    <div 
-      class="tool-header" 
+    <div
+      class="tool-header"
       :class="{ 'tool-header--clickable': canExpand }"
       @click="canExpand && (expanded = !expanded)">
       <div class="tool-header-left">
@@ -69,9 +70,9 @@ const fullResult = computed(() => {
           {{ statusText }}
         </span>
       </div>
-      <span 
-        v-if="canExpand" 
-        class="tool-expand-icon" 
+      <span
+        v-if="canExpand"
+        class="tool-expand-icon"
         :class="expanded ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'" />
     </div>
 
@@ -100,18 +101,18 @@ const fullResult = computed(() => {
 .tool-wrapper {
   display: flex;
   flex-direction: column;
-  border: 1px solid hsl(var(--border) / 0.5);
-  border-radius: 8px;
+  border: 1px solid hsl(var(--border) / 0.45);
+  border-radius: 7px;
   overflow: hidden;
-  background: hsl(var(--muted) / 0.2);
+  background: hsl(var(--muted) / 0.16);
 }
 
 .tool-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  gap: 8px;
+  padding: 7px 10px;
+  gap: 6px;
   transition: background-color 0.15s;
 }
 
@@ -120,35 +121,35 @@ const fullResult = computed(() => {
 }
 
 .tool-header--clickable:hover {
-  background: hsl(var(--muted) / 0.4);
+  background: hsl(var(--muted) / 0.32);
 }
 
 .tool-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
 
 .tool-status-icon {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .tool-name {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: hsl(var(--foreground));
 }
 
 .tool-status-badge {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: 10px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -176,8 +177,8 @@ const fullResult = computed(() => {
 
 .tool-expand-icon {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: hsl(var(--muted-foreground));
   transition: transform 0.2s;
 }
@@ -185,20 +186,20 @@ const fullResult = computed(() => {
 .tool-details {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border-top: 1px solid hsl(var(--border) / 0.5);
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid hsl(var(--border) / 0.45);
   background: hsl(var(--background));
 }
 
 .tool-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tool-section-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
   text-transform: uppercase;
@@ -206,16 +207,16 @@ const fullResult = computed(() => {
 }
 
 .tool-section-content {
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
 }
 
 .tool-section-content pre {
   margin: 0;
-  padding: 10px;
+  padding: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11.5px;
+  line-height: 1.45;
   color: hsl(var(--foreground));
   background: hsl(var(--muted) / 0.3);
   overflow-x: auto;
