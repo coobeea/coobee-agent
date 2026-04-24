@@ -5,7 +5,7 @@
  * 支持按 extensionId 注册和批量卸载，为热插拔提供基础。
  */
 
-import type { ToolDefinition } from '../tools/types';
+import type { ToolDefinition } from '../agent/tools/types';
 import type { MethodHandler } from './types';
 import type {
   ExtensionHookName,

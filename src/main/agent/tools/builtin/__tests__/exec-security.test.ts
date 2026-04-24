@@ -54,7 +54,7 @@ vi.mock('@main/common/logger', () => ({
 
 const mockGetExtensionIds = vi.fn();
 
-vi.mock('../../../../common/extension', () => ({
+vi.mock('../../../../extension', () => ({
   ExtensionManager: {
     getRegistry: (): { getExtensionIds: () => string[] } | null => {
       return { getExtensionIds: mockGetExtensionIds };

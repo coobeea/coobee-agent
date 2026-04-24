@@ -11,7 +11,7 @@
  *     不经过 ModelSelector。
  */
 import type { CoobeeConfig } from '@main/common/config/schema';
-import { ExtensionManager } from '@main/common/extension/ExtensionManager';
+import { ExtensionManager } from '@main/extension/ExtensionManager';
 import { log } from '@main/common/logger';
 
 import type { ModelRef, ModelSelectionConfig } from './types';

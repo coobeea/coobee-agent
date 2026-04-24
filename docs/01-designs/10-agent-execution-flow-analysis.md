@@ -37,7 +37,6 @@
   - **统一分发**：通过 `eventWriter.dispatch(chunk)` 写入文件并广播到 WebSocket。
   - **状态更新**：根据 `tool:start`、`tool:done` 等事件实时更新会话状态。
   - **过程钩子**：触发 `turn_start`、`turn_end`、`before_compaction` 等过程 Hook。
-  - **指标采集**：调用 `recordMetrics()` 记录 Token 消耗。
 
 ### 6. 清理与销毁 (Teardown)
 - 触发后置钩子：`agent_end`、`session_end`。

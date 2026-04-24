@@ -19,7 +19,7 @@ vi.mock('@main/common/logger', () => {
 });
 
 // Mock ExtensionManager（无 runner，模拟 Extension 未加载的场景）
-vi.mock('../../../common/extension', () => ({
+vi.mock('../../../extension', () => ({
   ExtensionManager: {
     getHookRunner: () => null
   }

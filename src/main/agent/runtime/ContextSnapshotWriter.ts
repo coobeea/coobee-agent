@@ -1,5 +1,5 @@
 /**
- * Context Snapshot — LLM 请求上下文快照
+ * Context Snapshot Writer — LLM 请求上下文快照写入器
  *
  * 每次 LLM 调用完成后，由 Runtime 层将输入上下文和输出结果追加写入 JSONL 文件。
  * 用于调试、Prompt 优化和成本分析。

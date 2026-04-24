@@ -31,7 +31,7 @@ export const ReadyAgentSystemHook: LifecycleHook = {
 
     try {
       const { Env } = await import('@main/common/env');
-      const { ExtensionRegistry, ExtensionLoader, ExtensionManager } = await import('@main/agent/extension');
+      const { ExtensionRegistry, ExtensionLoader, ExtensionManager } = await import('@main/extension');
       const { ToolRegistry } = await import('@main/agent/tools/registry');
       const { builtinTools } = await import('@main/agent/tools/builtin');
       const { eventBus } = await import('@main/common/eventbus');
@@ -129,7 +129,7 @@ export const BeforeQuitAgentSystemHook: LifecycleHook = {
 
     // 3. 停止 Background Services
     try {
-      const { ExtensionManager } = await import('@main/agent/extension');
+      const { ExtensionManager } = await import('@main/extension');
       const registry = ExtensionManager.getRegistry();
 
       // 停止所有 Background Service

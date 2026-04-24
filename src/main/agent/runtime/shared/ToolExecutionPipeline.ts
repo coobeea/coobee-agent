@@ -73,7 +73,7 @@ async function executeToolCore(
 
   // === Phase 1.5: before_tool_call Hook (Extension 扩展点) ===
   try {
-    const { ExtensionManager } = await import('../../../common/extension');
+    const { ExtensionManager } = await import('@main/extension');
     const runner = ExtensionManager.getHookRunner();
     if (runner) {
       const hookResult = await runner.runModifyingHook('before_tool_call', {
@@ -211,7 +211,7 @@ async function executeToolCore(
 
   // === Phase 4: after_tool_call + tool_result_persist Hooks ===
   try {
-    const { ExtensionManager } = await import('../../../common/extension');
+    const { ExtensionManager } = await import('@main/extension');
     const runner = ExtensionManager.getHookRunner();
     if (runner) {
       const toolDuration = Date.now() - toolStartTime;

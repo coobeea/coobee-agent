@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExtensionLoader } from '../ExtensionLoader';
 import { ExtensionRegistry } from '../ExtensionRegistry';
-import { SkillManager } from '../../skills/SkillManager';
+import { SkillManager } from '../../agent/skills/SkillManager';
 
 vi.mock('@main/common/logger', () => ({
   createLogger: () => ({

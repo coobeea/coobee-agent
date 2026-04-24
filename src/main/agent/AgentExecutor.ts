@@ -13,7 +13,7 @@
  *   - 事件广播 / 持久化 → StreamEmitter.ts + StreamConsumersManager.ts
  *   - 执行协议 → AgentEnvInjector.ts (buildExecutionProtocol)
  *   - HITL 审批 → extensions/tool-approval（通过 before_tool_call Hook）
- *   - 块处理（指标/ Hook/ suspendReason）→ runtime/ChunkProcessor.ts
+ *   - 工具调用 Hook → runtime/shared/ToolExecutionPipeline.ts
  *
  * 设计哲学（参考 OpenClaw pi-integration-architecture）：
  *   - 消息驱动：每条用户消息触发完整的 "创建 → 推理 → 销毁" 流程
@@ -35,7 +35,6 @@ import type { StreamSource } from './streaming/types';
 import { injectEnv } from './AgentEnvInjector';
 import { streamConsumersManager } from './streaming/StreamConsumersManager';
 import { ProviderInjector } from './provider/ProviderInjector';
-import { fireHooks, recordMetrics } from './runtime/ChunkProcessor';
 import { SkillManager } from './skills/SkillManager';
 
 // ==================== 类型定义 ====================
@@ -288,7 +287,7 @@ class AgentExecutor {
       // === Extension Hook 触发（fire-and-forget，不阻塞流） ===
       if (emitter) {
         // 仅在非轻量模式下触发 Hook
-        fireHooks(
+        this.fireChunkHooks(
           chunk,
           sessionId,
           { getTurnStartTime: () => turnStartTime, getTurnToolCallCount: () => turnToolCallCount },
@@ -303,9 +302,6 @@ class AgentExecutor {
       } else if (chunk.type === 'tool:done') {
         turnToolCallCount++;
       }
-
-      // === 指标采集（fire-and-forget，不阻塞流） ===
-      recordMetrics(chunk, sessionId);
 
       onChunk?.(chunk);
       yield chunk;
@@ -437,7 +433,7 @@ class AgentExecutor {
     }
 
     let workspaceDir: string | undefined;
-    let loader: import('./extension/ExtensionLoader').ExtensionLoader | null = null;
+    let loader: import('../extension/ExtensionLoader').ExtensionLoader | null = null;
 
     // 检查是否轻量模式
     const isLightweight = builder ? (builder.getLightweight?.() ?? false) : false;
@@ -452,7 +448,7 @@ class AgentExecutor {
       }
 
       // 加载任务级 Extension（如果存在）
-      const { ExtensionManager } = await import('@main/common/extension');
+      const { ExtensionManager } = await import('@main/extension');
       loader = ExtensionManager.getLoader?.() || null;
       if (loader) {
         await loader.loadWorkspaceExtensions(sessionId, workspaceDir).catch((err: unknown) => {
@@ -681,6 +677,73 @@ class AgentExecutor {
     }
   }
 
+  /** 根据 StreamChunk 触发 Agent 运行过程中的派生 Hook。 */
+  private fireChunkHooks(
+    chunk: StreamChunk,
+    sessionId: string,
+    turnState: { getTurnStartTime: () => number; getTurnToolCallCount: () => number },
+    agentId?: string
+  ): void {
+    if (
+      chunk.type !== 'turn:start' &&
+      chunk.type !== 'turn:done' &&
+      chunk.type !== 'compression:start' &&
+      chunk.type !== 'compression:done'
+    ) {
+      return;
+    }
+
+    const fire = async (): Promise<void> => {
+      const { ExtensionManager } = await import('@main/extension');
+      const runner = ExtensionManager.getHookRunner();
+      if (!runner) return;
+
+      const data = chunk.data as Record<string, unknown> | undefined;
+
+      switch (chunk.type) {
+        case 'turn:start':
+          await runner.runVoidHook('turn_start', {
+            sessionId,
+            turnIndex: (data?.turnIndex as number) || 1
+          });
+          break;
+
+        case 'turn:done':
+          await runner.runVoidHook('turn_end', {
+            sessionId,
+            turnIndex: (data?.turnIndex as number) || 1,
+            durationMs: Date.now() - turnState.getTurnStartTime(),
+            toolCallCount: turnState.getTurnToolCallCount()
+          });
+          break;
+
+        case 'compression:start':
+          await runner.runVoidHook('before_compaction', {
+            sessionId,
+            agentId: agentId || (data?.agentId as string | undefined),
+            messageCount: 0,
+            totalTokens: (data?.totalTokens as number) || 0,
+            threshold: (data?.threshold as number) || 0
+          });
+          break;
+
+        case 'compression:done':
+          await runner.runVoidHook('after_compaction', {
+            sessionId,
+            originalTokens: (data?.originalTokens as number) || 0,
+            compressedTokens: (data?.summaryTokens as number) || 0,
+            compressionRatio: (data?.compressionRatio as number) || 0,
+            duration: (data?.duration as number) || 0
+          });
+          break;
+      }
+    };
+
+    fire().catch((err) => {
+      log.warn(`[AgentExecutor] Chunk-derived hook failed for ${chunk.type}:`, err);
+    });
+  }
+
   // ========== Extension Hook ==========
 
   /**
@@ -689,7 +752,7 @@ class AgentExecutor {
    */
   private async runExtensionHooks(sessionId: string, message: string, builder: AgentBuilder): Promise<void> {
     try {
-      const { ExtensionManager } = await import('../common/extension');
+      const { ExtensionManager } = await import('../extension');
       const runner = ExtensionManager.getHookRunner();
       if (!runner) return;
 
@@ -724,7 +787,7 @@ class AgentExecutor {
     durationMs: number
   ): Promise<void> {
     try {
-      const { ExtensionManager } = await import('../common/extension');
+      const { ExtensionManager } = await import('../extension');
       const runner = ExtensionManager.getHookRunner();
       if (!runner) return;
 

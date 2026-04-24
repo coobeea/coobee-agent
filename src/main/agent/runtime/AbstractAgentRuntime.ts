@@ -17,7 +17,7 @@
 
 import type { AgentRuntime } from './AgentRuntime';
 import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from './types';
-import { saveContextSnapshot } from './ContextSnapshot';
+import { saveContextSnapshot } from './ContextSnapshotWriter';
 import { defaultRecoveryChain } from './ErrorRecoveryChain';
 
 type RecoveryRuntime = Pick<AgentRuntime, 'thinkingLevel' | 'setThinkingLevel' | 'compressSession'> & {

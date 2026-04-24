@@ -57,7 +57,7 @@ Extension 是动态可插拔的功能模块，可以注册工具（Tool）、生
 ### index.ts 代码骨架
 
 ```typescript
-import type { ExtensionModule } from '@main/common/extension';
+import type { ExtensionModule } from '@main/extension';
 
 export default {
   id: 'my-ext',

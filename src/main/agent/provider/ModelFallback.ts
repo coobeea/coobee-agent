@@ -3,7 +3,7 @@
  *
  * 按顺序尝试候选模型，遇到可重试错误时自动切换。
  */
-import { ExtensionManager } from '@main/common/extension/ExtensionManager';
+import { ExtensionManager } from '@main/extension/ExtensionManager';
 
 import type { FallbackResult, ModelRef } from './types';
 import { formatModelRef, parseModelRef } from './types';

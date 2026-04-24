@@ -391,7 +391,7 @@ async function buildToolExecutionContext(
 function collectExtensionInstructions(): string[] {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { ExtensionManager } = require('@main/common/extension');
+    const { ExtensionManager } = require('@main/extension');
     const registry = ExtensionManager.getRegistry();
     if (registry) {
       return registry.getInjectInstructions();

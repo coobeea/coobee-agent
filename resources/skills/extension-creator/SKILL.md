@@ -74,7 +74,7 @@ Extension 可以注册以下能力：
 ### 3. 创建 index.ts（代码入口）
 
 ```typescript
-import type { ExtensionApi } from '@main/common/extension';
+import type { ExtensionApi } from '@main/extension';
 
 export default {
   id: 'my-extension',
@@ -204,7 +204,7 @@ my-skill-pack/
 ### index.ts
 
 ```typescript
-import type { ExtensionApi } from '@main/common/extension';
+import type { ExtensionApi } from '@main/extension';
 
 export default {
   id: 'translate-helper',

@@ -62,7 +62,7 @@ TypeError: Cannot read properties of undefined (reading 'getAppPath')
 
 - `src/main/common/logger.ts` - 顶层访问 `Env.paths.logPath`（第 8 行）
 - `src/main/common/env.ts` - 调用 `app.getAppPath()`（第 123 行）
-- `src/main/common/extension/ExtensionLoader.ts` - jiti 加载 Extension
+- `src/main/extension/ExtensionLoader.ts` - jiti 加载 Extension
 - `extensions/discussion-channel/DiscussionChannel.ts` - 触发错误的场景
 
 ### 典型失败案例
@@ -112,5 +112,5 @@ TypeError: Cannot read properties of undefined (reading 'getAppPath')
 ## 六、参考文档
 
 - [Extension Development Guide](../../../../docs/extension-development-guide.md)
-- [Extension API](../../../src/main/common/extension/types.ts)
-- [Extension Loader](../../../src/main/common/extension/ExtensionLoader.ts)
+- [Extension API](../../../src/main/extension/types.ts)
+- [Extension Loader](../../../src/main/extension/ExtensionLoader.ts)

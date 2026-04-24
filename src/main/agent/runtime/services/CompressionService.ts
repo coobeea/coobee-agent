@@ -68,11 +68,7 @@ export class CompressionService {
    */
   async compressWithChunks(
     session: FileSession,
-    model: string,
-    beforeCompressionHook?: (status: CompressionStatus) => Promise<{
-      skipDefault?: boolean;
-      customSummary?: string;
-    }>
+    model: string
   ): Promise<StreamChunk[]> {
     if (!this.compressor) return [];
 
@@ -81,15 +77,6 @@ export class CompressionService {
     try {
       const status = await this.getCompressionStatus(session);
       if (!status || !status.needsCompression) return [];
-
-      // 调用 Hook（如果有）
-      let skipDefault = false;
-      if (beforeCompressionHook) {
-        const hookResult = await beforeCompressionHook(status);
-        skipDefault = hookResult.skipDefault || false;
-      }
-
-      if (skipDefault) return [];
 
       // 执行压缩
       const result = await this.compressor.compressIfNeeded(session, model);

@@ -466,7 +466,7 @@ A: 不建议。这些信息对 Agent 正确执行任务很重要。如果使用 
 
 - `src/main/agent/AgentEnv.ts` - AgentEnv 类型定义和 `formatRuntimePaths()`
 - `src/main/agent/AgentEnvInjector.ts` - `injectEnv()` 主逻辑
-- `src/main/agent/runtime/ContextSnapshot.ts` - Context Snapshot 写入
+- `src/main/agent/runtime/ContextSnapshotWriter.ts` - Context Snapshot 写入
 
 ## 相关文档
 

@@ -710,10 +710,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   /**
    * 检查并执行 session 压缩（如果需要），返回产生的 StreamChunk 数组
    *
-   * 压缩前触发 before_compaction modifying Hook：
-   *   - 扩展可在此做 Memory Flush（如 memory-auto Extension）
-   *   - 扩展可返回 skipDefault: true 跳过默认压缩（自行实现）
-   *   - 扩展可返回 customSummary 替换默认压缩摘要
+   * 压缩由 Runtime 自身负责，扩展只会通过统一的 compression:start/done 事件收到通知。
    */
   private async compressSessionWithChunks(): Promise<StreamChunk[]> {
     if (!this.compressor) return [];
@@ -726,36 +723,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       const status = await this.compressor.getCompressionStatus(this.session);
       if (!status) return [];
 
-      // 检查是否达到压缩阈值（避免在未达阈值时触发 Hook）
+      // 检查是否达到压缩阈值（避免在未达阈值时触发压缩事件）
       if (status.totalTokens < status.threshold) return [];
-
-      // === Extension Hook: before_compaction (modifying) ===
-      let skipDefault = false;
-      try {
-        const { ExtensionManager } = await import('../../../common/extension');
-        const runner = ExtensionManager.getHookRunner();
-        if (runner) {
-          const hookResult = await runner.runModifyingHook('before_compaction', {
-            sessionId: this.options.sessionId || '',
-            agentId: this.options.sandboxContext?.agentId,
-            messageCount: 0,
-            totalTokens: status.totalTokens,
-            threshold: status.threshold
-          });
-          if (hookResult?.skipDefault) {
-            skipDefault = true;
-            log.info(
-              `Session compression skipped by Extension Hook` +
-                (hookResult.customSummary ? ' (custom summary provided)' : '')
-            );
-          }
-        }
-      } catch (hookErr) {
-        log.warn('before_compaction hook failed (continuing with default compression):', hookErr);
-      }
-
-      // 如果扩展跳过了默认压缩
-      if (skipDefault) return [];
 
       const result = await this.compressor.compressIfNeeded(this.session, model);
 
@@ -766,9 +735,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
           data: {
             reason: `tokens ${status.totalTokens} >= threshold ${status.threshold}`,
             totalTokens: status.totalTokens,
-            threshold: status.threshold,
-            // 标记 Hook 已在此处理过，consumeAndForward 不再重复触发
-            hookHandled: true
+            threshold: status.threshold
           }
         });
         chunks.push({

@@ -46,7 +46,6 @@ ChatRoutes / ThreadWaker
 | `AgentRuntime`           | SDK 适配层，统一以 `AsyncGenerator<StreamChunk>` 输出事件                                                 |
 | `StreamEmitter`          | 将 `StreamChunk` 转成 EventBus 事件                                                                       |
 | `StreamConsumersManager` | 管理 EventWriter、HistoryWriter、StreamMonitor 等消费者                                                   |
-| `AgentEventWriter`       | 已废弃的兼容适配层，仅用于 Extension API 转发到 EventBus                                                  |
 
 ## 3. 标准执行流程
 
@@ -190,8 +189,7 @@ runtime.stream(message): AsyncGenerator<StreamChunk, ExecutionResult>
 chunk
   -> StreamEmitter.forward(chunk)
   -> updateCheckpoint(sessionId, chunk)
-  -> fireHooks(chunk, sessionId, ...)
-  -> recordMetrics(chunk, sessionId)
+  -> fireChunkHooks(chunk, sessionId, ...)
   -> onChunk?.(chunk)
   -> yield chunk
 ```
@@ -214,16 +212,7 @@ StreamEmitter.forward()
   -> StreamMonitor(metrics)
 ```
 
-`AgentEventWriter` 只保留为 Extension API 的兼容层：
-
-```text
-Extension
-  -> AgentEventWriter.dispatchForSession()
-  -> EventBus
-  -> StreamConsumers
-```
-
-它不再直接写 `events.jsonl`，也不再持有 `StreamEmitter`。
+Extension 不再直接接入前端流式事件链路；当前唯一真相源仍是 Runtime 产出的 `StreamChunk` 经 `StreamEmitter` 进入 EventBus。
 
 P2 后，`EventWriter` 和 `HistoryWriter` 不再在 EventBus listener 内同步 `appendFileSync`。它们会先把 JSONL 行写入内存队列，再由 `AsyncJsonlWriter` 批量异步 flush。会话结束、消费者销毁和应用退出前都会强制 flush，避免常规退出路径丢事件。
 
@@ -272,7 +261,6 @@ sessionStatus.unregister(sessionId)
 - 路径、Agent Home、workspace、model override 不分散推导，统一走 `AgentContextResolver`。
 - Prompt 附加内容不散落在 Injector / Runtime 中，统一走 `PromptAssemblyService`。
 - Runtime 只负责产出 `StreamChunk`，不负责广播。
-- `AgentEventWriter` 只作为兼容层存在，新代码不要再依赖它。
 - Extension Hook 如果新增时机，需要写进类型、执行链路和文档，避免只停留在注释里。
 - EventBus 消费者不要在高频 listener 中直接做同步磁盘写入；新增持久化消费者应复用异步队列或等价机制。
 

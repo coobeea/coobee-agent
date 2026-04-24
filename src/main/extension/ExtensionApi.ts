@@ -118,32 +118,21 @@ function createExtensionServices(): ExtensionServices {
         // no-op
       }
     },
-    events: {
-      emit(sessionId, chunk) {
-        import('../AgentEventWriter')
-          .then(({ AgentEventWriter }) => {
-            AgentEventWriter.dispatchForSession(sessionId, chunk as never);
-          })
-          .catch(() => {
-            // 分发失败不阻断
-          });
-      }
-    },
     paths: {
       async getWorkspace(sessionId) {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         return Env.getAgentWorkspaceDir(sessionId);
       },
       async getAgentHome(agentId) {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         return Env.getAgentHomeDir(agentId);
       },
       async getUserHome() {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         return Env.paths.userHome;
       },
       async getDataDir(extensionId) {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         const path = await import('node:path');
         const dataDir = path.default.join(Env.paths.userHome, 'extensions', extensionId, 'data');
         const fs = await import('node:fs');
@@ -153,15 +142,15 @@ function createExtensionServices(): ExtensionServices {
         return dataDir;
       },
       async getConfigDir() {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         return Env.paths.configDir;
       },
       async getSecretsDir() {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         return Env.paths.secretsDir;
       },
       async getWorkspacesDir() {
-        const { Env } = await import('../../common/env');
+        const { Env } = await import('../common/env');
         return Env.paths.workspacesDir;
       }
     },
@@ -170,9 +159,9 @@ function createExtensionServices(): ExtensionServices {
         throw new Error('Not implemented');
       },
       async runAgent(agentId, message) {
-        const { agentExecutor } = await import('../AgentExecutor');
-        const { AgentStore } = await import('../agents/AgentStore');
-        const { generateSnowflakeId } = await import('../../utils/SnowflakeIdGenerator');
+        const { agentExecutor } = await import('../agent/AgentExecutor');
+        const { AgentStore } = await import('../agent/agents/AgentStore');
+        const { generateSnowflakeId } = await import('../utils/SnowflakeIdGenerator');
 
         const store = await AgentStore.getInstance();
         const agentDef = await store.get(agentId);
@@ -228,35 +217,29 @@ function createExtensionServices(): ExtensionServices {
     },
     agent: {
       async getExecutor() {
-        const { agentExecutor } = await import('../AgentExecutor');
+        const { agentExecutor } = await import('../agent/AgentExecutor');
         return agentExecutor;
       },
       async getStore() {
-        const { AgentStore } = await import('../agents/AgentStore');
+        const { AgentStore } = await import('../agent/agents/AgentStore');
         return AgentStore.getInstance();
       },
       async getBuiltinTools() {
         return []; // placeholder
       },
       async getToolRegistry() {
-        const { ToolRegistry } = await import('../tools/registry');
+        const { ToolRegistry } = await import('../agent/tools/registry');
         return ToolRegistry.getInstance();
       },
       async getSkillManager() {
-        const { SkillManager } = await import('../skills');
+        const { SkillManager } = await import('../agent/skills');
         return new SkillManager();
       }
     },
     thread: {
       async getStore() {
-        const { ThreadStore } = await import('../threads/ThreadStore');
+        const { ThreadStore } = await import('../agent/threads/ThreadStore');
         return ThreadStore.getInstance();
-      }
-    },
-    types: {
-      async getStreamEventType() {
-        const { StreamEventType } = await import('../streaming/types');
-        return StreamEventType;
       }
     }
   };

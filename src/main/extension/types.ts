@@ -5,7 +5,7 @@
  * Extension 系统提供三种能力注册：Agent 生命周期钩子、工具、Gateway 方法。
  */
 
-import type { ToolDefinition } from '../tools/types';
+import type { ToolDefinition } from '../agent/tools/types';
 export type MethodHandler = (params: unknown, ctx?: unknown) => Promise<unknown> | unknown;
 
 // ==================== Extension 模块 ====================
@@ -138,11 +138,6 @@ export interface ExtensionServices {
     /** 清理指定 session 的所有审批 */
     cleanupSession(sessionId: string): void;
   };
-  /** 事件发送服务 */
-  events: {
-    /** 向指定 session 广播流式事件（前端 + EventBus） */
-    emit(sessionId: string, chunk: { type: string; content: string; data?: Record<string, unknown> }): void;
-  };
   /** 路径解析服务 */
   paths: {
     /** 获取 Agent 工作空间目录 */
@@ -179,25 +174,20 @@ export interface ExtensionServices {
   /** Agent 相关服务 */
   agent: {
     /** 获取 AgentExecutor 实例 */
-    getExecutor(): Promise<ReturnType<typeof import('../AgentExecutor').getAgentExecutor>>;
+    getExecutor(): Promise<ReturnType<typeof import('../agent/AgentExecutor').getAgentExecutor>>;
     /** 获取 AgentStore 实例 */
-    getStore(): Promise<import('../agents/AgentStore').AgentStore>;
+    getStore(): Promise<import('../agent/agents/AgentStore').AgentStore>;
     /** 获取内置工具列表 */
-    getBuiltinTools(): Promise<Array<import('../tools/types').ToolDefinition>>;
+    getBuiltinTools(): Promise<Array<import('../agent/tools/types').ToolDefinition>>;
     /** 获取 ToolRegistry 实例 */
-    getToolRegistry(): Promise<import('../tools/registry').ToolRegistry>;
+    getToolRegistry(): Promise<import('../agent/tools/registry').ToolRegistry>;
     /** 获取 SkillManager 实例 */
-    getSkillManager(): Promise<import('../skills').SkillManager>;
+    getSkillManager(): Promise<import('../agent/skills').SkillManager>;
   };
   /** Thread 相关服务 */
   thread: {
     /** 获取 ThreadStore 实例 */
-    getStore(): Promise<import('../threads/ThreadStore').ThreadStore>;
-  };
-  /** 类型定义服务 */
-  types: {
-    /** 获取流式事件类型枚举 */
-    getStreamEventType(): Promise<typeof import('../streaming/types').StreamEventType>;
+    getStore(): Promise<import('../agent/threads/ThreadStore').ThreadStore>;
   };
 }
 
@@ -215,7 +205,7 @@ export interface ExtensionApi {
   /**
    * 核心服务接口（解耦 Extension 与核心模块的直接依赖）
    *
-   * Extension 应通过 api.services 访问 HITL、事件等能力，
+   * Extension 应通过 api.services 访问 HITL、路径、LLM 等能力，
    * 而非直接 import 内部模块路径。
    */
   services: ExtensionServices;
@@ -257,7 +247,7 @@ export type ExtensionHookName =
   // Phase 1 新增（Turn + Compaction）
   | 'turn_start' // void：轮次开始
   | 'turn_end' // void：轮次完成
-  | 'before_compaction' // modifying：压缩前（可自定义压缩 / Memory Flush）
+  | 'before_compaction' // void：压缩开始通知（如 Memory Flush）
   | 'after_compaction' // void：压缩完成
   // Phase 2 新增（Pipeline + Provider）
   | 'message_queued' // void：消息入队
@@ -281,7 +271,7 @@ export const EXTENSION_HOOK_MODE: Record<ExtensionHookName, ExtensionHookMode> =
   // Phase 1 新增
   turn_start: 'void',
   turn_end: 'void',
-  before_compaction: 'modifying',
+  before_compaction: 'void',
   after_compaction: 'void',
   // Phase 2 新增（Pipeline + Provider）
   message_queued: 'void',
@@ -390,13 +380,6 @@ export interface BeforeCompactionEvent {
   threshold: number;
 }
 
-export interface BeforeCompactionResult {
-  /** 跳过默认压缩（由扩展自行实现压缩） */
-  skipDefault?: boolean;
-  /** 自定义压缩摘要（替换默认摘要） */
-  customSummary?: string;
-}
-
 export interface AfterCompactionEvent {
   sessionId: string;
   /** 压缩前 token 数 */
@@ -495,7 +478,7 @@ export type ExtensionHookResultMap = {
   // Phase 1 新增
   turn_start: void;
   turn_end: void;
-  before_compaction: BeforeCompactionResult | void;
+  before_compaction: void;
   after_compaction: void;
   // Phase 2 新增（Pipeline + Provider）
   message_queued: void;

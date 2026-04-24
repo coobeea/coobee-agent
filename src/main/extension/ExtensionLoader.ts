@@ -16,7 +16,7 @@ import { createLogger } from '@main/common/logger';
 import { ExtensionRegistry } from './ExtensionRegistry';
 import { createExtensionApi, createEventBusWrapper } from './ExtensionApi';
 import type { ExtensionManifest, ExtensionModule, ExtensionOrigin } from './types';
-import { SkillManager } from '../skills/SkillManager';
+import { SkillManager } from '../agent/skills/SkillManager';
 
 const log = createLogger('extension');
 
@@ -229,7 +229,7 @@ export class ExtensionLoader {
     const extTools = this.registry.getTools().filter((t) => t.extensionId === manifest.id);
     if (extTools.length > 0) {
       try {
-        const { ToolRegistry } = await import('../tools/registry');
+        const { ToolRegistry } = await import('../agent/tools/registry');
         for (const { tool } of extTools) {
           try {
             ToolRegistry.getInstance().register(tool);
@@ -289,7 +289,7 @@ export class ExtensionLoader {
     // 6. 同步清理 ToolRegistry（动态 import 避免 common→ai 编译时依赖）
     if (removedTools.length > 0) {
       try {
-        const { ToolRegistry } = await import('../tools/registry');
+        const { ToolRegistry } = await import('../agent/tools/registry');
         for (const name of removedTools) {
           ToolRegistry.getInstance().unregister(name);
         }

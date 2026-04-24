@@ -14,7 +14,7 @@ const mockRunModifyingHook = vi.fn();
 const mockRunVoidHook = vi.fn();
 
 // Mock ExtensionManager
-vi.mock('../../../../common/extension', () => ({
+vi.mock('../../../../extension', () => ({
   ExtensionManager: {
     getHookRunner: vi.fn(() => ({
       runModifyingHook: mockRunModifyingHook,

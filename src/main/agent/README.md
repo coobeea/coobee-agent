@@ -11,7 +11,6 @@ src/main/agent/
 ├── AgentExecutor.ts              # 执行调度：并发锁、Abort、Hook、事件转发、清理
 ├── AgentEnv.ts                   # 运行期 AgentEnv 类型和 runtime paths 格式化
 ├── AgentEnvInjector.ts           # 环境注入：workspace、Skill、工具、沙箱、prompt blocks
-├── AgentEventWriter.ts           # 已废弃兼容层：Extension 事件转发到 EventBus
 ├── agents/                       # Agent 定义、Agent Home、导入导出
 ├── context/                      # AgentContextResolver：统一运行期路径和上下文解析
 ├── execution/                    # ThreadExecutionFactory：统一 Thread -> Builder 配置

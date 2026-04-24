@@ -120,7 +120,7 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
   let availableTools: string[] = [];
 
   try {
-    const { ExtensionManager } = await import('@main/common/extension');
+    const { ExtensionManager } = await import('@main/extension');
     const registry = ExtensionManager.getRegistry();
     if (registry) {
       // 合并扩展贡献的 Skill 目录
