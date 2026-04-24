@@ -125,6 +125,41 @@ async function handleStop(): Promise<void> {
 
 // ==================== 历史加载 ====================
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return '';
+
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (!isRecord(item)) return '';
+      const type = typeof item.type === 'string' ? item.type : '';
+      if (type && type !== 'text') return '';
+      const text = item.text ?? item.content;
+      return typeof text === 'string' ? text : '';
+    })
+    .join('');
+}
+
+function normalizeThinking(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return '';
+
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return '';
+      const type = typeof item.type === 'string' ? item.type : '';
+      if (type !== 'thinking' && type !== 'reasoning') return '';
+      const text = item.thinking ?? item.text ?? item.content;
+      return typeof text === 'string' ? text : '';
+    })
+    .join('');
+}
+
 async function loadAgentDetails(): Promise<void> {
   const thread = currentThread.value;
   agentDisplayName.value = '';
@@ -175,34 +210,36 @@ async function loadThreadHistory(): Promise<void> {
     // 直接处理聚合好的消息（来自 history.jsonl）
     for (const msg of history.messages) {
       const msgData = msg as any; // 临时使用 any，因为聚合消息格式不同
+      const historyText = normalizeText(msgData.text || msgData.content);
+      const historyThinking = normalizeThinking(msgData.thinking || msgData.content);
 
       if (msgData.role === 'user') {
         // 用户消息
-        chatStore.addUserMessage(props.threadId, msgData.content || '');
+        chatStore.addUserMessage(props.threadId, historyText);
       } else if (msgData.role === 'assistant') {
         // AI 消息（已聚合）
         const chatMsg: StreamChatMessage = {
           id: msgData.id || `hist-${msgData.timestamp}`,
           role: 'assistant',
-          content: msgData.text || '',
+          content: historyText,
           blocks: [],
           status: 'done',
           timestamp: new Date(msgData.timestamp).getTime()
         };
 
         // 添加 thinking 块
-        if (msgData.thinking) {
+        if (historyThinking) {
           chatMsg.blocks.push({
             type: 'thinking',
-            text: msgData.thinking
+            text: historyThinking
           });
         }
 
         // 添加 text 块
-        if (msgData.text) {
+        if (historyText) {
           chatMsg.blocks.push({
             type: 'text',
-            text: msgData.text
+            text: historyText
           });
         }
 
@@ -222,19 +259,21 @@ async function loadThreadHistory(): Promise<void> {
         }
 
         // 添加统计信息
-        if (msgData.metadata) {
+        const historyMetadata = msgData.metadata || {};
+        const historyTokens = historyMetadata.tokens || msgData.usage || historyMetadata;
+        if (msgData.metadata || msgData.usage) {
           chatMsg.stats = {
-            inputTokens: msgData.metadata.inputTokens || 0,
-            outputTokens: msgData.metadata.outputTokens || 0,
-            totalTokens: msgData.metadata.totalTokens || 0,
-            llmCalls: msgData.metadata.llmCalls || 0,
+            inputTokens: historyTokens.inputTokens || historyTokens.input || 0,
+            outputTokens: historyTokens.outputTokens || historyTokens.output || 0,
+            totalTokens: historyTokens.totalTokens || 0,
+            llmCalls: historyMetadata.llmCalls || 0,
             toolCalls: Array.isArray(msgData.tools) ? msgData.tools.length : 0,
-            startTime: msgData.metadata.startTime
-              ? new Date(msgData.metadata.startTime).getTime()
+            startTime: historyMetadata.startTime
+              ? new Date(historyMetadata.startTime).getTime()
               : new Date(msgData.timestamp).getTime(),
-            endTime: msgData.metadata.endTime ? new Date(msgData.metadata.endTime).getTime() : undefined,
-            duration: msgData.metadata.duration,
-            tokensPerSecond: msgData.metadata.tokensPerSecond
+            endTime: historyMetadata.endTime ? new Date(historyMetadata.endTime).getTime() : undefined,
+            duration: historyMetadata.duration,
+            tokensPerSecond: historyMetadata.tokensPerSecond
           };
         }
 

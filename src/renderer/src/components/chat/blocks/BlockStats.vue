@@ -7,42 +7,31 @@ const props = defineProps<{
   messageContent: string;
 }>();
 
-// 格式化数字（添加千位分隔符）
 function formatNumber(num: number): string {
   return num.toLocaleString('zh-CN');
 }
 
-// 格式化时间（HH:mm:ss）
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+function formatCompactNumber(num: number): string {
+  if (num >= 10000) return `${(num / 10000).toFixed(1)}w`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+  return formatNumber(num);
 }
 
-// 格式化耗时
 const formattedDuration = computed(() => {
   if (!props.stats.duration) return '-';
   const seconds = (props.stats.duration / 1000).toFixed(1);
   return `${seconds}s`;
 });
 
-// 格式化速率
 const formattedSpeed = computed(() => {
   if (!props.stats.tokensPerSecond) return '-';
   return `${formatNumber(props.stats.tokensPerSecond)} t/s`;
 });
 
-// 开始时间
-const startTime = computed(() => formatTime(props.stats.startTime));
-
-// 结束时间
-const endTime = computed(() => {
-  return props.stats.endTime ? formatTime(props.stats.endTime) : '-';
+const tokenSummary = computed(() => {
+  return `${formatCompactNumber(props.stats.inputTokens)}→${formatCompactNumber(props.stats.outputTokens)} tokens`;
 });
 
-// 复制消息内容
 async function copyMessage(): Promise<void> {
   try {
     await navigator.clipboard.writeText(props.messageContent);
@@ -55,57 +44,15 @@ async function copyMessage(): Promise<void> {
 
 <template>
   <div class="stats-bar">
-    <!-- 左侧：操作按钮 -->
-    <div class="stats-actions">
-      <button class="stats-btn" title="复制消息" @click="copyMessage">
-        <span class="i-carbon-copy" />
-      </button>
-    </div>
+    <button class="stats-btn" title="复制消息" @click="copyMessage">
+      <span class="i-carbon-copy" />
+      <span>复制</span>
+    </button>
 
-    <span class="stats-divider">·</span>
-
-    <!-- 中间：统计信息组 -->
-    <div class="stats-metrics">
-      <!-- 时间范围 -->
-      <div class="stats-metric">
-        <span class="stats-text">{{ startTime }}</span>
-        <span class="stats-text stats-text--muted">~</span>
-        <span class="stats-text">{{ endTime }}</span>
-      </div>
-
-      <span class="stats-divider">·</span>
-
-      <!-- 耗时 -->
-      <div class="stats-metric">
-        <span class="stats-text">{{ formattedDuration }}</span>
-      </div>
-
-      <span class="stats-divider">·</span>
-
-      <!-- Token -->
-      <div class="stats-metric">
-        <span class="stats-text">{{ formatNumber(stats.inputTokens) }}</span>
-        <span class="stats-text stats-text--muted">→</span>
-        <span class="stats-text stats-text--primary">{{ formatNumber(stats.outputTokens) }}</span>
-        <span class="stats-text stats-text--muted">tokens</span>
-      </div>
-
-      <span class="stats-divider">·</span>
-
-      <!-- 速率 -->
-      <div class="stats-metric">
-        <span class="stats-text">{{ formattedSpeed }}</span>
-      </div>
-
-      <span class="stats-divider">·</span>
-
-      <!-- 调用统计 -->
-      <div class="stats-metric">
-        <span class="stats-text">模型{{ stats.llmCalls }}</span>
-        <span class="stats-text stats-text--muted">·</span>
-        <span class="stats-text">工具{{ stats.toolCalls }}</span>
-      </div>
-    </div>
+    <span class="stats-chip">{{ formattedDuration }}</span>
+    <span class="stats-chip stats-chip--primary">{{ tokenSummary }}</span>
+    <span class="stats-chip">{{ formattedSpeed }}</span>
+    <span class="stats-chip">模型 {{ stats.llmCalls }} · 工具 {{ stats.toolCalls }}</span>
   </div>
 </template>
 
@@ -113,82 +60,73 @@ async function copyMessage(): Promise<void> {
 .stats-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  padding: 2px 0;
-  min-height: 22px;
-}
-
-.stats-actions {
-  display: flex;
-  align-items: center;
+  flex-wrap: nowrap;
   gap: 4px;
-  flex-shrink: 0;
+  margin-top: 3px;
+  overflow: hidden;
 }
 
 .stats-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: hsl(var(--muted-foreground) / 0.6);
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid hsl(var(--border) / 0.55);
+  background: hsl(var(--background) / 0.65);
+  color: hsl(var(--muted-foreground) / 0.78);
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: 6px;
+  font-size: 10.5px;
+  line-height: 18px;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
   flex-shrink: 0;
 }
 
 .stats-btn span {
-  width: 13px;
-  height: 13px;
-  display: block;
+  display: inline-block;
+}
+
+.stats-btn span:first-child {
+  width: 12px;
+  height: 12px;
 }
 
 .stats-btn:hover {
-  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--primary) / 0.28);
+  background: hsl(var(--primary) / 0.06);
   color: hsl(var(--foreground));
 }
 
-.stats-divider {
-  color: hsl(var(--muted-foreground) / 0.3);
-  font-size: 11px;
-  line-height: 18px;
-  flex-shrink: 0;
-}
-
-.stats-metrics {
-  display: flex;
+.stats-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-
-.stats-metric {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.stats-text {
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border) / 0.38);
+  background: hsl(var(--muted) / 0.12);
+  padding: 0 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10.5px;
   line-height: 18px;
-  color: hsl(var(--muted-foreground) / 0.8);
+  color: hsl(var(--muted-foreground) / 0.72);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.stats-text--muted {
-  color: hsl(var(--muted-foreground) / 0.5);
-}
-
-.stats-text--primary {
+.stats-chip--primary {
   color: hsl(var(--primary));
-  font-weight: 600;
+  background: hsl(var(--primary) / 0.06);
+  border-color: hsl(var(--primary) / 0.16);
+}
+
+.stats-chip:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

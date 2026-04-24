@@ -5,7 +5,7 @@
  * 封装了优秀的消息排版布局，负责消息的整体渲染与自动滚动控制。
  */
 
-import { ref, computed, watch, nextTick, onMounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import type { ContentBlock, ExecutionStats, PendingApproval } from '@/types/chat';
 import type { HitlApprovalDecision } from '@shared/stream-protocol';
 import MessageItemUser from './items/MessageItemUser.vue';
@@ -40,6 +40,10 @@ const emit = defineEmits<{
   decide: [approval: PendingApproval, decision: HitlApprovalDecision];
 }>();
 
+const processingStartedAt = ref<number | null>(null);
+const nowTick = ref(Date.now());
+let processingTimer: ReturnType<typeof setInterval> | null = null;
+
 const currentActivity = computed<string>(() => {
   if (!props.isStreaming || props.messages.length === 0) return '处理中...';
   const last = props.messages[props.messages.length - 1];
@@ -56,6 +60,13 @@ const currentActivity = computed<string>(() => {
   }
   return '生成中...';
 });
+
+const elapsedSeconds = computed(() => {
+  if (!props.isStreaming || !processingStartedAt.value) return 0;
+  return Math.max(0, Math.floor((nowTick.value - processingStartedAt.value) / 1000));
+});
+
+const elapsedLabel = computed(() => formatElapsed(elapsedSeconds.value));
 
 const messageContainer = ref<HTMLElement | null>(null);
 
@@ -92,6 +103,50 @@ function scrollToBottom(force = false): void {
   });
 }
 
+function getProcessingStartTime(): number {
+  const runningAssistant = [...props.messages]
+    .reverse()
+    .find((msg) => msg.role === 'assistant' && (msg.status === 'streaming' || (msg.stats && !msg.stats.endTime)));
+  if (runningAssistant) {
+    return runningAssistant.stats?.startTime || runningAssistant.timestamp;
+  }
+
+  const lastMessage = props.messages[props.messages.length - 1];
+  return lastMessage?.timestamp || Date.now();
+}
+
+function startProcessingTimer(): void {
+  if (!processingStartedAt.value) {
+    processingStartedAt.value = getProcessingStartTime();
+  }
+  nowTick.value = Date.now();
+  if (processingTimer) return;
+
+  processingTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1000);
+}
+
+function stopProcessingTimer(): void {
+  if (processingTimer) {
+    clearInterval(processingTimer);
+    processingTimer = null;
+  }
+  processingStartedAt.value = null;
+}
+
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  const restSeconds = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${String(restSeconds).padStart(2, '0')}s`;
+
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return `${hours}h ${String(restMinutes).padStart(2, '0')}m`;
+}
+
 defineExpose({
   scrollToBottom
 });
@@ -107,6 +162,18 @@ watch(
       scrollToBottom();
     }
   }
+);
+
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (streaming) {
+      startProcessingTimer();
+    } else {
+      stopProcessingTimer();
+    }
+  },
+  { immediate: true }
 );
 
 // 监听流式内容增量更新
@@ -125,6 +192,10 @@ watch(
 
 onMounted(() => {
   scrollToBottom(true);
+});
+
+onBeforeUnmount(() => {
+  stopProcessingTimer();
 });
 </script>
 
@@ -152,12 +223,14 @@ onMounted(() => {
           @decide="(approval, decision) => emit('decide', approval, decision)" />
       </template>
 
-      <div v-if="isStreaming" class="stream-indicator">
-        <span class="relative flex h-2 w-2">
-          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60"></span>
-          <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+      <div v-if="isStreaming" class="stream-indicator" aria-live="polite">
+        <span class="stream-wave" aria-hidden="true">
+          <span class="stream-wave-bar"></span>
+          <span class="stream-wave-bar"></span>
+          <span class="stream-wave-bar"></span>
         </span>
-        <span class="ml-1.5 text-xs font-medium text-muted-foreground">{{ currentActivity }}</span>
+        <span class="stream-activity">{{ currentActivity }}</span>
+        <span class="stream-elapsed">已处理 {{ elapsedLabel }}</span>
       </div>
     </div>
 
@@ -224,9 +297,80 @@ onMounted(() => {
 }
 
 .stream-indicator {
-  padding: 4px 12px 8px;
+  padding: 5px 12px 8px;
   display: flex;
   align-items: center;
+  gap: 6px;
   color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.stream-wave {
+  display: inline-flex;
+  height: 14px;
+  width: 14px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.stream-wave-bar {
+  width: 2.5px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  animation: stream-wave-bounce 1.05s ease-in-out infinite;
+}
+
+.stream-wave-bar:nth-child(1) {
+  height: 7px;
+  animation-delay: -0.22s;
+}
+
+.stream-wave-bar:nth-child(2) {
+  height: 12px;
+  animation-delay: -0.11s;
+}
+
+.stream-wave-bar:nth-child(3) {
+  height: 9px;
+}
+
+.stream-activity {
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground) / 0.82);
+}
+
+.stream-elapsed {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--muted) / 0.12);
+  padding: 0 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 18px;
+  color: hsl(var(--foreground) / 0.68);
+}
+
+@keyframes stream-wave-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-wave-bar {
+    animation: none;
+  }
 }
 </style>

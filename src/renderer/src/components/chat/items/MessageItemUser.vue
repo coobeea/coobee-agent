@@ -13,9 +13,6 @@ defineProps<{
         <span class="inline-block h-3 w-3 i-carbon-user" />
       </span>
       <span class="msg-role-name">你</span>
-      <span class="msg-time">{{
-        new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-      }}</span>
     </div>
 
     <div class="msg-content">
@@ -55,12 +52,6 @@ defineProps<{
   font-size: 12.5px;
   font-weight: 600;
   color: hsl(var(--foreground));
-}
-
-.msg-time {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground));
-  margin-left: auto;
 }
 
 .msg-content {

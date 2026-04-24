@@ -27,15 +27,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="msg-block">
+  <div class="msg-block" :class="{ 'msg-block--with-stats': message.status === 'done' && message.stats }">
     <div class="msg-role-row">
       <span class="msg-role-icon msg-role-assistant">
         <span class="inline-block h-3 w-3 i-mdi-star-four-points" />
       </span>
       <span class="msg-role-name">{{ assistantName }}</span>
-      <span class="msg-time">{{
-        new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-      }}</span>
     </div>
 
     <div class="msg-content">
@@ -85,7 +82,12 @@ const emit = defineEmits<{
 <style scoped>
 /* 消息块 */
 .msg-block {
+  position: relative;
   padding: 5px 12px;
+}
+
+.msg-block--with-stats {
+  padding-bottom: 30px;
 }
 
 .msg-role-row {
@@ -115,16 +117,32 @@ const emit = defineEmits<{
   color: hsl(var(--foreground));
 }
 
-.msg-time {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground));
-  margin-left: auto;
-}
-
 .msg-content {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.msg-block :deep(.stats-bar) {
+  position: absolute;
+  left: 12px;
+  bottom: 5px;
+  z-index: 6;
+  max-width: min(calc(100% - 24px), 560px);
+  margin-top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.msg-block:hover :deep(.stats-bar),
+.msg-block:focus-within :deep(.stats-bar) {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 /* 错误与状态 */
