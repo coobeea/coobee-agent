@@ -90,6 +90,47 @@ export interface ExecutionStats {
   tokensPerSecond?: number;
 }
 
+export interface HistoryUsageV2 {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface HistoryToolCallV2 {
+  name: string;
+  callId: string;
+  arguments?: unknown;
+  result?: string;
+  status: 'calling' | 'done' | 'error';
+  startTime: string;
+  endTime?: string;
+}
+
+export interface HistoryTurnV2 {
+  index: number;
+  startTime: string;
+  endTime?: string;
+  status: 'running' | 'done' | 'error' | 'interrupted';
+  reasoning: string;
+  content: string;
+  toolCalls: HistoryToolCallV2[];
+  usage: HistoryUsageV2;
+}
+
+export interface HistoryAssistantMessageV2 {
+  version: 2;
+  id: string;
+  role: 'assistant';
+  timestamp: string;
+  startTime: string;
+  endTime?: string;
+  status: 'running' | 'done' | 'error' | 'interrupted';
+  content: string;
+  turns: HistoryTurnV2[];
+  usage: HistoryUsageV2;
+  error?: string;
+}
+
 /**
  * 流式聊天消息（UI 可渲染）
  */

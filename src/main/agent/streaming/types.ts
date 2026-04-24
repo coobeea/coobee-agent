@@ -50,3 +50,44 @@ export interface StreamEvent {
   /** 事件时间戳 */
   timestamp: number;
 }
+
+export interface UsageRecord {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface ToolCallRecord {
+  name: string;
+  callId: string;
+  arguments?: unknown;
+  result?: string;
+  status: 'calling' | 'done' | 'error';
+  startTime: string;
+  endTime?: string;
+}
+
+export interface TurnRecord {
+  index: number;
+  startTime: string;
+  endTime?: string;
+  status: 'running' | 'done' | 'error' | 'interrupted';
+  reasoning: string;
+  content: string;
+  toolCalls: ToolCallRecord[];
+  usage: UsageRecord;
+}
+
+export interface HistoryAssistantMessageV2 {
+  version: 2;
+  id: string;
+  role: 'assistant';
+  timestamp: string;
+  startTime: string;
+  endTime?: string;
+  status: 'running' | 'done' | 'error' | 'interrupted';
+  content: string;
+  turns: TurnRecord[];
+  usage: UsageRecord;
+  error?: string;
+}

@@ -462,6 +462,8 @@ export interface ToolStartData {
   toolName: string;
   /** 调用 ID */
   callId?: string;
+  /** 工具参数（如果 runtime 在 start 阶段可获得） */
+  arguments?: unknown;
 }
 
 /** tool:delta 数据 */
@@ -490,6 +492,8 @@ export interface ToolDoneData {
   callId?: string;
   /** 输出内容 */
   output: unknown;
+  /** 工具参数（部分 runtime 只在完成事件中可获得） */
+  toolArgs?: unknown;
 }
 
 // ---- ⑦ handoff: ----

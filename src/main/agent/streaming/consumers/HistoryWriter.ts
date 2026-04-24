@@ -4,15 +4,22 @@
  * 监听 EventBus 的流式消息，实时聚合并异步写入前端友好的历史格式。
  *
  * 聚合策略：
- * - 按 turn 聚合（一轮对话）
- * - 合并同一轮的 thinking + text + tools
- * - 生成统一的 AggregatedMessage 格式（运行时无关）
+ * - 按 run 聚合（一次用户请求）
+ * - run 内保留 turns[]，记录每次 LLM 调用、工具调用和 usage
+ * - run:done 时写入一条 assistant v2 记录
  */
 
 import path from 'node:path';
 import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
-import { StreamEventType, type StreamEvent, type StreamMessage } from '../types';
+import {
+  StreamEventType,
+  type HistoryAssistantMessageV2,
+  type StreamEvent,
+  type StreamMessage,
+  type TurnRecord,
+  type UsageRecord
+} from '../types';
 import { AsyncJsonlWriter } from './AsyncJsonlWriter';
 
 const log = createLogger('history-writer');
@@ -48,12 +55,25 @@ export interface AggregatedMessage {
   };
 }
 
+interface RunState {
+  id: string;
+  role: 'assistant';
+  timestamp: string;
+  startTime: string;
+  status: 'running' | 'done' | 'error' | 'interrupted';
+  turns: TurnRecord[];
+  usage: UsageRecord;
+  error?: string;
+}
+
 /**
  * 历史写入器
  */
 export class HistoryWriter {
   private historyFiles = new Map<string, string>();
-  private currentTurns = new Map<string, Partial<AggregatedMessage>>();
+  // 当前事件协议没有稳定 runId；第一阶段同一 session 只维护一个 active run。
+  // 如需支持同 session 并发 run，必须先在 run/turn/llm 全链路事件中补充真实 runId。
+  private currentRuns = new Map<string, RunState>();
   private userMessages = new Map<string, string>(); // 暂存用户消息
   private writer = new AsyncJsonlWriter('HistoryWriter');
   private workspacesDir: string;
@@ -84,9 +104,10 @@ export class HistoryWriter {
     if (!this.initialized) return;
 
     eventBus.off(StreamEventType.MESSAGE, this.handleMessage);
+    this.flushActiveRuns('interrupted');
     await this.writer.closeAll();
     this.historyFiles.clear();
-    this.currentTurns.clear();
+    this.currentRuns.clear();
     this.userMessages.clear();
     this.initialized = false;
     log.info('[HistoryWriter] Stopped listening');
@@ -108,11 +129,11 @@ export class HistoryWriter {
     // 根据消息类型分发处理
     switch (message.type) {
       case 'run:start':
-        // 执行开始，等待用户消息（从 context 或其他途径获取）
+        this.startRun(sessionId, message);
         break;
 
       case 'turn:start':
-        this.startNewTurn(sessionId);
+        this.startNewTurn(sessionId, message);
         break;
 
       case 'reasoning:delta':
@@ -127,16 +148,32 @@ export class HistoryWriter {
         this.addTool(sessionId, message);
         break;
 
+      case 'tool:delta':
+        this.updateToolArguments(sessionId, message);
+        break;
+
+      case 'tool:pending':
+        this.updateToolArguments(sessionId, message);
+        break;
+
       case 'tool:done':
         this.updateTool(sessionId, message);
         break;
 
       case 'llm:done':
-        this.updateMetadata(sessionId, message);
+        this.updateUsage(sessionId, message);
         break;
 
       case 'turn:done':
-        this.finalizeTurn(sessionId);
+        this.finalizeTurn(sessionId, message);
+        break;
+
+      case 'run:done':
+        this.finalizeRun(sessionId, 'done', message);
+        break;
+
+      case 'run:error':
+        this.finalizeRun(sessionId, 'error', message);
         break;
     }
   };
@@ -152,33 +189,55 @@ export class HistoryWriter {
     log.debug(`[HistoryWriter] Initialized session: ${sessionId}`);
   }
 
+  /** 开始一次用户请求对应的 assistant 聚合记录 */
+  private startRun(sessionId: string, message: StreamMessage): void {
+    const existing = this.currentRuns.get(sessionId);
+    if (existing) {
+      this.finalizeRun(sessionId, 'interrupted', message);
+    }
+
+    const timestamp = toIso(message.timestamp);
+    this.currentRuns.set(sessionId, {
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      timestamp,
+      startTime: timestamp,
+      status: 'running',
+      turns: [],
+      usage: emptyUsage()
+    });
+  }
+
   /**
    * 开始新一轮 AI 响应
    */
-  private startNewTurn(sessionId: string): void {
-    const turn: Partial<AggregatedMessage> = {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      timestamp: new Date().toISOString(),
-      content: '',
-      thinking: '',
-      tools: [],
-      metadata: {}
-    };
+  private startNewTurn(sessionId: string, message: StreamMessage): void {
+    const run = this.ensureRun(sessionId, message);
+    const data = message.data as Record<string, unknown> | undefined;
+    const index = typeof data?.turnIndex === 'number' ? data.turnIndex : run.turns.length + 1;
+    const timestamp = toIso(message.timestamp);
 
-    this.currentTurns.set(sessionId, turn);
+    run.turns.push({
+      index,
+      startTime: timestamp,
+      status: 'running',
+      reasoning: '',
+      content: '',
+      toolCalls: [],
+      usage: emptyUsage()
+    });
   }
 
   /**
    * 追加思考内容
    */
   private appendThinking(sessionId: string, message: StreamMessage): void {
-    const turn = this.currentTurns.get(sessionId);
+    const turn = this.getCurrentTurn(sessionId);
     if (!turn) return;
 
-    const delta = message.data?.delta as string;
+    const delta = (message.data?.delta as string | undefined) || message.content;
     if (delta) {
-      turn.thinking = (turn.thinking || '') + delta;
+      turn.reasoning += delta;
     }
   }
 
@@ -186,12 +245,12 @@ export class HistoryWriter {
    * 追加文本内容
    */
   private appendText(sessionId: string, message: StreamMessage): void {
-    const turn = this.currentTurns.get(sessionId);
+    const turn = this.getCurrentTurn(sessionId);
     if (!turn) return;
 
-    const delta = message.content;
+    const delta = message.content || (message.data?.delta as string | undefined);
     if (delta) {
-      turn.content = (turn.content || '') + delta;
+      turn.content += delta;
     }
   }
 
@@ -199,81 +258,154 @@ export class HistoryWriter {
    * 添加工具调用
    */
   private addTool(sessionId: string, message: StreamMessage): void {
-    const turn = this.currentTurns.get(sessionId);
-    if (!turn || !turn.tools) return;
+    const turn = this.getCurrentTurn(sessionId);
+    if (!turn) return;
 
     const data = message.data as Record<string, unknown> | undefined;
     if (!data) return;
 
-    turn.tools.push({
+    turn.toolCalls.push({
       name: (data.toolName as string) || 'unknown',
       callId: (data.callId as string) || '',
-      arguments: data.arguments as Record<string, unknown> | undefined,
-      status: 'calling'
+      arguments: data.arguments ?? data.toolArgs,
+      status: 'calling',
+      startTime: toIso(message.timestamp)
     });
+  }
+
+  /**
+   * 更新工具参数。tool:pending 通常携带完整参数，tool:delta 在部分 runtime 中可能携带参数片段。
+   */
+  private updateToolArguments(sessionId: string, message: StreamMessage): void {
+    const turn = this.getCurrentTurn(sessionId);
+    if (!turn) return;
+
+    const data = message.data as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const tool = this.findTool(turn, data);
+    if (!tool) return;
+
+    const args = data.arguments ?? data.toolArgs;
+    if (args !== undefined) {
+      tool.arguments = args;
+      return;
+    }
+
+    if (message.type === 'tool:delta' && typeof data.delta === 'string' && tool.arguments === undefined) {
+      tool.arguments = data.delta;
+    }
   }
 
   /**
    * 更新工具执行结果
    */
   private updateTool(sessionId: string, message: StreamMessage): void {
-    const turn = this.currentTurns.get(sessionId);
-    if (!turn || !turn.tools) return;
+    const turn = this.getCurrentTurn(sessionId);
+    if (!turn) return;
 
     const data = message.data as Record<string, unknown> | undefined;
     if (!data) return;
 
-    const tool = turn.tools.find((t) => t.callId === data.callId);
+    const tool = this.findTool(turn, data);
     if (tool) {
       tool.status = 'done';
-      tool.result = (data.output as string) || '';
+      if (tool.arguments === undefined) {
+        tool.arguments = data.arguments ?? data.toolArgs;
+      }
+      tool.result = (data.output as string) || message.content || '';
+      tool.endTime = toIso(message.timestamp);
     }
   }
 
   /**
    * 更新元数据（token 统计等）
    */
-  private updateMetadata(sessionId: string, message: StreamMessage): void {
-    const turn = this.currentTurns.get(sessionId);
-    if (!turn || !turn.metadata) return;
+  private updateUsage(sessionId: string, message: StreamMessage): void {
+    const run = this.currentRuns.get(sessionId);
+    const turn = this.getCurrentTurn(sessionId);
+    if (!run || !turn) return;
 
     const data = message.data as Record<string, unknown> | undefined;
     if (data?.usage) {
       const usage = data.usage as Record<string, unknown>;
-      turn.metadata.tokens = {
+      const delta = {
         inputTokens: (usage.inputTokens as number) || 0,
         outputTokens: (usage.outputTokens as number) || 0,
         totalTokens: (usage.totalTokens as number) || 0
       };
+      addUsage(turn.usage, delta);
+      addUsage(run.usage, delta);
     }
   }
 
   /**
-   * 完成一轮，写入文件
+   * 完成一轮，只更新内存状态，不写入文件
    */
-  private finalizeTurn(sessionId: string): void {
-    const turn = this.currentTurns.get(sessionId);
+  private finalizeTurn(sessionId: string, message: StreamMessage): void {
+    const turn = this.getCurrentTurn(sessionId);
     if (!turn) return;
+
+    turn.status = 'done';
+    turn.endTime = toIso(message.timestamp);
+  }
+
+  /** 完成当前 run 并写入 history.jsonl */
+  private finalizeRun(sessionId: string, status: 'done' | 'error' | 'interrupted', message?: StreamMessage): void {
+    const run = this.currentRuns.get(sessionId);
+    if (!run) return;
 
     const historyFile = this.historyFiles.get(sessionId);
     if (!historyFile) return;
 
-    try {
-      // 清理空字段
-      if (!turn.thinking) delete turn.thinking;
-      if (turn.tools?.length === 0) delete turn.tools;
+    const endTime = toIso(message?.timestamp);
+    const currentTurn = run.turns.at(-1);
+    if (currentTurn && currentTurn.status === 'running') {
+      currentTurn.status = status === 'done' ? 'done' : status;
+      currentTurn.endTime = endTime;
+    }
 
+    run.status = status;
+    if (status === 'error') {
+      run.error = message?.content || (message?.data?.message as string | undefined) || '执行出错';
+    }
+
+    const content = run.turns.map((turn) => turn.content).join('');
+    const hasReasoning = run.turns.some((turn) => turn.reasoning);
+
+    if (!content && !hasReasoning && run.turns.length === 0 && status !== 'error') {
+      this.currentRuns.delete(sessionId);
+      return;
+    }
+
+    const assistantMessage: HistoryAssistantMessageV2 = {
+      version: 2,
+      id: run.id,
+      role: 'assistant',
+      timestamp: run.timestamp,
+      startTime: run.startTime,
+      endTime,
+      status,
+      content,
+      turns: run.turns,
+      usage: run.usage
+    };
+
+    if (run.error) {
+      assistantMessage.error = run.error;
+    }
+
+    try {
       // 异步批量写入
-      const line = JSON.stringify(turn);
+      const line = JSON.stringify(assistantMessage);
       this.writer.writeLine(historyFile, line);
 
-      log.debug(`[HistoryWriter] Queued turn for session: ${sessionId}`);
+      log.debug(`[HistoryWriter] Queued run for session: ${sessionId}`);
     } catch (err) {
       log.warn(`[HistoryWriter] Enqueue failed for session ${sessionId}:`, err);
     }
 
-    // 清理当前 turn
-    this.currentTurns.delete(sessionId);
+    this.currentRuns.delete(sessionId);
   }
 
   /**
@@ -309,10 +441,11 @@ export class HistoryWriter {
   async clearSession(sessionId: string): Promise<void> {
     const historyFile = this.historyFiles.get(sessionId);
     if (historyFile) {
+      this.finalizeRun(sessionId, 'interrupted');
       await this.writer.closeFile(historyFile);
     }
     this.historyFiles.delete(sessionId);
-    this.currentTurns.delete(sessionId);
+    this.currentRuns.delete(sessionId);
     this.userMessages.delete(sessionId);
   }
 
@@ -320,4 +453,57 @@ export class HistoryWriter {
   async flush(): Promise<void> {
     await this.writer.flush();
   }
+
+  private ensureRun(sessionId: string, message: StreamMessage): RunState {
+    let run = this.currentRuns.get(sessionId);
+    if (!run) {
+      this.startRun(sessionId, message);
+      run = this.currentRuns.get(sessionId)!;
+    }
+    return run;
+  }
+
+  private getCurrentTurn(sessionId: string): TurnRecord | undefined {
+    return this.currentRuns.get(sessionId)?.turns.at(-1);
+  }
+
+  private findTool(turn: TurnRecord, data: Record<string, unknown>): TurnRecord['toolCalls'][number] | undefined {
+    const callId = data.callId;
+    if (typeof callId === 'string' && callId) {
+      const byCallId = turn.toolCalls.find((tool) => tool.callId === callId);
+      if (byCallId) return byCallId;
+    }
+
+    const toolName = data.toolName;
+    if (typeof toolName === 'string' && toolName) {
+      const byName = [...turn.toolCalls].reverse().find((tool) => tool.name === toolName && tool.status === 'calling');
+      if (byName) return byName;
+    }
+
+    return turn.toolCalls.at(-1);
+  }
+
+  private flushActiveRuns(status: 'interrupted'): void {
+    for (const sessionId of Array.from(this.currentRuns.keys())) {
+      this.finalizeRun(sessionId, status);
+    }
+  }
+}
+
+function emptyUsage(): UsageRecord {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0
+  };
+}
+
+function addUsage(target: UsageRecord, delta: UsageRecord): void {
+  target.inputTokens += delta.inputTokens;
+  target.outputTokens += delta.outputTokens;
+  target.totalTokens += delta.totalTokens;
+}
+
+function toIso(timestamp?: number): string {
+  return new Date(timestamp || Date.now()).toISOString();
 }

@@ -136,9 +136,56 @@ Runtime yield chunk
 | ------------------------------- | ------------------- |
 | `threads/{id}.json`             | Thread 元数据真相源 |
 | `workspaces/{id}/sessions/...`  | SDK 会话历史        |
-| `workspaces/{id}/history.jsonl` | 前端消息投影        |
+| `workspaces/{id}/history.jsonl` | 前端消息投影（v2）  |
 | `workspaces/{id}/events.jsonl`  | 细粒度事件日志      |
 | `workspaces/{id}/context*.json` | 调试和审计快照      |
+
+### history.jsonl v2
+
+`history.jsonl` 是前端展示投影，不是完整事件源。旧格式不再兼容，实施前需要删除旧 `history.jsonl` 数据；新数据统一写入 v2。
+
+写入语义：
+
+- 一次用户请求写入一条 user 消息和一条 assistant v2 消息。
+- assistant 记录在 `run:done` 时一次性写入，`turn:done` 不再写盘。
+- 顶层 `content` / `usage` 供前端基础文本和统计展示直接消费。
+- `turns[]` 保留每次 LLM 调用的 reasoning、内容、工具调用和 token 明细，用于审计、调试和按轮恢复 thinking block。
+
+assistant v2 结构：
+
+```json
+{
+  "version": 2,
+  "id": "assistant-xxx",
+  "role": "assistant",
+  "timestamp": "2026-04-24T07:16:11.697Z",
+  "startTime": "2026-04-24T07:16:11.697Z",
+  "endTime": "2026-04-24T07:16:46.710Z",
+  "status": "done",
+  "content": "最终回复内容",
+  "turns": [
+    {
+      "index": 1,
+      "startTime": "2026-04-24T07:16:11.697Z",
+      "endTime": "2026-04-24T07:16:24.222Z",
+      "status": "done",
+      "reasoning": "...",
+      "content": "...",
+      "toolCalls": [],
+      "usage": {
+        "inputTokens": 1,
+        "outputTokens": 2,
+        "totalTokens": 3
+      }
+    }
+  ],
+  "usage": {
+    "inputTokens": 1,
+    "outputTokens": 2,
+    "totalTokens": 3
+  }
+}
+```
 
 列表型批量读取走明确异步入口：`ThreadStore.listAsync()`、`AgentStore.listAsync()`；兼容入口 `list()` 仍保留，但新调用点应优先使用 `listAsync()`。
 

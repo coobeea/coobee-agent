@@ -10,7 +10,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
 import { useThreadsStore } from '@/stores/threads';
 import { useAgentsStore } from '@/stores/agents';
-import type { StreamChatMessage } from '@/types/chat';
+import type { HistoryAssistantMessageV2, HistoryToolCallV2, StreamChatMessage } from '@/types/chat';
 import { useGateway } from '@/composables/useGateway';
 import { getThreadHistory } from '@/api/threads';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
@@ -145,19 +145,32 @@ function normalizeText(value: unknown): string {
     .join('');
 }
 
-function normalizeThinking(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (!Array.isArray(value)) return '';
+function isHistoryAssistantMessageV2(value: unknown): value is HistoryAssistantMessageV2 {
+  return (
+    isRecord(value) &&
+    value.version === 2 &&
+    value.role === 'assistant' &&
+    typeof value.id === 'string' &&
+    typeof value.timestamp === 'string' &&
+    typeof value.content === 'string' &&
+    Array.isArray(value.turns) &&
+    isRecord(value.usage)
+  );
+}
 
-  return value
-    .map((item) => {
-      if (!isRecord(item)) return '';
-      const type = typeof item.type === 'string' ? item.type : '';
-      if (type !== 'thinking' && type !== 'reasoning') return '';
-      const text = item.thinking ?? item.text ?? item.content;
-      return typeof text === 'string' ? text : '';
-    })
-    .join('');
+function formatToolArguments(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function collectHistoryToolCalls(msg: HistoryAssistantMessageV2): HistoryToolCallV2[] {
+  return msg.turns.flatMap((turn) => (Array.isArray(turn.toolCalls) ? turn.toolCalls : []));
 }
 
 async function loadAgentDetails(): Promise<void> {
@@ -210,71 +223,81 @@ async function loadThreadHistory(): Promise<void> {
     // 直接处理聚合好的消息（来自 history.jsonl）
     for (const msg of history.messages) {
       const msgData = msg as any; // 临时使用 any，因为聚合消息格式不同
-      const historyText = normalizeText(msgData.text || msgData.content);
-      const historyThinking = normalizeThinking(msgData.thinking || msgData.content);
 
       if (msgData.role === 'user') {
         // 用户消息
+        const historyText = normalizeText(msgData.text || msgData.content);
         chatStore.addUserMessage(props.threadId, historyText);
-      } else if (msgData.role === 'assistant') {
+      } else if (isHistoryAssistantMessageV2(msgData)) {
         // AI 消息（已聚合）
+        const historyText = msgData.content;
+        const startTime = new Date(msgData.startTime || msgData.timestamp).getTime();
+        const endTime = msgData.endTime ? new Date(msgData.endTime).getTime() : undefined;
+        const toolCalls = collectHistoryToolCalls(msgData);
         const chatMsg: StreamChatMessage = {
           id: msgData.id || `hist-${msgData.timestamp}`,
           role: 'assistant',
           content: historyText,
           blocks: [],
-          status: 'done',
+          status: msgData.status === 'running' ? 'done' : msgData.status,
           timestamp: new Date(msgData.timestamp).getTime()
         };
 
-        // 添加 thinking 块
-        if (historyThinking) {
-          chatMsg.blocks.push({
-            type: 'thinking',
-            text: historyThinking
-          });
+        // 按 turn 恢复 block，保留每轮 reasoning 的独立折叠块。
+        for (const turn of msgData.turns) {
+          if (turn.reasoning) {
+            chatMsg.blocks.push({
+              type: 'thinking',
+              text: turn.reasoning
+            });
+          }
+
+          for (const tool of turn.toolCalls || []) {
+            chatMsg.blocks.push({
+              type: 'tool',
+              tool: {
+                name: tool.name || 'unknown',
+                arguments: formatToolArguments(tool.arguments),
+                result: tool.result || '',
+                status: tool.status === 'calling' ? 'done' : tool.status
+              }
+            });
+          }
+
+          if (turn.content) {
+            chatMsg.blocks.push({
+              type: 'text',
+              text: turn.content
+            });
+          }
         }
 
-        // 添加 text 块
-        if (historyText) {
+        if (chatMsg.blocks.length === 0 && historyText) {
           chatMsg.blocks.push({
             type: 'text',
             text: historyText
           });
         }
 
-        // 添加工具调用块
-        if (msgData.tools && Array.isArray(msgData.tools) && msgData.tools.length > 0) {
-          for (const tool of msgData.tools) {
-            chatMsg.blocks.push({
-              type: 'tool',
-              tool: {
-                name: tool.name || 'unknown',
-                arguments: JSON.stringify(tool.arguments || {}, null, 2),
-                result: tool.result || '',
-                status: tool.error ? 'error' : 'done'
-              }
-            });
-          }
-        }
-
         // 添加统计信息
-        const historyMetadata = msgData.metadata || {};
-        const historyTokens = historyMetadata.tokens || msgData.usage || historyMetadata;
-        if (msgData.metadata || msgData.usage) {
-          chatMsg.stats = {
-            inputTokens: historyTokens.inputTokens || historyTokens.input || 0,
-            outputTokens: historyTokens.outputTokens || historyTokens.output || 0,
-            totalTokens: historyTokens.totalTokens || 0,
-            llmCalls: historyMetadata.llmCalls || 0,
-            toolCalls: Array.isArray(msgData.tools) ? msgData.tools.length : 0,
-            startTime: historyMetadata.startTime
-              ? new Date(historyMetadata.startTime).getTime()
-              : new Date(msgData.timestamp).getTime(),
-            endTime: historyMetadata.endTime ? new Date(historyMetadata.endTime).getTime() : undefined,
-            duration: historyMetadata.duration,
-            tokensPerSecond: historyMetadata.tokensPerSecond
-          };
+        const duration = endTime ? endTime - startTime : undefined;
+        chatMsg.stats = {
+          inputTokens: msgData.usage.inputTokens || 0,
+          outputTokens: msgData.usage.outputTokens || 0,
+          totalTokens: msgData.usage.totalTokens || 0,
+          llmCalls: msgData.turns.filter((turn) => turn.usage.totalTokens > 0).length,
+          toolCalls: toolCalls.length,
+          startTime,
+          endTime,
+          duration,
+          tokensPerSecond:
+            duration && duration > 0 && msgData.usage.outputTokens > 0
+              ? Math.round((msgData.usage.outputTokens / duration) * 1000)
+              : undefined
+        };
+
+        if (msgData.error) {
+          chatMsg.error = msgData.error;
         }
 
         // 添加到 chatStore

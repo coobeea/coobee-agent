@@ -139,6 +139,20 @@ export const useChatStore = defineStore(
           break;
         }
 
+        case 'tool:pending': {
+          // 工具参数准备完成，回填到最近的 calling 工具块
+          if (!threadState.currentAssistantMsg) break;
+
+          for (let i = threadState.currentAssistantMsg.blocks.length - 1; i >= 0; i--) {
+            const block = threadState.currentAssistantMsg.blocks[i];
+            if (block.type === 'tool' && block.tool.status === 'calling') {
+              block.tool.arguments = (msg.data?.arguments as string) || block.tool.arguments;
+              break;
+            }
+          }
+          break;
+        }
+
         case 'tool:done': {
           // 工具调用完成
           if (!threadState.currentAssistantMsg) break;
@@ -154,6 +168,15 @@ export const useChatStore = defineStore(
           for (let i = threadState.currentAssistantMsg.blocks.length - 1; i >= 0; i--) {
             const block = threadState.currentAssistantMsg.blocks[i];
             if (block.type === 'tool' && block.tool.status === 'calling') {
+              const toolArgs = msg.data?.toolArgs;
+              const doneArguments =
+                (msg.data?.arguments as string | undefined) ||
+                (typeof toolArgs === 'string'
+                  ? toolArgs
+                  : toolArgs && typeof toolArgs === 'object'
+                    ? JSON.stringify(toolArgs, null, 2)
+                    : undefined);
+              block.tool.arguments = doneArguments || block.tool.arguments;
               block.tool.result = msg.content;
               block.tool.status = suspended ? 'approval-pending' : 'done';
               break;

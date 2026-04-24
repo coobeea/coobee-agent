@@ -549,7 +549,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       const rawItem = (item as { rawItem?: Record<string, unknown> }).rawItem;
       const toolName = (rawItem as { name?: string })?.name || 'unknown';
       const callId = (rawItem as { call_id?: string })?.call_id;
-      emit({ type: 'tool:start', content: toolName, data: { toolName, callId } });
+      const args = (rawItem as { arguments?: unknown })?.arguments;
+      emit({ type: 'tool:start', content: toolName, data: { toolName, callId, arguments: args } });
     }
 
     // tool_output → tool:done
