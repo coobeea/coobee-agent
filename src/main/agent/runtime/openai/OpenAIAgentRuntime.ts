@@ -226,7 +226,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       // 4. 等待完成
       await streamResult.completed;
 
-      // HITL 审批现在由 tool-approval Extension 在 before_tool_call Hook 中处理，
+      // HITL 审批现在由 tool-approval Extension 在 prepare_tool_call Hook 中处理，
       // 不再依赖 SDK 的 interruptions 机制。
 
       const rawOutput = (streamResult.finalOutput as string) || fullOutput;
@@ -258,7 +258,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   }
 
   // runStream() 由基类 AbstractAgentRuntime 提供
-  // HITL 审批由 tool-approval Extension 在 before_tool_call Hook 中处理
+  // HITL 审批由 tool-approval Extension 在 prepare_tool_call Hook 中处理
 
   // ========== 会话管理 ==========
 
@@ -650,7 +650,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    * 将统一 ToolDefinition 转换为 @openai/agents SDK 原生 Tool
    *
    * 核心映射：
-   *   - execute 前通过 before_tool_call Hook 处理审批（tool-approval Extension）
+   *   - execute 前通过 prepare_tool_call Hook 处理审批（tool-approval Extension）
    *   - execute 前检查工具策略（isToolAllowed，sandbox 级别拦截）
    *   - yield 的 ToolStreamUpdate 通过 StreamEmitter 发送 tool:delta 事件给前端
    *   - return 的 ToolResult.llmContent 作为工具返回值发送回 LLM
@@ -658,7 +658,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    *
    * HITL 审批：
    *   不再使用 SDK 的 needsApproval 机制，改由 tool-approval Extension
-   *   在 before_tool_call Hook 中统一处理（适用于所有 Runtime）。
+   *   在 prepare_tool_call Hook 中统一处理（适用于所有 Runtime）。
    */
   private convertTools(defs: ToolDefinition[]): Tool[] {
     if (!defs.length) return [];

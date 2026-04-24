@@ -234,73 +234,83 @@ export interface ExtensionApi {
 
 // ==================== Extension Hook ====================
 
-/** 17 种 Agent 生命周期钩子 */
-export type ExtensionHookName =
-  | 'before_agent_start' // modifying：注入上下文 / 替换提示词
-  | 'agent_end' // void：Agent 执行完成
-  | 'before_tool_call' // modifying：修改参数 / 阻止调用
-  | 'after_tool_call' // void：工具执行后
-  | 'tool_result_persist' // modifying：修改持久化结果
-  | 'message_received' // void：收到用户消息
-  | 'session_start' // void：会话开始
-  | 'session_end' // void：会话结束
-  // Phase 1 新增（Turn + Compaction）
-  | 'turn_start' // void：轮次开始
-  | 'turn_end' // void：轮次完成
-  | 'before_compaction' // void：压缩开始通知（如 Memory Flush）
-  | 'after_compaction' // void：压缩完成
-  // Phase 2 新增（Pipeline + Provider）
-  | 'message_queued' // void：消息入队
-  | 'message_dequeued' // void：消息出队（即将执行）
-  | 'queue_drain_start' // void：队列排水开始
-  | 'model_resolved' // void：模型选择完成
-  | 'model_fallback'; // void：模型回退触发
+/** 扩展点分类 */
+export type ExtensionHookCategory = 'event' | 'interceptor';
 
 /** 执行模式 */
 export type ExtensionHookMode = 'void' | 'modifying';
 
+/**
+ * 公开扩展点统一定义入口
+ *
+ * 单一来源：所有扩展点名字、分类、执行模式都从这里定义。
+ * 其他类型（ExtensionHookName / AgentEventName / AgentInterceptorName）都基于它推导。
+ */
+export const EXTENSION_HOOK_DEFINITIONS = {
+  prepare_run_input: { category: 'interceptor', mode: 'modifying' },
+  prepare_tool_call: { category: 'interceptor', mode: 'modifying' },
+  transform_tool_result: { category: 'interceptor', mode: 'modifying' },
+  message_received: { category: 'event', mode: 'void' },
+  run_started: { category: 'event', mode: 'void' },
+  run_completed: { category: 'event', mode: 'void' },
+  turn_started: { category: 'event', mode: 'void' },
+  turn_completed: { category: 'event', mode: 'void' },
+  tool_call_completed: { category: 'event', mode: 'void' },
+  compaction_started: { category: 'event', mode: 'void' },
+  compaction_completed: { category: 'event', mode: 'void' }
+} as const satisfies Record<string, { category: ExtensionHookCategory; mode: ExtensionHookMode }>;
+
+/** 公开扩展点名称 */
+export type ExtensionHookName = keyof typeof EXTENSION_HOOK_DEFINITIONS;
+
+/** 单个扩展点定义 */
+export type ExtensionHookDefinition = (typeof EXTENSION_HOOK_DEFINITIONS)[ExtensionHookName];
+
+type HookNamesByCategory<C extends ExtensionHookCategory> = {
+  [K in ExtensionHookName]: (typeof EXTENSION_HOOK_DEFINITIONS)[K]['category'] extends C ? K : never;
+}[ExtensionHookName];
+
+/** Agent 运行时公开事件（只读通知） */
+export type AgentEventName = HookNamesByCategory<'event'>;
+
+/** Agent 运行时公开拦截点（可修改） */
+export type AgentInterceptorName = HookNamesByCategory<'interceptor'>;
+
+/** 兼容导出：按名称查看执行模式 */
 export const EXTENSION_HOOK_MODE: Record<ExtensionHookName, ExtensionHookMode> = {
-  before_agent_start: 'modifying',
-  agent_end: 'void',
-  before_tool_call: 'modifying',
-  after_tool_call: 'void',
-  tool_result_persist: 'modifying',
-  message_received: 'void',
-  session_start: 'void',
-  session_end: 'void',
-  // Phase 1 新增
-  turn_start: 'void',
-  turn_end: 'void',
-  before_compaction: 'void',
-  after_compaction: 'void',
-  // Phase 2 新增（Pipeline + Provider）
-  message_queued: 'void',
-  message_dequeued: 'void',
-  queue_drain_start: 'void',
-  model_resolved: 'void',
-  model_fallback: 'void'
+  prepare_run_input: EXTENSION_HOOK_DEFINITIONS.prepare_run_input.mode,
+  prepare_tool_call: EXTENSION_HOOK_DEFINITIONS.prepare_tool_call.mode,
+  transform_tool_result: EXTENSION_HOOK_DEFINITIONS.transform_tool_result.mode,
+  message_received: EXTENSION_HOOK_DEFINITIONS.message_received.mode,
+  run_started: EXTENSION_HOOK_DEFINITIONS.run_started.mode,
+  run_completed: EXTENSION_HOOK_DEFINITIONS.run_completed.mode,
+  turn_started: EXTENSION_HOOK_DEFINITIONS.turn_started.mode,
+  turn_completed: EXTENSION_HOOK_DEFINITIONS.turn_completed.mode,
+  tool_call_completed: EXTENSION_HOOK_DEFINITIONS.tool_call_completed.mode,
+  compaction_started: EXTENSION_HOOK_DEFINITIONS.compaction_started.mode,
+  compaction_completed: EXTENSION_HOOK_DEFINITIONS.compaction_completed.mode
 };
 
 // ---- 各 Hook 的 Event / Result ----
 
-export interface BeforeAgentStartEvent {
+export interface PrepareRunInputEvent {
   sessionId: string;
   prompt: string;
   systemPrompt?: string;
 }
-export interface BeforeAgentStartResult {
+export interface PrepareRunInputResult {
   prependContext?: string;
   replaceSystemPrompt?: string;
 }
 
-export interface BeforeToolCallEvent {
+export interface PrepareToolCallEvent {
   sessionId: string;
   toolName: string;
   params: Record<string, unknown>;
   /** 工具定义中是否标记需要用户确认（needUserConfirm） */
   needUserConfirm?: boolean;
 }
-export interface BeforeToolCallResult {
+export interface PrepareToolCallResult {
   block?: boolean;
   blockReason?: string;
   /** 异步挂起：工具需要审批但不阻塞 Agent run，run 正常结束后等待事件唤醒 */
@@ -311,16 +321,16 @@ export interface BeforeToolCallResult {
   params?: Record<string, unknown>;
 }
 
-export interface ToolResultPersistEvent {
+export interface TransformToolResultEvent {
   sessionId: string;
   toolName: string;
   result: string;
 }
-export interface ToolResultPersistResult {
+export interface TransformToolResultResult {
   result?: string;
 }
 
-export interface AgentEndEvent {
+export interface RunCompletedEvent {
   sessionId: string;
   agentId: string;
   success: boolean;
@@ -328,7 +338,7 @@ export interface AgentEndEvent {
   durationMs: number;
 }
 
-export interface AfterToolCallEvent {
+export interface ToolCallCompletedEvent {
   sessionId: string;
   toolName: string;
   params: Record<string, unknown>;
@@ -341,19 +351,17 @@ export interface MessageReceivedEvent {
   message: string;
 }
 
-export interface SessionEvent {
+export interface RunStartedEvent {
   sessionId: string;
 }
 
-// ---- Phase 1 新增：Turn + Compaction ----
-
-export interface TurnStartEvent {
+export interface TurnStartedEvent {
   sessionId: string;
   /** 轮次索引（从 1 开始） */
   turnIndex: number;
 }
 
-export interface TurnEndEvent {
+export interface TurnCompletedEvent {
   sessionId: string;
   /** 轮次索引 */
   turnIndex: number;
@@ -368,7 +376,7 @@ export interface TurnEndEvent {
   };
 }
 
-export interface BeforeCompactionEvent {
+export interface CompactionStartedEvent {
   sessionId: string;
   /** Agent 定义 ID（用于定位 Agent Home） */
   agentId?: string;
@@ -380,7 +388,7 @@ export interface BeforeCompactionEvent {
   threshold: number;
 }
 
-export interface AfterCompactionEvent {
+export interface CompactionCompletedEvent {
   sessionId: string;
   /** 压缩前 token 数 */
   originalTokens: number;
@@ -389,103 +397,37 @@ export interface AfterCompactionEvent {
   /** 压缩比 */
   compressionRatio: number;
   /** 压缩耗时（ms） */
-  duration: number;
-}
-
-// ---- Phase 2 新增：Pipeline + Provider ----
-
-export interface MessageQueuedEvent {
-  sessionId: string;
-  /** 入队的消息内容 */
-  message: string;
-  /** 当前队列模式 */
-  mode: string;
-  /** 入队后队列深度 */
-  queueLength: number;
-}
-
-export interface MessageDequeuedEvent {
-  sessionId: string;
-  /** 出队的消息内容 */
-  message: string;
-  /** 出队后剩余队列深度 */
-  remainingLength: number;
-}
-
-export interface QueueDrainStartEvent {
-  sessionId: string;
-  /** 排水策略 */
-  strategy: 'followup' | 'collect';
-  /** 待排水消息数 */
-  pendingCount: number;
-}
-
-export interface ModelResolvedEvent {
-  sessionId: string;
-  /** 解析后的 provider ID */
-  providerId: string;
-  /** 解析后的 model ID */
-  modelId: string;
-  /** 解析来源层级 */
-  source: string;
-}
-
-export interface ModelFallbackEvent {
-  sessionId: string;
-  /** 失败的 provider/model */
-  failedRef: string;
-  /** 回退到的 provider/model */
-  fallbackRef: string;
-  /** 失败原因 */
-  error: string;
-  /** 已尝试次数 */
-  attemptIndex: number;
+  durationMs: number;
 }
 
 /** Event 映射 */
 export type ExtensionHookEventMap = {
-  before_agent_start: BeforeAgentStartEvent;
-  agent_end: AgentEndEvent;
-  before_tool_call: BeforeToolCallEvent;
-  after_tool_call: AfterToolCallEvent;
-  tool_result_persist: ToolResultPersistEvent;
+  prepare_run_input: PrepareRunInputEvent;
+  prepare_tool_call: PrepareToolCallEvent;
+  transform_tool_result: TransformToolResultEvent;
   message_received: MessageReceivedEvent;
-  session_start: SessionEvent;
-  session_end: SessionEvent;
-  // Phase 1 新增
-  turn_start: TurnStartEvent;
-  turn_end: TurnEndEvent;
-  before_compaction: BeforeCompactionEvent;
-  after_compaction: AfterCompactionEvent;
-  // Phase 2 新增（Pipeline + Provider）
-  message_queued: MessageQueuedEvent;
-  message_dequeued: MessageDequeuedEvent;
-  queue_drain_start: QueueDrainStartEvent;
-  model_resolved: ModelResolvedEvent;
-  model_fallback: ModelFallbackEvent;
+  run_started: RunStartedEvent;
+  run_completed: RunCompletedEvent;
+  turn_started: TurnStartedEvent;
+  turn_completed: TurnCompletedEvent;
+  tool_call_completed: ToolCallCompletedEvent;
+  compaction_started: CompactionStartedEvent;
+  compaction_completed: CompactionCompletedEvent;
 };
 
 /** Result 映射 */
 export type ExtensionHookResultMap = {
-  before_agent_start: BeforeAgentStartResult | void;
-  agent_end: void;
-  before_tool_call: BeforeToolCallResult | void;
-  after_tool_call: void;
-  tool_result_persist: ToolResultPersistResult | void;
+  prepare_run_input: PrepareRunInputResult | void;
+  prepare_tool_call: PrepareToolCallResult | void;
+  transform_tool_result: TransformToolResultResult | void;
   message_received: void;
-  session_start: void;
-  session_end: void;
-  // Phase 1 新增
-  turn_start: void;
-  turn_end: void;
-  before_compaction: void;
-  after_compaction: void;
-  // Phase 2 新增（Pipeline + Provider）
-  message_queued: void;
-  message_dequeued: void;
-  queue_drain_start: void;
-  model_resolved: void;
-  model_fallback: void;
+  run_started: void;
+  run_completed: void;
+  turn_started: void;
+  turn_completed: void;
+  tool_call_completed: void;
+  compaction_started: void;
+  compaction_completed: void;
 };
 
 /** Handler 签名 */

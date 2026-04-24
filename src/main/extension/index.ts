@@ -16,7 +16,11 @@ export type {
   ExtensionLogger,
   ExtensionApi,
   ExtensionEventBus,
+  ExtensionHookCategory,
+  AgentEventName,
+  AgentInterceptorName,
   ExtensionHookName,
+  ExtensionHookDefinition,
   ExtensionHookMode,
   ExtensionHookHandler,
   ExtensionHookEventMap,
@@ -25,16 +29,20 @@ export type {
   RegisteredExtensionTool,
   RegisteredExtensionMethod,
   RegisteredExtensionSkillDir,
-  BeforeAgentStartEvent,
-  BeforeAgentStartResult,
-  BeforeToolCallEvent,
-  BeforeToolCallResult,
-  ToolResultPersistEvent,
-  ToolResultPersistResult,
-  AgentEndEvent,
-  AfterToolCallEvent,
+  PrepareRunInputEvent,
+  PrepareRunInputResult,
+  PrepareToolCallEvent,
+  PrepareToolCallResult,
+  TransformToolResultEvent,
+  TransformToolResultResult,
+  RunStartedEvent,
+  RunCompletedEvent,
+  ToolCallCompletedEvent,
   MessageReceivedEvent,
-  SessionEvent
+  TurnStartedEvent,
+  TurnCompletedEvent,
+  CompactionStartedEvent,
+  CompactionCompletedEvent
 } from './types';
 
-export { EXTENSION_HOOK_MODE } from './types';
+export { EXTENSION_HOOK_DEFINITIONS, EXTENSION_HOOK_MODE } from './types';

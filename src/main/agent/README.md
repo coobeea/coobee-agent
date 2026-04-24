@@ -101,13 +101,12 @@ Prompt 附加块不再散落在 Runtime 和 Injector 中，而是由 `PromptAsse
 
 ## Extension
 
-Extension Hook 分三类：
+Extension 公开扩展点分两类：
 
-| 阶段   | Hook                                                      |
-| ------ | --------------------------------------------------------- |
-| 启动前 | `message_received`, `session_start`, `before_agent_start` |
-| 执行中 | `before_tool_call`, `after_tool_call`                     |
-| 结束后 | `agent_end`, `session_end`                                |
+| 类型 | 名称 |
+| ---- | ---- |
+| Event | `message_received`, `run_started`, `run_completed`, `turn_started`, `turn_completed`, `tool_call_completed`, `compaction_started`, `compaction_completed` |
+| Interceptor | `prepare_run_input`, `prepare_tool_call`, `transform_tool_result` |
 
 如果后续需要把 agent handoff、checkpoint、approval 等节点也做成扩展点，需要同步更新 Hook 类型、执行位置和架构文档。
 

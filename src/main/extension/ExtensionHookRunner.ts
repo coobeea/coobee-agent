@@ -15,13 +15,13 @@
 
 import { ExtensionRegistry } from './ExtensionRegistry';
 import {
-  EXTENSION_HOOK_MODE,
+  EXTENSION_HOOK_DEFINITIONS,
   type ExtensionHookName,
   type ExtensionHookEventMap,
   type ExtensionHookResultMap,
-  type BeforeAgentStartResult,
-  type BeforeToolCallResult,
-  type ToolResultPersistResult
+  type PrepareRunInputResult,
+  type PrepareToolCallResult,
+  type TransformToolResultResult
 } from './types';
 
 export class ExtensionHookRunner {
@@ -87,7 +87,7 @@ export class ExtensionHookRunner {
    * 通用入口：自动判断 void / modifying 模式
    */
   async run<K extends ExtensionHookName>(name: K, event: ExtensionHookEventMap[K]): Promise<ExtensionHookResultMap[K]> {
-    const mode = EXTENSION_HOOK_MODE[name];
+    const mode = EXTENSION_HOOK_DEFINITIONS[name].mode;
     if (mode === 'void') {
       await this.runVoidHook(name, event);
       return undefined as ExtensionHookResultMap[K];
@@ -105,22 +105,22 @@ function mergeResult(
   next: Record<string, unknown>
 ): Record<string, unknown> {
   switch (hookName) {
-    case 'before_agent_start':
-      return mergeBeforeAgentStart(prev as BeforeAgentStartResult, next as BeforeAgentStartResult) as unknown as Record<
+    case 'prepare_run_input':
+      return mergePrepareRunInput(prev as PrepareRunInputResult, next as PrepareRunInputResult) as unknown as Record<
         string,
         unknown
       >;
 
-    case 'before_tool_call':
-      return mergeBeforeToolCall(prev as BeforeToolCallResult, next as BeforeToolCallResult) as unknown as Record<
+    case 'prepare_tool_call':
+      return mergePrepareToolCall(prev as PrepareToolCallResult, next as PrepareToolCallResult) as unknown as Record<
         string,
         unknown
       >;
 
-    case 'tool_result_persist':
-      return mergeToolResultPersist(
-        prev as ToolResultPersistResult,
-        next as ToolResultPersistResult
+    case 'transform_tool_result':
+      return mergeTransformToolResult(
+        prev as TransformToolResultResult,
+        next as TransformToolResultResult
       ) as unknown as Record<string, unknown>;
 
     default:
@@ -129,14 +129,14 @@ function mergeResult(
   }
 }
 
-function mergeBeforeAgentStart(prev: BeforeAgentStartResult, next: BeforeAgentStartResult): BeforeAgentStartResult {
+function mergePrepareRunInput(prev: PrepareRunInputResult, next: PrepareRunInputResult): PrepareRunInputResult {
   return {
     prependContext: joinOptional(prev.prependContext, next.prependContext),
     replaceSystemPrompt: next.replaceSystemPrompt ?? prev.replaceSystemPrompt
   };
 }
 
-function mergeBeforeToolCall(prev: BeforeToolCallResult, next: BeforeToolCallResult): BeforeToolCallResult {
+function mergePrepareToolCall(prev: PrepareToolCallResult, next: PrepareToolCallResult): PrepareToolCallResult {
   return {
     block: prev.block || next.block,
     blockReason: next.blockReason ?? prev.blockReason,
@@ -144,7 +144,10 @@ function mergeBeforeToolCall(prev: BeforeToolCallResult, next: BeforeToolCallRes
   };
 }
 
-function mergeToolResultPersist(prev: ToolResultPersistResult, next: ToolResultPersistResult): ToolResultPersistResult {
+function mergeTransformToolResult(
+  prev: TransformToolResultResult,
+  next: TransformToolResultResult
+): TransformToolResultResult {
   return {
     result: next.result ?? prev.result
   };

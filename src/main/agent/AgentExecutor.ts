@@ -12,7 +12,7 @@
  *   - 环境注入 → AgentEnvInjector.ts
  *   - 事件广播 / 持久化 → StreamEmitter.ts + StreamConsumersManager.ts
  *   - 执行协议 → AgentEnvInjector.ts (buildExecutionProtocol)
- *   - HITL 审批 → extensions/tool-approval（通过 before_tool_call Hook）
+ *   - HITL 审批 → extensions/tool-approval（通过 prepare_tool_call Hook）
  *   - 工具调用 Hook → runtime/shared/ToolExecutionPipeline.ts
  *
  * 设计哲学（参考 OpenClaw pi-integration-architecture）：
@@ -240,7 +240,7 @@ class AgentExecutor {
     _workspaceDir?: string,
     agentId?: string
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    // Turn 状态跟踪（用于 turn_end 事件数据）
+    // Turn 状态跟踪（用于 turn_completed 事件数据）
     let turnStartTime = 0;
     let turnToolCallCount = 0;
 
@@ -520,7 +520,7 @@ class AgentExecutor {
         streamConsumersManager.writeUserMessage(sessionId, message);
       }
 
-      // === Extension Hooks: message_received + session_start + before_agent_start ===
+      // === Extension Hooks: message_received + run_started + prepare_run_input ===
       if (!isLightweight) {
         await Promise.race([
           this.runExtensionHooks(sessionId, message, builder),
@@ -561,7 +561,7 @@ class AgentExecutor {
 
       const duration = Date.now() - startTime;
 
-      // === Extension Hooks: agent_end + session_end（fire-and-forget）===
+      // === Extension Hooks: run_completed（fire-and-forget）===
       if (!isLightweight) {
         const stableAgentId = builderAgentId || runtime.id;
         this.runExtensionEndHooks(sessionId, stableAgentId, result, duration).catch((err) => {
@@ -702,14 +702,14 @@ class AgentExecutor {
 
       switch (chunk.type) {
         case 'turn:start':
-          await runner.runVoidHook('turn_start', {
+          await runner.runVoidHook('turn_started', {
             sessionId,
             turnIndex: (data?.turnIndex as number) || 1
           });
           break;
 
         case 'turn:done':
-          await runner.runVoidHook('turn_end', {
+          await runner.runVoidHook('turn_completed', {
             sessionId,
             turnIndex: (data?.turnIndex as number) || 1,
             durationMs: Date.now() - turnState.getTurnStartTime(),
@@ -718,7 +718,7 @@ class AgentExecutor {
           break;
 
         case 'compression:start':
-          await runner.runVoidHook('before_compaction', {
+          await runner.runVoidHook('compaction_started', {
             sessionId,
             agentId: agentId || (data?.agentId as string | undefined),
             messageCount: 0,
@@ -728,12 +728,12 @@ class AgentExecutor {
           break;
 
         case 'compression:done':
-          await runner.runVoidHook('after_compaction', {
+          await runner.runVoidHook('compaction_completed', {
             sessionId,
             originalTokens: (data?.originalTokens as number) || 0,
             compressedTokens: (data?.summaryTokens as number) || 0,
             compressionRatio: (data?.compressionRatio as number) || 0,
-            duration: (data?.duration as number) || 0
+            durationMs: (data?.duration as number) || 0
           });
           break;
       }
@@ -748,7 +748,7 @@ class AgentExecutor {
 
   /**
    * 执行 Extension 前置 Hook
-   * message_received → session_start → before_agent_start
+   * message_received → run_started → prepare_run_input
    */
   private async runExtensionHooks(sessionId: string, message: string, builder: AgentBuilder): Promise<void> {
     try {
@@ -757,9 +757,9 @@ class AgentExecutor {
       if (!runner) return;
 
       await runner.runVoidHook('message_received', { sessionId, message });
-      await runner.runVoidHook('session_start', { sessionId });
+      await runner.runVoidHook('run_started', { sessionId });
 
-      const result = await runner.runModifyingHook('before_agent_start', {
+      const result = await runner.runModifyingHook('prepare_run_input', {
         sessionId,
         prompt: message
       });
@@ -778,7 +778,7 @@ class AgentExecutor {
 
   /**
    * 执行 Extension 后置 Hook
-   * agent_end → session_end
+   * run_completed
    */
   private async runExtensionEndHooks(
     sessionId: string,
@@ -791,14 +791,13 @@ class AgentExecutor {
       const runner = ExtensionManager.getHookRunner();
       if (!runner) return;
 
-      await runner.runVoidHook('agent_end', {
+      await runner.runVoidHook('run_completed', {
         sessionId,
         agentId,
         success: !result.error,
         output: result.output,
         durationMs
       });
-      await runner.runVoidHook('session_end', { sessionId });
     } catch (err) {
       log.warn('[AgentExecutor] Extension hooks (end) failed:', err);
     }

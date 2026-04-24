@@ -70,7 +70,7 @@ describe('ToolExecutionPipeline Core', () => {
     expect(onUpdate).toHaveBeenNthCalledWith(2, { type: 'progress', content: 'still working' });
   });
 
-  it('should block execution if before_tool_call hook returns block', async () => {
+  it('should block execution if prepare_tool_call hook returns block', async () => {
     mockRunModifyingHook.mockResolvedValueOnce({ block: true, blockReason: 'custom reason' });
 
     const result = await executeToolPipeline(mockTool, { arg: 'test_arg' }, { sandboxContext: context });
@@ -80,7 +80,7 @@ describe('ToolExecutionPipeline Core', () => {
     expect(result.resultText).toContain('custom reason');
   });
 
-  it('should modify params if before_tool_call hook returns params', async () => {
+  it('should modify params if prepare_tool_call hook returns params', async () => {
     mockRunModifyingHook.mockResolvedValueOnce({ params: { arg: 'modified_arg' } });
 
     const result = await executeToolPipeline(mockTool, { arg: 'test_arg' }, { sandboxContext: context });
@@ -103,14 +103,14 @@ describe('ToolExecutionPipeline Core', () => {
     expect(result.resultText).toContain('denied');
   });
 
-  it('should call after_tool_call and tool_result_persist hooks', async () => {
-    mockRunModifyingHook.mockResolvedValueOnce(undefined); // before_tool_call
-    mockRunModifyingHook.mockResolvedValueOnce({ result: 'persisted_result' }); // tool_result_persist
+  it('should call tool_call_completed and transform_tool_result hooks', async () => {
+    mockRunModifyingHook.mockResolvedValueOnce(undefined); // prepare_tool_call
+    mockRunModifyingHook.mockResolvedValueOnce({ result: 'persisted_result' }); // transform_tool_result
 
     const result = await executeToolPipeline(mockTool, { arg: 'test_arg' }, { sandboxContext: context });
 
     expect(mockRunVoidHook).toHaveBeenCalledWith(
-      'after_tool_call',
+      'tool_call_completed',
       expect.objectContaining({
         toolName: 'test_tool',
         result: 'result: test_arg'
@@ -118,7 +118,7 @@ describe('ToolExecutionPipeline Core', () => {
     );
 
     expect(mockRunModifyingHook).toHaveBeenCalledWith(
-      'tool_result_persist',
+      'transform_tool_result',
       expect.objectContaining({
         toolName: 'test_tool',
         result: 'result: test_arg'

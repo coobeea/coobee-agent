@@ -8,7 +8,7 @@
  *   2. 安全命令白名单（始终允许，不触发 HITL）
  *   3. 动态 allowlist 学习（approve-always 时记住命令模式）
  *
- * 集成架构（通过 tool-approval Extension 的 before_tool_call Hook 协同）：
+ * 集成架构（通过 tool-approval Extension 的 prepare_tool_call Hook 协同）：
  *
  *   所有 Runtime 统一路径：
  *     LLM 调用 exec → ToolExecutionPipeline

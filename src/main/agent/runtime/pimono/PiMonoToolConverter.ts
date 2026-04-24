@@ -5,7 +5,7 @@
  *
  * 职责：
  *   - Schema 转换：Zod → JSON Schema
- *   - Hook 集成：before_tool_call / after_tool_call / tool_result_persist
+ *   - Hook 集成：prepare_tool_call / tool_call_completed / transform_tool_result
  *   - 策略检查：sandbox 级别 isToolAllowed
  *   - 流式桥接：AsyncGenerator yield → PiMono onUpdate 回调
  *
@@ -44,14 +44,14 @@ interface ConvertToolsOptions {
  * 将统一 ToolDefinition 列表转换为 pi-coding-agent SDK 原生 PiToolDefinition 列表
  *
  * 核心映射：
- *   - execute 前通过 before_tool_call Hook 处理审批（tool-approval Extension）
+ *   - execute 前通过 prepare_tool_call Hook 处理审批（tool-approval Extension）
  *   - execute 前检查工具策略（isToolAllowed，sandbox 级别拦截）
  *   - yield 的 ToolStreamUpdate 通过 PiMono 的 onUpdate 回调发送增量输出
  *   - return 的 ToolResult.llmContent 作为 AgentToolResult 返回
  *   - 自动注入 ToolExecutionContext（路径守卫、工具策略、Agent 信息等）
  *
  * HITL 审批：
- *   由 tool-approval Extension 在 before_tool_call Hook 中统一处理，
+ *   由 tool-approval Extension 在 prepare_tool_call Hook 中统一处理，
  *   PiMono 现在也支持 HITL（通过 Hook 异步等待用户审批）。
  */
 export function convertTools(defs: ToolDefinition[], options: ConvertToolsOptions): PiToolDefinition[] {

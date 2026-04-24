@@ -2,10 +2,10 @@
  * 工具执行管线 — 共享公共逻辑
  *
  * 将 OpenAI 和 PiMono 两个 Runtime 中重复的工具执行流程提取到此模块：
- *   1. before_tool_call Hook（审批 / 参数修改 / 拦截）
+ *   1. prepare_tool_call Hook（审批 / 参数修改 / 拦截）
  *   2. sandbox toolPolicy 策略检查
  *   3. 执行工具 AsyncGenerator
- *   4. after_tool_call Hook + tool_result_persist Hook
+ *   4. tool_call_completed Hook + transform_tool_result Hook
  *
  * 各 Runtime 只需关注：
  *   - SDK 特有的 Tool 格式转换
@@ -25,7 +25,7 @@ import type { ToolDefinition, ToolExecutionContext, ToolResult, ToolStreamUpdate
 export interface PipelineResult {
   /** 最终文本结果（经过 hook 修改后） */
   resultText: string;
-  /** 工具是否被拦截（before_tool_call block 或 policy deny） */
+  /** 工具是否被拦截（prepare_tool_call block 或 policy deny） */
   blocked: boolean;
   /** 拦截原因 */
   blockReason?: string;
@@ -51,7 +51,7 @@ export interface PipelineOptions {
 /**
  * 执行工具核心流程（Phase 1.5 - 4）
  *
- * 包含：before_tool_call Hook、sandbox policy、execute、after_tool_call Hook
+ * 包含：prepare_tool_call Hook、sandbox policy、execute、tool_call_completed Hook
  *
  * @param def    - 工具定义
  * @param params - 工具参数
@@ -71,12 +71,12 @@ async function executeToolCore(
   const paramsPreview = JSON.stringify(params).slice(0, 200);
   log.info(`[Tool] Start: tool=${def.name}, sessionId=${sessionId}, params=${paramsPreview}`);
 
-  // === Phase 1.5: before_tool_call Hook (Extension 扩展点) ===
+  // === Phase 1.5: prepare_tool_call Hook (Extension 扩展点) ===
   try {
     const { ExtensionManager } = await import('@main/extension');
     const runner = ExtensionManager.getHookRunner();
     if (runner) {
-      const hookResult = await runner.runModifyingHook('before_tool_call', {
+      const hookResult = await runner.runModifyingHook('prepare_tool_call', {
         sessionId,
         toolName: def.name,
         params: typedParams,
@@ -107,11 +107,11 @@ async function executeToolCore(
       }
     }
   } catch (error) {
-    // before_tool_call Hook 失败不阻塞工具执行，但记录完整错误
+    // prepare_tool_call Hook 失败不阻塞工具执行，但记录完整错误
     const errMsg = error instanceof Error ? error.message : String(error);
     const errStack = error instanceof Error ? error.stack : undefined;
     log.error(
-      `[ToolPipeline] before_tool_call hook failed for ${def.name}: ${errMsg}`,
+      `[ToolPipeline] prepare_tool_call hook failed for ${def.name}: ${errMsg}`,
       errStack ? { stack: errStack } : undefined
     );
   }
@@ -209,13 +209,13 @@ async function executeToolCore(
   let resultText =
     toolResult.llmContent || (toolResult.success ? 'Success' : `Error: ${toolResult.error?.message || 'unknown'}`);
 
-  // === Phase 4: after_tool_call + tool_result_persist Hooks ===
+  // === Phase 4: tool_call_completed + transform_tool_result Hooks ===
   try {
     const { ExtensionManager } = await import('@main/extension');
     const runner = ExtensionManager.getHookRunner();
     if (runner) {
       const toolDuration = Date.now() - toolStartTime;
-      await runner.runVoidHook('after_tool_call', {
+      await runner.runVoidHook('tool_call_completed', {
         sessionId,
         toolName: def.name,
         params: typedParams,
@@ -223,7 +223,7 @@ async function executeToolCore(
         durationMs: toolDuration
       });
 
-      const persistResult = await runner.runModifyingHook('tool_result_persist', {
+      const persistResult = await runner.runModifyingHook('transform_tool_result', {
         sessionId,
         toolName: def.name,
         result: resultText
@@ -233,11 +233,11 @@ async function executeToolCore(
       }
     }
   } catch (error) {
-    // after_tool_call Hook 失败不影响工具结果返回，但记录完整错误
+    // tool_call_completed Hook 失败不影响工具结果返回，但记录完整错误
     const errMsg = error instanceof Error ? error.message : String(error);
     const errStack = error instanceof Error ? error.stack : undefined;
     log.error(
-      `[ToolPipeline] after_tool_call / tool_result_persist hook failed for ${def.name}: ${errMsg}`,
+      `[ToolPipeline] tool_call_completed / transform_tool_result hook failed for ${def.name}: ${errMsg}`,
       errStack ? { stack: errStack } : undefined
     );
   }

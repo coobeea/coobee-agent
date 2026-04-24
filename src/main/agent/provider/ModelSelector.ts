@@ -11,7 +11,6 @@
  *     不经过 ModelSelector。
  */
 import type { CoobeeConfig } from '@main/common/config/schema';
-import { ExtensionManager } from '@main/extension/ExtensionManager';
 import { log } from '@main/common/logger';
 
 import type { ModelRef, ModelSelectionConfig } from './types';
@@ -150,7 +149,6 @@ export class ModelSelector {
   resolve(
     opts: { sessionId?: string; agentId?: string; modelOverride?: string; context?: ModelSelectionContext } = {}
   ): ModelRef {
-    let source = 'builtin';
     let modelRefStr: string | null = null;
 
     // 🆕 检查是否是模型组或 auto 模式
@@ -162,20 +160,16 @@ export class ModelSelector {
           groupName = groupName.substring(6);
         }
         modelRefStr = this.resolveModelGroup(groupName, opts.context);
-        source = 'model-group';
       } else if (opts.modelOverride === 'auto') {
         // Auto 模式
         modelRefStr = this.resolveAuto(opts.context);
-        source = 'auto';
       } else {
         // 普通模型引用
         modelRefStr = opts.modelOverride;
-        source = 'override';
       }
 
       if (modelRefStr) {
         const ref = parseModelRef(modelRefStr);
-        this.fireModelResolved(opts.sessionId ?? '', ref, source);
         return ref;
       }
     }
@@ -184,9 +178,7 @@ export class ModelSelector {
     if (opts.sessionId) {
       const sessionRef = this.sessionOverrides.get(opts.sessionId);
       if (sessionRef) {
-        const ref = parseModelRef(sessionRef);
-        this.fireModelResolved(opts.sessionId ?? '', ref, 'session');
-        return ref;
+        return parseModelRef(sessionRef);
       }
     }
 
@@ -194,25 +186,18 @@ export class ModelSelector {
     if (opts.agentId) {
       const agentRef = this.agentOverrides.get(opts.agentId);
       if (agentRef) {
-        const ref = parseModelRef(agentRef);
-        this.fireModelResolved(opts.sessionId ?? '', ref, 'agent-runtime');
-        return ref;
+        return parseModelRef(agentRef);
       }
     }
 
     // Level 3: 全局默认
     const globalDefault = this.config.models?.defaults?.model?.primary;
     if (globalDefault) {
-      source = 'global';
-      const ref = parseModelRef(globalDefault);
-      this.fireModelResolved(opts.sessionId ?? '', ref, source);
-      return ref;
+      return parseModelRef(globalDefault);
     }
 
     // Level 4: 内置默认
-    const ref = parseModelRef(this.fallbackDefault);
-    this.fireModelResolved(opts.sessionId ?? '', ref, 'builtin');
-    return ref;
+    return parseModelRef(this.fallbackDefault);
   }
 
   /**
@@ -285,20 +270,6 @@ export class ModelSelector {
     }
 
     return filtered;
-  }
-
-  /** 触发 model_resolved 扩展钩子 */
-  private fireModelResolved(sessionId: string, ref: ModelRef, source: string): void {
-    ExtensionManager.getHookRunner()
-      ?.runVoidHook('model_resolved', {
-        sessionId,
-        providerId: ref.provider,
-        modelId: ref.model,
-        source
-      })
-      .catch(() => {
-        /* hook 错误不影响主流程 */
-      });
   }
 
   /**
