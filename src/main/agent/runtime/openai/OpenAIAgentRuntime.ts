@@ -62,16 +62,15 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    *
    * SDK 的 StreamedRunResult 本身是 AsyncIterable，直接 for await + yield。
    */
-  protected async *doStream(
-    input: string,
-    options: AgentRuntimeOptions
-  ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const runtimeOptions = options;
+  protected async *doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+    const runtimeOptions = this.options;
     const pendingRuntimeChunks: StreamChunk[] = [];
-    const allTools: Tool[] = [
-      ...(runtimeOptions.sdkTools || []),
-      ...this.convertTools(runtimeOptions.tools || [], runtimeOptions, pendingRuntimeChunks, runtimeOptions.signal)
-    ];
+    const allTools: Tool[] = this.convertTools(
+      runtimeOptions.tools || [],
+      runtimeOptions,
+      pendingRuntimeChunks,
+      runtimeOptions.signal
+    );
     const finalInstructions = buildInstructions(
       runtimeOptions.instructions,
       runtimeOptions.skills,
@@ -94,7 +93,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     );
 
     const startTime = Date.now();
-    const maxTurns = options.maxTurns ?? runtimeOptions.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTurns = runtimeOptions.maxTurns ?? DEFAULT_MAX_TURNS;
 
     log.info(`Running stream: ${runtimeOptions.name}`);
 

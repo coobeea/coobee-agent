@@ -476,8 +476,8 @@ class AgentExecutor {
           task: message.substring(0, 200)
         });
 
-        const runtimeOptions = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
-        const gen = runtime.stream(message, runtimeOptions);
+        runtime.options = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
+        const gen = runtime.stream(message);
         const runtimeAgentId = builder ? builder.getAgentId?.() : undefined;
 
         const result = yield* this.consumeAndForward(
@@ -546,8 +546,8 @@ class AgentExecutor {
       });
 
       // 2. 流式执行
-      const runtimeOptions = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
-      const gen = runtime.stream(message, runtimeOptions);
+      runtime.options = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
+      const gen = runtime.stream(message);
       const builderAgentId = builder.getAgentId?.();
 
       const result = yield* this.consumeAndForward(

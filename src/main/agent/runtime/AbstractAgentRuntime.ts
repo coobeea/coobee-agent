@@ -84,10 +84,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    * 不直接暴露给调用方，由 `stream()` 模板方法包装。
    * 子类在这里专注于“如何和具体 SDK 对接并产出标准 chunk”。
    */
-  protected abstract doStream(
-    input: string,
-    options: AgentRuntimeOptions
-  ): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
+  protected abstract doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
 
   /**
    * 流式执行 — 模板方法（最终暴露给调用方）
@@ -103,14 +100,14 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    *   - 快照写入失败不阻断主流程
    *   - 错误时尝试渐进式恢复（重试）
    */
-  async *stream(input: string, options: AgentRuntimeOptions): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  async *stream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const maxAttempts = 3;
     let attempt = 0;
-    const runtimeOptions = options;
+    const runtimeOptions = this.options;
 
     while (true) {
       try {
-        const gen = this.doStream(input, runtimeOptions);
+        const gen = this.doStream(input);
         let r = await gen.next();
         while (!r.done) {
           yield r.value;
@@ -121,7 +118,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
 
         // 自动写入上下文快照（异步，不阻塞返回）
         // 从 result 中提取 rawApiRequest 并传递给 snapshot
-        saveContextSnapshot(runtimeOptions, options.type, input, result, result.rawApiRequest).catch(() => {});
+        saveContextSnapshot(runtimeOptions, runtimeOptions.type, input, result, result.rawApiRequest).catch(() => {});
 
         return result;
       } catch (error: unknown) {
@@ -132,7 +129,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
           attempt,
           maxAttempts,
           sessionId: runtimeOptions.sessionId,
-          runtime: this
+          runtime: this as unknown as import('./AgentRuntime').InternalAgentRuntime
         });
 
         if (recovery.action === 'retry') {
@@ -164,8 +161,8 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    * 通过 `stream()` 模板方法执行，自动继承快照与错误恢复能力。
    * 子类一般不需要覆盖此方法。
    */
-  async run(input: string, options: AgentRuntimeOptions): Promise<ExecutionResult> {
-    const gen = this.stream(input, options);
+  async run(input: string): Promise<ExecutionResult> {
+    const gen = this.stream(input);
     let r = await gen.next();
     while (!r.done) {
       r = await gen.next();

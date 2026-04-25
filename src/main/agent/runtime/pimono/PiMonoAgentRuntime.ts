@@ -186,10 +186,8 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
    * 事件时序：
    *   run:start → turn:start → llm:start → { reasoning:*, text:*, tool:* } → llm:done → turn:done → run:done
    */
-  protected async *doStream(
-    input: string,
-    options: AgentRuntimeOptions
-  ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  protected async *doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+    const options = this.options;
     const startTime = Date.now();
     const queue = new ChunkQueue<StreamChunk>();
     const executionSignal = options.signal;

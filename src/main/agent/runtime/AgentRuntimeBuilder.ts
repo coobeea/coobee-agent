@@ -1,9 +1,9 @@
-import type { AgentRuntimeOptions } from './types';
+import type { AgentRuntimeOptions, ThinkingLevel } from './types';
 import type { AgentRuntimeKind } from './types';
 import type { AgentRuntime } from './AgentRuntime';
 import { PiMonoAgentRuntime } from './pimono/PiMonoAgentRuntime';
 import { OpenAIAgentRuntime } from './openai/OpenAIAgentRuntime';
-import type { SkillDefinition } from './types';
+import type { SkillDefinition, ToolDefinition } from './types';
 
 /**
  * AgentRuntimeBuilder（参数构造器）

@@ -31,7 +31,6 @@ export interface AgentRuntime {
    * 调用方可以直接消费 chunk，也可以由更上层桥接到 EventBus / WebSocket / SSE。
    *
    * @param input 用户输入
-   * @param options 本次执行使用的运行时选项
    * @yields StreamChunk 流式事件块
    * @returns ExecutionResult 执行结果
    */
@@ -43,7 +42,17 @@ export interface AgentRuntime {
    * 内部调用 `stream()` 并消费完整个事件流，最终只返回 `ExecutionResult`。
    *
    * @param input 用户输入
-   * @param options 本次执行使用的运行时选项
    */
   run(input: string): Promise<ExecutionResult>;
+}
+
+/**
+ * Runtime 内部接口（Executor 使用）
+ */
+export interface InternalAgentRuntime extends AgentRuntime {
+  id: string;
+  name: string;
+  type: AgentRuntimeOptions['type'];
+  initialize(): Promise<void>;
+  destroy(): Promise<void>;
 }
