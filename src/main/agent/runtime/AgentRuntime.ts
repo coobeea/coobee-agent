@@ -21,6 +21,7 @@ import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types'
  * 这里的接口重点是“如何执行”，而不是“如何被创建”。
  */
 export interface AgentRuntime {
+  options: AgentRuntimeOptions;
   // ========== 执行方法 ==========
 
   /**
@@ -34,7 +35,7 @@ export interface AgentRuntime {
    * @yields StreamChunk 流式事件块
    * @returns ExecutionResult 执行结果
    */
-  stream(input: string, options: AgentRuntimeOptions): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
+  stream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
 
   /**
    * 非流式执行（便捷方法）
@@ -44,5 +45,5 @@ export interface AgentRuntime {
    * @param input 用户输入
    * @param options 本次执行使用的运行时选项
    */
-  run(input: string, options: AgentRuntimeOptions): Promise<ExecutionResult>;
+  run(input: string): Promise<ExecutionResult>;
 }

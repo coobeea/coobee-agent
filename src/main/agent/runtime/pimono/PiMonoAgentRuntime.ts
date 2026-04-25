@@ -118,6 +118,10 @@ function createOpenAICompatModel(
  * 5. 管理会话生命周期
  */
 export class PiMonoAgentRuntime extends AbstractAgentRuntime {
+  constructor(options: AgentRuntimeOptions) {
+    super(options);
+  }
+
   /**
    * 创建 AgentSession
    * @param options 运行时选项

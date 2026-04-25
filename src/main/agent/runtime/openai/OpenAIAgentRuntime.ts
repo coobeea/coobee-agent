@@ -46,6 +46,10 @@ const log = createRuntimeLogger('agent-runtime');
  * 4. 处理 HITL 工具审批的暂停/恢复
  */
 export class OpenAIAgentRuntime extends AbstractAgentRuntime {
+  constructor(options: AgentRuntimeOptions) {
+    super(options);
+  }
+
   // ========== 执行方法 ==========
 
   // run() 由基类 AbstractAgentRuntime 提供（消费 stream()，自动继承快照功能）
@@ -584,5 +588,4 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     pendingRuntimeChunks.length = 0;
     return chunks;
   }
-
 }
