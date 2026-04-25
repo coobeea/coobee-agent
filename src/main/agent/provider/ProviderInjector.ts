@@ -11,7 +11,11 @@
  */
 
 import { Models, Providers } from '@main/config';
+import type { BaseAgentBuilder } from '../runtime/BaseAgentBuilder';
 import { resolveApiKey } from './ApiKeyResolver';
+
+interface ProviderConfigurableBuilder extends Pick<BaseAgentBuilder, 'fromProviderConfig' | 'model'> {
+}
 
 export class ProviderInjector {
   /**
@@ -21,7 +25,7 @@ export class ProviderInjector {
    * 如果配置未就绪或无可用配置，静默回退。
    */
   applyProviderConfig(
-    builder: import('../AgentExecutor').AgentBuilder,
+    builder: ProviderConfigurableBuilder,
     opts?: { modelOverride?: string; sessionId?: string; agentId?: string }
   ): void {
     try {
@@ -67,23 +71,24 @@ export class ProviderInjector {
    * 从 coobee.json5 读取 models.defaults.thinkingLevel，默认 'medium'。
    * 注意：这是同步方法，使用延迟导入避免循环依赖。
    */
-  applyThinkingLevel(builder: import('../AgentExecutor').AgentBuilder): void {
+  applyThinkingLevel(builder: ProviderConfigurableBuilder): void {
+    const thinkingBuilder = builder as ProviderConfigurableBuilder & {
+      thinkingLevel?: (level: unknown) => unknown;
+    };
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { configStoreInstance } = require('@main/common/config/ConfigStore');
       const config = configStoreInstance?.getAll?.();
       const level = config?.models?.defaults?.thinkingLevel;
-      if (level && 'thinkingLevel' in builder) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (builder as any).thinkingLevel(level);
+      if (level && typeof thinkingBuilder.thinkingLevel === 'function') {
+        thinkingBuilder.thinkingLevel(level);
         return;
       }
     } catch {
       // 静默回退
     }
-    if ('thinkingLevel' in builder) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (builder as any).thinkingLevel('medium');
+    if (typeof thinkingBuilder.thinkingLevel === 'function') {
+      thinkingBuilder.thinkingLevel('medium');
     }
   }
 }

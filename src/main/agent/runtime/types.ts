@@ -82,6 +82,57 @@ export interface SkillDefinition {
  */
 export type AgentMode = 'chat' | 'agent';
 
+// ========== Runtime 选择与 Builder 请求 ==========
+
+/**
+ * Runtime 实现类型
+ *
+ * 由 runtime 层统一决定具体使用哪套 Builder / Runtime 实现，
+ * 入口层只应传递运行语义，不直接 new 具体 Builder。
+ */
+export type RuntimeKind = 'pimono' | 'openai';
+
+/**
+ * 会话持久化语义
+ *
+ *   - memory: 仅本次调用保留在内存中
+ *   - thread: 绑定到 thread/session 的持久化会话
+ */
+export type RuntimePersistence = 'memory' | 'thread';
+
+/**
+ * Runtime Builder 创建请求
+ *
+ * 入口层通过这组抽象参数描述“我想运行什么样的 Agent”，
+ * 由 runtime 层内部决定具体选择哪种 Builder 并做语义映射。
+ */
+export interface RuntimeBuilderRequest {
+  /** 指定 Runtime 类型；不传则走 runtime 层默认策略 */
+  runtime?: RuntimeKind;
+  /** 运行模式（默认 agent） */
+  mode?: AgentMode;
+  /** 会话持久化语义（默认 memory） */
+  persistence?: RuntimePersistence;
+  /** Agent 定义 ID */
+  agentId?: string;
+  /** 运行时展示名称 */
+  name?: string;
+  /** 运行时基础指令 */
+  instructions?: string;
+  /** 会话 ID */
+  sessionId?: string;
+  /** 会话目录 */
+  sessionDir?: string;
+  /** 工作区根目录 */
+  workspaceRoot?: string;
+  /** 上下文快照目录 */
+  contextDir?: string;
+  /** 最大轮次 */
+  maxTurns?: number;
+  /** 任务级模型覆盖 */
+  modelOverride?: string;
+}
+
 // ========== Agent 运行时通用选项 ==========
 
 /**
