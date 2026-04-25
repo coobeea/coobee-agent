@@ -26,7 +26,6 @@ import { createLogger } from '@main/common/logger';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { AgentStore } from '@main/agent/agents/AgentStore';
 import { agentExecutor } from '@main/agent/AgentExecutor';
-import { ThreadExecutionFactory } from '@main/agent/execution/ThreadExecutionFactory';
 import type { ApiResponse } from '@shared/api';
 import type { ThreadIndexEntry, ThreadDefinition } from '@main/agent/threads/types';
 
@@ -154,32 +153,19 @@ export function registerChatRoutes(router: Router): void {
       ctx.status = 200;
       ctx.body = stream;
 
-      // 组装 Builder
-      // sessionMode('file'): 启用完整流程
-      //   1. 文件持久化: workspaces/{threadId}/sessions/*.jsonl
-      //   2. EventBus 广播: 通过 WebSocket 推送到前端（实时监听）
-      //   3. SSE 流式返回: 通过 HTTP Response 返回给 API 客户端
-      // 注意：不使用 lightweight(true)，确保所有路径都走完整流程
-
-      // 模型选择优先级：thread.overrideModel > agent.model > 全局默认
-      // 如果都没有，AgentExecutor 会使用全局默认模型（来自 coobee.json5）
-      //
-      // 统一配置访问示例：
-      //   import { Models } from '@main/config';
-      //   const { provider, model } = Models.resolveModel(thread.overrideModel || agent.model);
-      //   // provider.baseUrl, model.maxOutputTokens 等完整信息
-      // P1 重构：使用 ThreadExecutionFactory 统一 Builder 配置
-      const factory = ThreadExecutionFactory.getInstance(agentExecutor);
-      const runConfig = await factory.createRunConfig({
-        threadId: thread.id,
-        sessionMode: 'file'
-      });
-
       // 启动 AgentExecutor（完整流程：持久化 + WebSocket + SSE）
+      // 入口只传普通参数；Builder 在 AgentExecutor 内部最后统一创建。
       const gen = agentExecutor.stream({
         sessionId: thread.id,
         message: body.message,
-        ...runConfig
+        agentId: agent.id,
+        name: agent.id,
+        instructions: agent.instructions,
+        modelOverride: thread.overrideModel || agent.model,
+        workspaceRoot: thread.metadata?.workspacePath as string | undefined,
+        mode: 'agent',
+        runtimeType: 'pi-mono',
+        sessionMode: 'file'
       });
 
       // 异步处理流

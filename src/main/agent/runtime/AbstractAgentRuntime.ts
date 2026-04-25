@@ -72,7 +72,7 @@ export function generateRuntimeId(prefix: string): string {
  * 这样可以把快照、恢复、默认执行封装收在内层，不让各 runtime 重复实现。
  */
 export abstract class AbstractAgentRuntime implements AgentRuntime {
-  options: AgentRuntimeOptions;
+  readonly options: AgentRuntimeOptions;
 
   constructor(options: AgentRuntimeOptions) {
     this.options = options;

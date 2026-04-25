@@ -7,7 +7,6 @@
 import { registerShellHandlers } from './shellHandlers';
 import { registerWindowHandlers } from './windowHandlers';
 import { registerTabHandlers } from './tabHandlers';
-import { registerAgentHandlers } from './agentHandlers';
 import { registerOnboardingHandlers } from './onboardingHandlers';
 
 export { ShellChannels, WindowChannels, TabChannels, EventChannels, OnboardingChannels } from '@shared/ipc';
@@ -15,16 +14,14 @@ export type { ShellChannel, WindowChannel, TabChannel, EventChannel, OnboardingC
 export { registerShellHandlers } from './shellHandlers';
 export { registerWindowHandlers } from './windowHandlers';
 export { registerTabHandlers } from './tabHandlers';
-export { registerAgentHandlers } from './agentHandlers';
 export { registerOnboardingHandlers } from './onboardingHandlers';
 
 /**
- * 注册所有常用 IPC 处理器（shell + window + tab + agent + onboarding）
+ * 注册所有常用 IPC 处理器（shell + window + tab + onboarding）
  */
 export function registerIpcHandlers(): void {
   registerShellHandlers();
   registerWindowHandlers();
   registerTabHandlers();
-  registerAgentHandlers();
   registerOnboardingHandlers();
 }

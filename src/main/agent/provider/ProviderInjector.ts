@@ -5,7 +5,7 @@
  *   - API Key + model + baseURL
  *   - 默认思维链级别
  *
- * 从 AgentExecutor 提取，供 chat.ts、Orchestrator、Swarm 等所有创建 Agent 的地方使用。
+ * 由 AgentExecutor 在创建 Builder 的唯一位置调用。
  *
  * 使用按需引用模式，直接从 @main/config 导入配置服务。
  */
@@ -22,18 +22,26 @@ interface ProviderConfigurableBuilder {
 
 export class ProviderInjector {
   /**
+   * 应用模型相关配置到 Builder。
+   *
+   * AgentExecutor 只需要知道“这次是否有模型覆盖”，Provider/API Key/思维链默认值
+   * 都收在这里处理，避免执行层继续携带多余参数。
+   */
+  apply(builder: ProviderConfigurableBuilder, modelOverride?: string): void {
+    this.applyProviderConfig(builder, modelOverride);
+    this.applyThinkingLevel(builder);
+  }
+
+  /**
    * 注入 Provider 配置到 Builder（API Key + 模型 + baseURL）
    *
    * 支持 providerId/modelId 格式，通过 Models 服务解析。
    * 如果配置未就绪或无可用配置，静默回退。
    */
-  applyProviderConfig(
-    builder: ProviderConfigurableBuilder,
-    opts?: { modelOverride?: string; sessionId?: string; agentId?: string }
-  ): void {
+  private applyProviderConfig(builder: ProviderConfigurableBuilder, modelOverride?: string): void {
     try {
       // 解析模型（优先使用 modelOverride，否则使用全局默认）
-      const modelSpec = opts?.modelOverride || Models.getDefaultModel();
+      const modelSpec = modelOverride || Models.getDefaultModel();
       const resolved = Models.resolveModel(modelSpec);
       if (!resolved) {
         console.warn(`[ProviderInjector] 无法解析模型: ${modelSpec}`);
@@ -59,7 +67,7 @@ export class ProviderInjector {
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
       // 注意：只传递模型 ID，不包含 provider 前缀，因为 OpenAI 兼容 API 只接受模型 ID
-      if (opts?.modelOverride) {
+      if (modelOverride) {
         builder.model(resolved.model.id);
       }
     } catch (err) {
@@ -73,7 +81,7 @@ export class ProviderInjector {
    * 从 coobee.json5 读取 models.defaults.thinkingLevel，默认 'medium'。
    * 注意：这是同步方法，使用延迟导入避免循环依赖。
    */
-  applyThinkingLevel(builder: ProviderConfigurableBuilder): void {
+  private applyThinkingLevel(builder: ProviderConfigurableBuilder): void {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { configStoreInstance } = require('@main/common/config/ConfigStore');

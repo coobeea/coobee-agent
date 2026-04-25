@@ -30,13 +30,12 @@ import type { AgentRuntime } from './runtime/AgentRuntime';
 import type {
   AgentMode,
   AgentRuntimeKind,
-  AgentRuntimeOptions,
-  ExecutionConfig,
   ExecutionResult,
   SkillDefinition,
   StreamChunk,
   ToolDefinition
 } from './runtime/types';
+import type { ThreadRunStatus } from './threads/types';
 import { AgentRuntimeBuilder } from './runtime/AgentRuntimeBuilder';
 import { createStreamEmitter, type IStreamEmitter } from './streaming/StreamEmitter';
 import type { StreamSource } from './streaming/types';
@@ -81,26 +80,31 @@ export interface ExecuteRequest {
   tools?: ToolDefinition[];
   /** 流式事件回调（可选） */
   onChunk?: (chunk: StreamChunk) => void;
-  /** 中止信号（Pipeline 传入，用于提前终止流式消费） */
+  /** 中止信号（会在 build 前注入 RuntimeOptions） */
   signal?: AbortSignal;
-  /** 执行配置（传递给 Runtime.stream/run，用于指定 maxTurns / signal 等） */
-  executionConfig?: ExecutionConfig;
 }
 
 /** 执行状态（从 SessionStatusManager re-export） */
 export type { SessionStatus } from './runtime/SessionStatusManager';
 
+interface RunInputPatch {
+  instructions?: string;
+  appendInstructions?: string[];
+}
+
+interface AgentRunIdentity {
+  id: string;
+  name: string;
+}
+
+type RuntimeNextResult =
+  | (IteratorYieldResult<StreamChunk> & { aborted?: false })
+  | (IteratorReturnResult<ExecutionResult> & { aborted?: false })
+  | { done: false; aborted: true };
+
 // ==================== AgentExecutor ====================
 
 class AgentExecutor {
-  private getRuntimeIdentity(runtime: AgentRuntime): { id: string; name: string } {
-    const candidate = runtime as AgentRuntime & { id?: string; name?: string };
-    return {
-      id: candidate.id ?? 'agent-runtime',
-      name: candidate.name ?? 'agent'
-    };
-  }
-
   /** 活跃会话状态管理 */
   private sessionStatus = new SessionStatusManager();
 
@@ -109,27 +113,6 @@ class AgentExecutor {
 
   /** 活跃会话的 AbortController 映射（用于按 sessionId 中止） */
   private abortControllers = new Map<string, AbortController>();
-
-  // ========== Provider 系统 ==========
-
-  /**
-   * 注入 Provider 配置到 Builder（API Key + 模型 + baseURL）
-   *
-   * 供 chat.ts、Orchestrator Worker、Swarm Role 等所有创建 Agent 的地方使用。
-   */
-  private applyProviderConfig(
-    builder: AgentRuntimeBuilder,
-    opts?: { modelOverride?: string; sessionId?: string; agentId?: string }
-  ): void {
-    this.providerInjector.applyProviderConfig(builder, opts);
-  }
-
-  /**
-   * 注入默认思维链级别到 Builder
-   */
-  private applyThinkingLevel(builder: AgentRuntimeBuilder): void {
-    this.providerInjector.applyThinkingLevel(builder);
-  }
 
   // ========== 提交执行 ==========
 
@@ -232,8 +215,6 @@ class AgentExecutor {
       return result;
     } finally {
       this.sessionStatus.unregister(sessionId);
-      // 清理 AbortController（在流式执行完全结束后）
-      this.abortControllers.delete(sessionId);
     }
   }
 
@@ -248,7 +229,6 @@ class AgentExecutor {
     sessionId: string,
     onChunk?: (chunk: StreamChunk) => void,
     signal?: AbortSignal,
-    _workspaceDir?: string,
     agentId?: string
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     // Turn 状态跟踪（用于 turn_completed 事件数据）
@@ -258,30 +238,15 @@ class AgentExecutor {
     // 标记开始执行
     this.updateSessionStatus(sessionId, 'running');
 
-    let r = await gen.next();
-    while (!r.done) {
-      // 检测中止信号：提前退出循环，通知 generator 结束
-      if (signal?.aborted) {
-        log.info(`[AgentExecutor] Aborted: sessionId=${sessionId}`);
-
-        // 发送 run:interrupted 事件
-        const interruptedChunk: StreamChunk = {
-          type: 'run:interrupted',
-          content: 'Execution cancelled by user'
-        };
-
-        if (emitter) {
-          emitter.forward(interruptedChunk);
-        }
-        onChunk?.(interruptedChunk);
+    let next = await this.nextWithAbort(gen, signal);
+    while (!next.done) {
+      if (next.aborted) {
+        const interruptedChunk = await this.interruptStream(gen, emitter, sessionId, onChunk);
         yield interruptedChunk;
-
-        await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
-        this.updateSessionStatus(sessionId, 'idle');
         return { output: '', error: 'Aborted by user' };
       }
 
-      const chunk = r.value as StreamChunk;
+      const chunk = next.value as StreamChunk;
 
       // 统一分发：广播到 eventBus（监听器自动处理持久化）
       if (emitter) {
@@ -317,59 +282,71 @@ class AgentExecutor {
       onChunk?.(chunk);
       yield chunk;
 
-      // 使用 Promise.race 让 abort 信号能在 gen.next() 阻塞期间生效
-      if (signal) {
-        const abortPromise = new Promise<{ done: true; value: ExecutionResult }>((resolve) => {
-          const onAbort = (): void => {
-            signal.removeEventListener('abort', onAbort);
-            resolve({ done: true, value: { output: '', error: 'Aborted by user' } });
-          };
-          if (signal.aborted) {
-            resolve({ done: true, value: { output: '', error: 'Aborted by user' } });
-          } else {
-            signal.addEventListener('abort', onAbort, { once: true });
-            // 当 gen.next() 正常完成时也需要清理监听器
-            gen.next().then(
-              (result) => {
-                signal.removeEventListener('abort', onAbort);
-                resolve(result as { done: true; value: ExecutionResult });
-              },
-              (err) => {
-                signal.removeEventListener('abort', onAbort);
-                throw err;
-              }
-            );
-          }
-        });
-        r = await abortPromise;
-        if (signal.aborted && !r.done) {
-          log.info(`[AgentExecutor] Aborted during gen.next(): sessionId=${sessionId}`);
-
-          // 发送 run:interrupted 事件
-          const interruptedChunk: StreamChunk = {
-            type: 'run:interrupted',
-            content: 'Execution cancelled by user'
-          };
-
-          if (emitter) {
-            emitter.forward(interruptedChunk);
-          }
-          onChunk?.(interruptedChunk);
-          yield interruptedChunk;
-
-          await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
-          this.updateSessionStatus(sessionId, 'idle');
-          return { output: '', error: 'Aborted by user' };
-        }
-      } else {
-        r = await gen.next();
-      }
+      next = await this.nextWithAbort(gen, signal);
     }
 
-    // 执行完成
-    this.updateSessionStatus(sessionId, 'completed');
+    const result = next.value as ExecutionResult;
+    this.updateSessionStatus(sessionId, result.error ? 'error' : 'completed');
+    return result;
+  }
 
-    return r.value as ExecutionResult;
+  private async nextWithAbort(
+    gen: AsyncGenerator<StreamChunk, ExecutionResult, unknown>,
+    signal?: AbortSignal
+  ): Promise<RuntimeNextResult> {
+    if (!signal) {
+      return (await gen.next()) as RuntimeNextResult;
+    }
+    if (signal.aborted) {
+      return { done: false, aborted: true };
+    }
+
+    return new Promise<RuntimeNextResult>((resolve, reject) => {
+      const onAbort = (): void => {
+        signal.removeEventListener('abort', onAbort);
+        resolve({ done: false, aborted: true });
+      };
+
+      signal.addEventListener('abort', onAbort, { once: true });
+      gen.next().then(
+        (result) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(result as RuntimeNextResult);
+        },
+        (err) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(err);
+        }
+      );
+    });
+  }
+
+  private async interruptStream(
+    gen: AsyncGenerator<StreamChunk, ExecutionResult, unknown>,
+    emitter: IStreamEmitter | null,
+    sessionId: string,
+    onChunk?: (chunk: StreamChunk) => void
+  ): Promise<StreamChunk> {
+    log.info(`[AgentExecutor] Aborted: sessionId=${sessionId}`);
+
+    const interruptedChunk: StreamChunk = {
+      type: 'run:interrupted',
+      content: 'Execution cancelled by user'
+    };
+
+    if (emitter) {
+      emitter.forward(interruptedChunk);
+    }
+    onChunk?.(interruptedChunk);
+    this.updateSessionStatus(sessionId, 'idle');
+
+    try {
+      await gen.return({ output: '', error: 'Aborted by user' } as ExecutionResult);
+    } catch (err) {
+      log.warn(`[AgentExecutor] Runtime did not close cleanly after abort: sessionId=${sessionId}`, err);
+    }
+
+    return interruptedChunk;
   }
 
   /**
@@ -378,7 +355,7 @@ class AgentExecutor {
    * fire-and-forget：不阻塞流式输出。
    * 同步更新 Thread 的 runStatus。
    */
-  private updateSessionStatus(sessionId: string, status: string): void {
+  private updateSessionStatus(sessionId: string, status: ThreadRunStatus): void {
     const isSubAgent = sessionId.includes(':');
 
     // 子 Agent 状态更新已移除（不再关注子智能体）
@@ -386,9 +363,7 @@ class AgentExecutor {
       return;
     }
 
-    if (status === 'tool-pending' || status === 'running' || status === 'error' || status === 'completed') {
-      this.syncThreadRunStatus(sessionId, status as 'running' | 'tool-pending' | 'error' | 'idle' | 'completed');
-    }
+    this.syncThreadRunStatus(sessionId, status);
   }
 
   private updateCheckpoint(sessionId: string, chunk: StreamChunk): void {
@@ -413,7 +388,7 @@ class AgentExecutor {
    *
    * 仅在 sessionId 对应已有 Thread 时更新（子 Agent sessionId 含 ':' 不会匹配 Thread）。
    */
-  private syncThreadRunStatus(sessionId: string, runStatus: import('./threads/types').ThreadRunStatus): void {
+  private syncThreadRunStatus(sessionId: string, runStatus: ThreadRunStatus): void {
     if (sessionId.includes(':')) return;
     import('./threads/ThreadStore')
       .then(({ ThreadStore }) => ThreadStore.getInstance())
@@ -427,7 +402,8 @@ class AgentExecutor {
    * 统一处理所有的 Hooks、环境注入、事件分发和生命周期。
    */
   private async *executePipeline(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const { sessionId, message, onChunk, signal: externalSignal } = request;
+    const { sessionId, message, onChunk } = request;
+    const externalSignal = request.signal;
     let runtime: AgentRuntime | null = null;
 
     log.info(`[AgentExecutor] Execute Pipeline: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
@@ -482,39 +458,39 @@ class AgentExecutor {
         streamConsumersManager.writeUserMessage(sessionId, message);
       }
 
-      const builder = this.createBuilder(request, preparedEnv);
-
       // === Extension Hooks: message_received + run_started + prepare_run_input ===
+      let runInputPatch: RunInputPatch | undefined;
       if (!isLightweight) {
-        await Promise.race([
-          this.runExtensionHooks(sessionId, message, builder),
-          new Promise<void>((resolve) => setTimeout(resolve, 60_000))
+        runInputPatch = await Promise.race([
+          this.runExtensionHooks(sessionId, message),
+          new Promise<RunInputPatch | undefined>((_, reject) => {
+            setTimeout(() => reject(new Error('Extension start hooks timed out')), 60_000);
+          })
         ]).catch((err) => {
           log.warn(`[AgentExecutor] Extension start hooks timed out or failed: sessionId=${sessionId}`, err);
+          return undefined;
         });
       }
 
+      const builder = this.createBuilder(request, preparedEnv, signal, runInputPatch);
+
       // 1. 创建 Runtime + 创建 Emitter
       runtime = await builder.build();
+      const runIdentity = this.getRunIdentity(request, runtime);
 
       if (!isLightweight) {
-        emitter = this.createEmitter(sessionId, runtime);
+        emitter = this.createEmitter(sessionId, runIdentity);
       }
 
       // agent:start 事件
-      const runtimeIdentity = this.getRuntimeIdentity(runtime);
       await this.emitAgentLifecycleEvent('agent:start', {
         sessionId,
-        agentId: runtimeIdentity.id,
-        agentName: runtimeIdentity.name,
+        agentId: runIdentity.id,
+        agentName: runIdentity.name,
         task: message.substring(0, 200)
       });
 
       // 2. 流式执行
-      runtime.options = this.buildRuntimeOptions(runtime, sessionId, signal, {
-        ...request.executionConfig,
-        maxTurns: request.executionConfig?.maxTurns ?? request.maxTurns
-      });
       const gen = runtime.stream(message);
       const requestAgentId = request.agentId;
 
@@ -524,7 +500,6 @@ class AgentExecutor {
         sessionId,
         onChunk,
         signal,
-        workspaceDir,
         requestAgentId
       );
 
@@ -532,7 +507,7 @@ class AgentExecutor {
 
       // === Extension Hooks: run_completed（fire-and-forget）===
       if (!isLightweight) {
-        const stableAgentId = requestAgentId || runtimeIdentity.id;
+        const stableAgentId = requestAgentId || runIdentity.id;
         this.runExtensionEndHooks(sessionId, stableAgentId, result, duration).catch((err) => {
           log.warn(`[AgentExecutor] Extension end hooks failed: sessionId=${sessionId}`, err);
         });
@@ -541,8 +516,8 @@ class AgentExecutor {
       // agent:done 事件
       await this.emitAgentLifecycleEvent('agent:done', {
         sessionId,
-        agentId: runtimeIdentity.id,
-        agentName: runtimeIdentity.name,
+        agentId: runIdentity.id,
+        agentName: runIdentity.name,
         success: true,
         durationMs: duration,
         summary: result.output?.substring(0, 500)
@@ -552,14 +527,15 @@ class AgentExecutor {
       return result;
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
+      this.updateSessionStatus(sessionId, 'error');
 
       // agent:done 事件（失败）
       if (runtime) {
-        const runtimeIdentity = this.getRuntimeIdentity(runtime);
+        const runIdentity = this.getRunIdentity(request, runtime);
         await this.emitAgentLifecycleEvent('agent:done', {
           sessionId,
-          agentId: runtimeIdentity.id,
-          agentName: runtimeIdentity.name,
+          agentId: runIdentity.id,
+          agentName: runIdentity.name,
           success: false,
           durationMs: duration,
           error: error instanceof Error ? error.message : String(error)
@@ -585,9 +561,7 @@ class AgentExecutor {
 
       await this.destroyRuntime(runtime);
       runtime = null;
-
-      // 注意：AbortController 的清理已移到 stream() 的 finally 块中
-      // 这样可以确保在整个流式执行期间 AbortController 保持有效
+      this.abortControllers.delete(sessionId);
     }
   }
 
@@ -615,13 +589,20 @@ class AgentExecutor {
     }
   }
 
+  private getRunIdentity(request: ExecuteRequest, runtime: AgentRuntime): AgentRunIdentity {
+    const name = request.name ?? runtime.options.name ?? request.agentId ?? 'agent';
+    return {
+      id: request.agentId ?? name,
+      name
+    };
+  }
+
   /** 创建 StreamEmitter */
-  private createEmitter(sessionId: string, runtime: AgentRuntime): IStreamEmitter {
-    const runtimeIdentity = this.getRuntimeIdentity(runtime);
+  private createEmitter(sessionId: string, identity: AgentRunIdentity): IStreamEmitter {
     const source: StreamSource = {
       type: 'agent',
-      id: runtimeIdentity.id,
-      name: runtimeIdentity.name
+      id: identity.id,
+      name: identity.name
     };
     return createStreamEmitter(sessionId, source);
   }
@@ -656,11 +637,17 @@ class AgentExecutor {
    *
    * Builder 只在这里创建一次，随后在 executePipeline 里 build() 一次。
    */
-  private createBuilder(request: ExecuteRequest, preparedEnv?: PreparedAgentEnv): AgentRuntimeBuilder {
+  private createBuilder(
+    request: ExecuteRequest,
+    preparedEnv?: PreparedAgentEnv,
+    signal?: AbortSignal,
+    runInputPatch?: RunInputPatch
+  ): AgentRuntimeBuilder {
     const mode = request.mode ?? 'agent';
     const runtimeType = request.runtimeType ?? 'pi-mono';
     const sessionMode = request.sessionMode ?? 'file';
     const name = request.name ?? request.agentId ?? 'agent';
+    const instructions = runInputPatch?.instructions ?? request.instructions ?? '';
 
     const builder = new AgentRuntimeBuilder()
       .type(runtimeType)
@@ -669,24 +656,22 @@ class AgentExecutor {
       .sessionId(request.sessionId)
       .sessionMode(sessionMode)
       .name(name)
-      .instructions(request.instructions ?? '');
+      .instructions(instructions);
 
     if (request.agentId) {
       builder.agentId(request.agentId);
     }
 
-    this.applyProviderConfig(builder, {
-      modelOverride: request.modelOverride,
-      sessionId: request.sessionId,
-      agentId: request.agentId
-    });
-    this.applyThinkingLevel(builder);
+    this.providerInjector.apply(builder, request.modelOverride);
 
     if (request.workspaceRoot) {
       builder.workspaceRoot(request.workspaceRoot);
     }
     if (request.maxTurns !== undefined) {
       builder.maxTurns(request.maxTurns);
+    }
+    if (signal) {
+      builder.signal(signal);
     }
     if (request.appendInstructions?.length) {
       builder.appendInstructions(...request.appendInstructions);
@@ -717,21 +702,11 @@ class AgentExecutor {
       }
     }
 
-    return builder;
-  }
+    if (runInputPatch?.appendInstructions?.length) {
+      builder.appendInstructions(...runInputPatch.appendInstructions);
+    }
 
-  private buildRuntimeOptions(
-    runtime: AgentRuntime,
-    sessionId: string,
-    signal?: AbortSignal,
-    executionConfig?: ExecutionConfig
-  ): AgentRuntimeOptions {
-    return {
-      ...runtime.options,
-      sessionId,
-      ...(executionConfig?.maxTurns !== undefined ? { maxTurns: executionConfig.maxTurns } : {}),
-      ...(signal ? { signal } : {})
-    };
+    return builder;
   }
 
   /** 根据 StreamChunk 触发 Agent 运行过程中的派生 Hook。 */
@@ -807,11 +782,11 @@ class AgentExecutor {
    * 执行 Extension 前置 Hook
    * message_received → run_started → prepare_run_input
    */
-  private async runExtensionHooks(sessionId: string, message: string, builder: AgentRuntimeBuilder): Promise<void> {
+  private async runExtensionHooks(sessionId: string, message: string): Promise<RunInputPatch | undefined> {
     try {
       const { ExtensionManager } = await import('../extension');
       const runner = ExtensionManager.getHookRunner();
-      if (!runner) return;
+      if (!runner) return undefined;
 
       await runner.runVoidHook('message_received', { sessionId, message });
       await runner.runVoidHook('run_started', { sessionId });
@@ -820,16 +795,21 @@ class AgentExecutor {
         sessionId,
         prompt: message
       });
-      if (result) {
-        if (result.prependContext) {
-          builder.appendInstructions(result.prependContext);
-        }
-        if (result.replaceSystemPrompt) {
-          builder.instructions(result.replaceSystemPrompt);
-        }
+      if (!result) {
+        return undefined;
       }
+
+      const patch: RunInputPatch = {};
+      if (result.replaceSystemPrompt) {
+        patch.instructions = result.replaceSystemPrompt;
+      }
+      if (result.prependContext) {
+        patch.appendInstructions = [result.prependContext];
+      }
+      return patch.instructions || patch.appendInstructions?.length ? patch : undefined;
     } catch (err) {
       log.warn('[AgentExecutor] Extension hooks (start) failed:', err);
+      return undefined;
     }
   }
 

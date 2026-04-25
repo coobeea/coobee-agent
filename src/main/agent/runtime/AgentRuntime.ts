@@ -21,7 +21,7 @@ import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types'
  * 这里的接口重点是“如何执行”，而不是“如何被创建”。
  */
 export interface AgentRuntime {
-  options: AgentRuntimeOptions;
+  readonly options: AgentRuntimeOptions;
   // ========== 执行方法 ==========
 
   /**

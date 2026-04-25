@@ -15,7 +15,7 @@ import type { MethodGroup } from '@main/common/gateway/types';
 import { GatewayErrorCode, GatewayMethodError } from '@main/common/gateway/errors';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { agentExecutor } from '@main/agent/AgentExecutor';
-import { ThreadExecutionFactory } from '@main/agent/execution/ThreadExecutionFactory';
+import { AgentStore } from '@main/agent/agents/AgentStore';
 import { createLogger } from '@main/common/logger';
 
 const log = createLogger('chat-methods');
@@ -118,26 +118,26 @@ export const chatMethods: MethodGroup = {
 
       log.info(`发送消息: threadId=${threadId}, message="${message.substring(0, 50)}..."`);
 
-      // 1. 通过统一工厂创建运行参数，保持 RPC / HTTP / 恢复路径配置一致
-      let runConfig: Awaited<ReturnType<ThreadExecutionFactory['createRunConfig']>>;
-      try {
-        const factory = ThreadExecutionFactory.getInstance(agentExecutor);
-        runConfig = await factory.createRunConfig({
-          threadId: thread.id,
-          sessionMode: 'file'
-        });
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Agent not found')) {
-          throw new GatewayMethodError(GatewayErrorCode.NOT_FOUND, `Agent not found: ${thread.agentId}`);
-        }
-        throw error;
+      const agentStore = AgentStore.getInstance();
+      const agent = await agentStore.get(thread.agentId);
+
+      if (!agent) {
+        throw new GatewayMethodError(GatewayErrorCode.NOT_FOUND, `Agent not found: ${thread.agentId}`);
       }
 
       // 2. 启动流式执行（Agent 结果会通过 WebSocket 事件推送）
+      // 入口只传普通参数；Builder 在 AgentExecutor 内部最后统一创建。
       const gen = agentExecutor.stream({
         sessionId: thread.id,
         message: message as string,
-        ...runConfig
+        agentId: agent.id,
+        name: agent.id,
+        instructions: agent.instructions,
+        modelOverride: thread.overrideModel || agent.model,
+        workspaceRoot: thread.metadata?.workspacePath as string | undefined,
+        mode: 'agent',
+        runtimeType: 'pi-mono',
+        sessionMode: 'file'
       });
 
       // 3. 异步消费流（触发 WebSocket 事件推送）
