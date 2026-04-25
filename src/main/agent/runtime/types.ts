@@ -1,10 +1,25 @@
 /**
- * 统一运行时类型定义
+ * runtime 层统一类型定义
+ *
+ * 这个文件只定义 runtime 这一层自己的公共契约，目标是把“如何运行一个 Agent”
+ * 抽象成稳定、SDK 无关的接口与数据结构。
+ *
+ * 可以把这里的类型分成四组来理解：
+ *   1. 运行计划：`RuntimeBuilderRequest`
+ *      - 描述“上层想运行一个什么样的 Agent”
+ *      - 用于 builder / factory 选择与组装
+ *   2. 运行时快照：`AgentRuntimeOptions`
+ *      - 描述“一个 runtime 实例最终拿到的只读配置”
+ *      - 用于调试、日志、快照记录
+ *   3. 执行交互：`ExecutionConfig` / `ExecutionResult`
+ *      - 描述“本次调用如何执行、最终返回什么”
+ *   4. 流式协议：`StreamChunk` / `StreamChunkType`
+ *      - 描述“执行过程中如何持续向外发事件”
  *
  * 设计原则：
- *   1. SDK 无关：不依赖任何特定 SDK（@openai/agents、pi-coding-agent 等）
- *   2. 接口优先：定义通用的 AgentRuntime 接口
- *   3. 各 SDK 实现在子目录（openai/、pi/）中定义特有类型
+ *   1. SDK 无关：不依赖某一套具体 SDK 的原生对象
+ *   2. 运行优先：聚焦运行期契约，不把 builder 工厂逻辑揉进来
+ *   3. 单向分层：上层依赖这里；这里不反向依赖入口层或业务层
  */
 
 // ========== 统一工具定义 ==========
@@ -34,10 +49,13 @@ type ToolDefinition = _ToolDefinition;
 /**
  * 统一技能定义（SDK 无关）
  *
- * 技能是注入到系统提示词中的领域知识/指令片段。
- * 各 Runtime 根据自身 SDK 机制将技能内容注入 LLM 上下文：
- *   - OpenAI：格式化后拼接到 Agent.instructions
- *   - PiMono：通过 resourceLoader.getSkills() 返回，由 SDK 内部组装
+ * Skill 是运行时可消费的知识与指令单元。
+ * runtime 层只关心“有哪些 skill、如何在提示词或资源加载阶段引用它们”，
+ * 不关心它们是从本地目录、扩展系统还是数据库里来的。
+ *
+ * 各 runtime 的注入方式可以不同：
+ *   - OpenAI：通常会被格式化后拼进最终 instructions
+ *   - PiMono：通常通过 resourceLoader 暴露给 SDK，由 SDK 内部决定何时加载
  */
 /**
  * Skill 配置项描述（定义在 SKILL.md frontmatter 的 config 字段中）
@@ -75,10 +93,15 @@ export interface SkillDefinition {
 /**
  * Agent 运行模式
  *
- *   - chat: 纯对话模式 — 不提供工具，不注入执行协议和 Skill，响应快、成本低
- *   - agent: 完整 Agent 模式 — 提供工具、注入执行协议和 Skill，支持 HITL
+ * 这里的 mode 描述的是“这次运行想要多强的 Agent 能力”，
+ * 而不是底层具体用哪套 SDK。
  *
- * 模式在 Builder 上设置，AgentEnvInjector 根据模式决定注入内容。
+ *   - chat:
+ *       纯对话模式。尽量少注入工具、协议和 skill，强调轻量与直接回复。
+ *   - agent:
+ *       完整 Agent 模式。允许工具、执行协议、skills、HITL 等完整能力进入运行时。
+ *
+ * mode 一般先出现在 builder 请求里，后续由环境装配层决定要注入哪些能力。
  */
 export type AgentMode = 'chat' | 'agent';
 
@@ -87,24 +110,44 @@ export type AgentMode = 'chat' | 'agent';
 /**
  * Runtime 实现类型
  *
- * 由 runtime 层统一决定具体使用哪套 Builder / Runtime 实现，
- * 入口层只应传递运行语义，不直接 new 具体 Builder。
+ * 这是“底层实现选型”维度，回答的是：
+ *   - 这次最终由哪个 runtime 实现来承接？
+ *
+ * 它和 `AgentMode` 不同：
+ *   - `AgentMode` 决定能力语义（chat / agent）
+ *   - `RuntimeKind` 决定实现类型（pimono / openai）
+ *
+ * 入口层通常不应该直接 `new` 具体 Builder，而应把这层选择收口到 runtime 工厂里。
  */
 export type RuntimeKind = 'pimono' | 'openai';
 
 /**
  * 会话持久化语义
  *
- *   - memory: 仅本次调用保留在内存中
- *   - thread: 绑定到 thread/session 的持久化会话
+ * 这是“运行状态保留多久”的抽象表达，避免上层直接依赖某个 runtime
+ * 特有的 `sessionMode=file|memory` 之类实现细节。
+ *
+ *   - memory:
+ *       状态只保留在当前进程 / 当前调用上下文中，适合一次性调用
+ *   - thread:
+ *       状态绑定到某个 thread / session，可跨多轮继续执行
  */
 export type RuntimePersistence = 'memory' | 'thread';
 
 /**
  * Runtime Builder 创建请求
  *
- * 入口层通过这组抽象参数描述“我想运行什么样的 Agent”，
- * 由 runtime 层内部决定具体选择哪种 Builder 并做语义映射。
+ * 这是 runtime 层最重要的“入口请求”对象之一。
+ * 它描述的是运行意图，而不是某个具体 SDK 的原生配置。
+ *
+ * 可以把它理解成：
+ *   “请帮我创建一个能满足这些运行语义的 builder / runtime 计划”
+ *
+ * 典型流程：
+ *   入口层 / launcher 组装 `RuntimeBuilderRequest`
+ *     -> runtime factory 选择具体 builder
+ *     -> 环境装配层补齐 workspace / session / tools / skills
+ *     -> build 成真正的 `AgentRuntime`
  */
 export interface RuntimeBuilderRequest {
   /** 指定 Runtime 类型；不传则走 runtime 层默认策略 */
@@ -133,17 +176,52 @@ export interface RuntimeBuilderRequest {
   modelOverride?: string;
 }
 
+// ========== Agent 运行时身份 ==========
+
+/**
+ * AgentRuntime 实例对外声明的运行时类型
+ *
+ * 这是 runtime 实例最终对外暴露的实现身份。
+ * 和 `RuntimeKind` 的区别可以简单理解为：
+ *   - `RuntimeKind`：用于“创建前/创建中”的选型
+ *   - `AgentRuntimeKind`：用于“创建后”的实例身份标识
+ *
+ * 当前两者的取值几乎一一对应，但语义阶段不同，所以仍然分别保留。
+ */
+export type AgentRuntimeKind = 'pi-mono' | 'openai';
+
+/**
+ * 思考级别
+ *
+ * 控制 LLM 的思考深度（与 pi-ai SDK ThinkingLevel 一致）：
+ *   - minimal: 最少思考
+ *   - low: 简单思考
+ *   - medium: 中等思考（默认）
+ *   - high: 深度思考
+ *   - xhigh: 极深度思考
+ */
+export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
 // ========== Agent 运行时通用选项 ==========
 
 /**
  * AgentRuntime 基础选项（SDK 无关）
  *
- * 各 SDK 实现可扩展此接口添加 SDK 特有配置。
- * 例如：OpenAI 实现添加 tools、handoffs、modelSettings 等。
+ * 这是“一个 runtime 实例最终拿到的配置快照”。
+ * 它不是入口层给用户暴露的请求 DTO，也不是 builder 工厂的全部参数。
+ *
+ * 更直白一点：
+ *   - `RuntimeBuilderRequest` 偏“我要什么”
+ *   - `AgentRuntimeOptions` 偏“这个 runtime 最终拿到了什么”
+ *
+ * 这份配置会被运行时、日志、快照、调试代码反复使用，所以保持只读、稳定很重要。
+ * 各 SDK 具体实现可以在此基础上继续扩展。
  */
 export interface AgentRuntimeOptions {
   /** Agent 名称 */
   name: string;
+  /** 运行时实例类型 */
+  type: AgentRuntimeKind;
   /** Agent 基础系统指令 */
   instructions: string;
   /**
@@ -160,10 +238,18 @@ export interface AgentRuntimeOptions {
    * 各 Runtime 自动格式化并整合到最终 LLM 上下文中。
    */
   skills?: SkillDefinition[];
-  /** 模型名称 */
-  model?: string;
+
   /** 会话 ID（不传则自动生成） */
   sessionId?: string;
+
+  /**
+   * Session 持久化模式
+   *
+   * - 'memory': 内存模式（默认，适合测试）
+   * - 'file': 文件模式（持久化到 cwd/.pi/sessions/）
+   */
+  sessionMode?: 'memory' | 'file';
+
   /**
    * 会话存储根目录
    *
@@ -176,6 +262,7 @@ export interface AgentRuntimeOptions {
    *   → PiMono: {sessionDir}/{sessionId}/（SDK 自行管理内部结构）
    */
   sessionDir?: string;
+
   /** 最大执行轮次，防止无限工具调用循环（默认 25） */
   maxTurns?: number;
   /**
@@ -211,24 +298,73 @@ export interface AgentRuntimeOptions {
    * 不传则降级为 path-only + workspaceRoot。
    */
   sandboxContext?: import('../tools/types').ToolExecutionContext;
+
+  /** 取消信号 */
+  signal?: AbortSignal;
+
+  /** 模型名称；如果构建阶段有 provider/model override，最终结果会体现在这里 */
+  model: string;
+
+  /** API Key（运行时注入，OpenAI 格式的 Bearer token） */
+  apiKey: string;
+
+  /** API 格式 */
+  apiType: 'openai-compatible';
+
+  /**
+   * OpenAI 兼容 API 的 Base URL（由 Builder / 调用方解析后注入）
+   *
+   * 所有后端统一使用 OpenAI Chat Completions 格式，例如 MiniMax、DeepSeek、OpenAI 等端点。
+   */
+  baseURL: string;
+
+  /** 思考级别（默认 'medium'） */
+  thinkingLevel?: ThinkingLevel;
+
+  /**
+   * 压缩配置
+   *
+   * SDK 内置自动压缩，通过 SettingsManager 配置。
+   * enabled=false 时禁用自动压缩。
+   */
+  compaction?: { enabled?: boolean };
+
+  /**
+   * 模型元数据（从 coobee.json5 模型配置透传）
+   *
+   * 用于动态构造 pi-SDK Model 对象。由 PiMonoBuilder.build() 从 ProviderConfig 中提取并注入。
+   */
+  modelMeta?: {
+    reasoning?: boolean;
+    contextWindow?: number;
+    maxOutputTokens?: number;
+    maxThinkingTokens?: number;
+    functionCalling?: boolean;
+  };
+
+  /**
+   * 重试配置
+   *
+   * SDK 内置自动重试，通过 SettingsManager 配置。
+   */
+  retry?: { enabled?: boolean; maxRetries?: number; baseDelayMs?: number };
 }
 
 // ========== 系统提示词构建 ==========
 
 /**
- * 格式化技能列表为提示词文本（摘要模式）
+ * 格式化技能列表为提示词文本
  *
- * 仅注入 name、description 和 filePath，不注入完整 content。
- * Agent 需要完整内容时，通过 read 工具按需加载 SKILL.md。
+ * 这是 runtime 层对 skill 的一个保守默认策略：
+ *   - 默认只注入 skill 摘要，避免把大量 SKILL.md 内容一次性塞进上下文
+ *   - 当确实需要完整内容时，再切到 `full`
  *
- * 格式：
- *   <skills>
- *     <skill name="xxx" path="/path/to/SKILL.md">
- *       description text
- *     </skill>
- *   </skills>
+ * 摘要模式下只注入：
+ *   - `name`
+ *   - `description`
+ *   - `filePath`
  *
- * 使用 mode='full' 可切换为完整注入模式（用于 active_skill 等场景）。
+ * 这样模型可以先“知道有这个 skill”，需要时再通过工具按需读取完整内容。
  */
 export function formatSkills(skills: SkillDefinition[], mode: 'summary' | 'full' = 'summary'): string {
   if (!skills.length) return '';
@@ -252,9 +388,14 @@ export function formatSkills(skills: SkillDefinition[], mode: 'summary' | 'full'
 /**
  * 构建最终系统提示词
  *
- * 组装顺序：instructions → skills → appendInstructions
- * 供不支持独立 skill 注入的 Runtime（如 OpenAI）使用。
- * PiMono 通过 resourceLoader 各方法分别返回，由 SDK 内部组装。
+ * 这是“不具备独立 skill/resource 装配能力”的 runtime 的默认拼装策略。
+ * 目前典型用法是 OpenAI 路线：把基础 instructions、skills 摘要、appendInstructions
+ * 合并成一段最终系统提示词。
+ *
+ * 组装顺序固定为：
+ *   instructions -> skills -> appendInstructions
+ *
+ * 具备更强资源装配能力的 runtime（例如 PiMono）可以不依赖这个函数。
  */
 export function buildInstructions(
   instructions: string,
@@ -277,14 +418,17 @@ export function buildInstructions(
 // ========== 执行配置和结果 ==========
 
 /**
- * 执行配置（运行时覆盖项）
+ * 执行配置（单次调用覆盖项）
+ *
+ * 这组参数的生命周期仅限“一次 `stream()` / `run()` 调用”。
+ * 它们用于在不改变 runtime 基础配置的前提下，对本次执行做局部覆盖。
  */
 export interface ExecutionConfig {
   /** 是否启用流式输出 */
   streaming?: boolean;
   /** 覆盖最大轮次 */
   maxTurns?: number;
-  /** 其他配置 */
+  /** 为兼容不同 runtime 的临时扩展位；新公共字段优先显式定义 */
   [key: string]: unknown;
 }
 
@@ -302,6 +446,11 @@ export interface ToolApprovalInfo {
 
 /**
  * 执行结果
+ *
+ * 这是一次完整执行完成后返回给上层的稳定结果对象。
+ * 它和 `StreamChunk` 的关系是：
+ *   - `StreamChunk` 负责过程事件
+ *   - `ExecutionResult` 负责最终归档结果
  */
 export interface ExecutionResult {
   /** 最终输出文本 */
@@ -339,7 +488,13 @@ export interface ExecutionResult {
 /**
  * 流式输出块
  *
- * 所有流式事件的统一载体。前端通过 `type` 的前缀过滤感兴趣的层级。
+ * 这是 runtime 层对外唯一的流式事件载体。
+ * 不管底层是 OpenAI、PiMono，还是以后新增 runtime，只要要进入统一执行链，
+ * 最终都应该翻译成 `StreamChunk`。
+ *
+ * 消费方通常只依赖两件事：
+ *   - `type`：事件类别
+ *   - `data`：该类别对应的结构化数据
  */
 export interface StreamChunk {
   /** 事件类型（prefix:event 格式） */
@@ -355,32 +510,26 @@ export interface StreamChunk {
 /**
  * 流式事件类型
  *
- * 设计原则：
- *   1. 每层用统一前缀（prefix:event），层级关系清晰
- *   2. 每个实体形成闭环（start → delta → done）
- *   3. 消费者不感知底层 SDK
+ * 命名约定统一为 `domain:event`，例如：
+ *   - `run:start`
+ *   - `tool:done`
+ *   - `compression:done`
  *
- * 嵌套关系：
- *   run ⊃ turn ⊃ llm ⊃ { text, reasoning, tool }
- *                                       ↓
- *                                     hitl
- *            ↗ handoff ↘
- *      (Agent A)    (Agent B)
+ * 设计目标有三个：
+ *   1. 读名字就知道层级归属
+ *   2. 同一类事件尽量形成完整闭环
+ *   3. 上层消费者不需要了解底层 SDK 的事件模型
  *
- * 闭环时序示意：
+ * 一般层级关系可以理解为：
+ *   run
+ *     -> turn
+ *       -> llm
+ *         -> text / reasoning / tool
  *
- *   ┌─ run:start ──────────────────────────────────────────────────── run:done ─┐
- *   │  ┌─ turn:start ──────────────────────────────────── turn:done ─┐         │
- *   │  │  ┌─ llm:start ──────────────────────── llm:done ─┐         │         │
- *   │  │  │  reasoning:start → :delta × N → :done         │         │         │
- *   │  │  │  text:start → :delta × N → :done              │         │         │
- *   │  │  │  tool:start → :delta × N → :pending           │         │         │
- *   │  │  └────────────────────────────────────────────────┘         │         │
- *   │  │  tool:done { result }                                       │         │
- *   │  └─────────────────────────────────────────────────────────────┘         │
- *   │  ┌─ turn:start (下一轮) ─── ... ─── turn:done ─┐                        │
- *   │  └──────────────────────────────────────────────┘                        │
- *   └──────────────────────────────────────────────────────────────────────────┘
+ * 注意：
+ *   - 并不是每个 runtime 都会产出所有事件
+ *   - 也不是每种事件都严格满足 start/delta/done 三段式
+ *   - 但统一命名能让消费侧保持稳定
  */
 export type StreamChunkType =
   // ① run: 执行生命周期（最外层）
@@ -427,7 +576,11 @@ export type StreamChunkType =
   | 'quality:done'; // 质量循环完成
 
 /**
- * StreamChunk 额外数据（联合类型，根据 StreamChunkType 变化）
+ * StreamChunk 额外数据
+ *
+ * `data` 的具体结构由 `type` 决定。
+ * 这里保持宽联合而不是强绑定映射，是为了让不同 runtime 在逐步收敛协议时
+ * 仍然能安全演进。
  */
 export type StreamChunkData =
   | RunErrorData
@@ -443,10 +596,6 @@ export type StreamChunkData =
   | HandoffData
   | CompressionStartData
   | CompressionDoneData
-  | QualityRoundStartData
-  | QualityScoreData
-  | QualityRepairingData
-  | QualityDoneData
   | Record<string, unknown>;
 
 // ---- ① run: ----
@@ -589,6 +738,8 @@ export interface CompressionDoneData {
 
 /**
  * 会话信息
+ *
+ * 这是 runtime 层对 session 元信息的轻量抽象，不承诺暴露底层 SDK 的完整 session 对象。
  */
 export interface SessionInfo {
   /** 会话 ID */
@@ -601,32 +752,4 @@ export interface SessionInfo {
   messageCount: number;
   /** 元数据 */
   metadata?: Record<string, unknown>;
-}
-
-// ---- ⑪ quality: 质量循环 ----
-
-/** quality:round_start 数据 */
-export interface QualityRoundStartData {
-  round: number;
-  maxRounds: number;
-}
-
-/** quality:score 数据 */
-export interface QualityScoreData {
-  score: number;
-  passed: boolean;
-  issues?: Array<{ severity: string; description: string }>;
-}
-
-/** quality:repairing 数据 */
-export interface QualityRepairingData {
-  strategy: string;
-  rootCause: string;
-}
-
-/** quality:done 数据 */
-export interface QualityDoneData {
-  finalScore: number;
-  rounds: number;
-  passed: boolean;
 }

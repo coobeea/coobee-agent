@@ -1,59 +1,65 @@
 /**
  * AgentRuntime 接口
  *
- * 统一运行时抽象 — 单智能体、团队、蜂群模式的唯一接口。
- * 所有实现（OpenAI、PiMono、Team、Swarm）都必须实现此接口。
+ * 这是 runtime 层对外暴露的核心抽象，表示一个“已经构建完成、可以执行”的运行时实例。
+ * 它只负责执行与生命周期，不负责：
+ *   - 选择具体 runtime 实现
+ *   - 创建 builder
+ *   - 注入 provider / model 默认值
+ *
+ * 换句话说：
+ *   - Builder 负责“把运行计划组出来”
+ *   - AgentRuntime 负责“按这份计划真正跑起来”
  *
  * 设计原则：
- *   1. SDK 无关：不引用任何特定 SDK 类型
- *   2. 双模式流式：stream()（AsyncGenerator 拉取）为主，推送通过 StreamEmitter 自动广播
- *   3. 无状态实例：每次请求创建 → 执行 → 销毁，会话连续性靠文件持久化
+ *   1. SDK 无关：`StreamChunk` / `ExecutionResult` 等公共类型不暴露底层 SDK 细节
+ *   2. 流式优先：`stream()` 是主入口；`run()` 是消费完整流后的便捷封装
+ *   3. 只暴露运行期信息：身份、生命周期、执行能力；不承担 builder 工厂职责
  *
  * 使用示例：
- *   // 拉取模式（SSE / 直接迭代）
+ *   // 拉取模式（直接迭代 chunk）
  *   for await (const chunk of runtime.stream('hello')) { ... }
  *
- *   // 便捷模式（等待完整结果）
- *   const result = await runtime.run('hello')
+ *   // 便捷模式（消费完整流后返回结果）
+ *   const result = await runtime.run('hello');
  */
 
-import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from './types';
+import type { AgentRuntimeKind, AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from './types';
 
 /**
  * 统一运行时接口
  *
- * 实现：
+ * 当前实现：
  *   - PiMonoAgentRuntime（runtime/pimono/）— 基于 pi-coding-agent SDK
  *   - OpenAIAgentRuntime（runtime/openai/）— 基于 @openai/agents SDK
- *   - OrchestratorRuntime（orchestration/）— 统筹者模式（程序化多 Agent 编排）
- *   - SwarmRuntime（swarm/）— 群体智能（LLM 自主 Handoff）
+ *
+ * 这里的接口重点是“如何执行”，而不是“如何被创建”。
  */
 export interface AgentRuntime {
   // ========== 身份 ==========
-
-  /** 运行时类型 */
-  readonly type: 'agent' | 'orchestrator' | 'swarm' | 'quality-loop';
   /** 运行时 ID */
   readonly id: string;
-  /** 名称 */
+
+  /** 运行时实现类型，例如 `pi-mono`、`openai` */
+  readonly type: AgentRuntimeKind;
+
+  /** 运行时实例名称，通常来自 Agent / Thread 场景的展示名 */
   readonly name: string;
-  /** 运行时配置选项 */
+
+  /**
+   * 构建该 runtime 时使用的只读配置快照
+   *
+   * 这是运行期调试与快照记录所需的元数据，不表示上层应直接操作 builder。
+   */
   readonly options: AgentRuntimeOptions;
-
-  // ========== 生命周期 ==========
-
-  /** 初始化 */
-  initialize(): Promise<void>;
-  /** 销毁 */
-  destroy(): Promise<void>;
 
   // ========== 执行方法 ==========
 
   /**
-   * 流式执行（主方法 — AsyncGenerator）
+   * 流式执行（主方法）
    *
-   * 每个 StreamChunk 通过 yield 输出（拉取模式）。
-   * 同时通过 StreamEmitter 广播到 EventBus（推送模式）。
+   * 以 AsyncGenerator 形式产出标准化的 `StreamChunk`。
+   * 调用方可以直接消费 chunk，也可以由更上层桥接到 EventBus / WebSocket / SSE。
    *
    * @param input 用户输入
    * @param config 执行配置
@@ -63,30 +69,21 @@ export interface AgentRuntime {
   stream(input: string, config?: ExecutionConfig): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
 
   /**
-   * 同步执行（便捷方法）
+   * 非流式执行（便捷方法）
    *
-   * 内部调用 stream() 并静默消费所有事件，返回最终结果。
+   * 内部调用 `stream()` 并消费完整个事件流，最终只返回 `ExecutionResult`。
    *
    * @param input 用户输入
    * @param config 执行配置
    */
   run(input: string, config?: ExecutionConfig): Promise<ExecutionResult>;
 
-  // ========== 错误恢复与动态控制 ==========
-
-  /** 当前思考级别（如 'high', 'medium', 'low'，如果支持） */
-  readonly thinkingLevel?: string;
-
-  /** 动态修改思考级别（用于错误恢复降级） */
-  setThinkingLevel?(level: string): void;
-
-  /** 手动触发上下文压缩（用于 context_length_exceeded 错误恢复） */
-  compressSession?(options?: { force?: boolean }): Promise<unknown>;
-
-  // ========== 会话管理 ==========
-
-  /** 获取会话信息 */
-  getSession(): Promise<SessionInfo>;
-  /** 清除会话历史 */
-  clearSession(): Promise<void>;
+  /**
+   * 中止当前进行中的执行
+   *
+   * 用户或调度层取消任务时调用：应触发本次 `stream` / `run` 所用的
+   * `AbortSignal`，使 LLM 请求、流式消费与工具执行尽快结束。
+   * 无在途执行时须为 no-op；可安全重复调用。
+   */
+  abort(): void;
 }

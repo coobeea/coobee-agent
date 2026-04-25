@@ -90,7 +90,7 @@ export class PiMonoBuilder extends BaseAgentBuilder {
       baseURL: this.resolveBaseURL()
     };
 
-    // 可选字段：仅在设置时传入，避免覆盖 Runtime 的默认值
+    // 可选字段：仅在设置时传入
     if (this._appendInstructions.length > 0) opts.appendInstructions = this._appendInstructions;
     if (this._sessionId) opts.sessionId = this._sessionId;
     if (this._sessionMode) opts.sessionMode = this._sessionMode;

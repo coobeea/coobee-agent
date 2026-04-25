@@ -30,67 +30,29 @@
  * - types.ts                — 类型定义
  */
 
-import path from 'node:path';
+import type { Model } from '@mariozechner/pi-ai';
+import type { AgentSession, ToolDefinition as PiToolDefinition } from '@mariozechner/pi-coding-agent';
 import {
+  AuthStorage,
   createAgentSession,
   createExtensionRuntime,
-  AuthStorage,
   ModelRegistry,
   SessionManager,
   SettingsManager
 } from '@mariozechner/pi-coding-agent';
-import type { AgentSession, ToolDefinition as PiToolDefinition } from '@mariozechner/pi-coding-agent';
-import type { Model } from '@mariozechner/pi-ai';
-import { AbstractAgentRuntime } from '../AbstractAgentRuntime';
+import path from 'node:path';
+import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
+import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from '../types';
 import { ChunkQueue } from './ChunkQueue';
-import { convertTools } from './PiMonoToolConverter';
 import { setupEventSubscription } from './PiMonoStreamAdapter';
-import type { ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from '../types';
-import type { PiMonoAgentRuntimeOptions, ThinkingLevel } from './types';
-
-/** 默认最大执行轮次（TODO: 接入 maxTurns 配置后启用） */
-// const DEFAULT_MAX_TURNS = 25
-
-/** 默认模型 */
-const DEFAULT_MODEL = 'MiniMax-M2.1';
-
-/** 默认 Base URL（MiniMax OpenAI 兼容端点） */
-const DEFAULT_BASE_URL = 'https://api.minimaxi.com/v1';
+import { convertTools } from './PiMonoToolConverter';
 
 /**
- * 自定义 Provider 名称
- *
- * 因为我们构造自定义 Model 对象，使用一个固定的 provider 名称
- * 来注册 API key 到 AuthStorage 中。
+ * 构造自定义 OpenAI 兼容 Model 时，在 pi-SDK AuthStorage 中注册 API Key 使用的 provider 键名（非用户可配业务默认值）。
  */
-const CUSTOM_PROVIDER = 'openai-compat';
+const PI_OPENAI_COMPAT_PROVIDER = 'openai-compat';
 
-// ========== Logger ==========
-
-interface RuntimeLogger {
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string, ...args: unknown[]): void;
-  debug(message: string, ...args: unknown[]): void;
-}
-
-const createRuntimeLogger = (): RuntimeLogger => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createLogger } = require('@main/common/logger');
-    return createLogger('pimono-runtime') as RuntimeLogger;
-  } catch {
-    const prefix = '[PiMonoAgentRuntime]';
-    return {
-      info: (msg: string, ...args: unknown[]) => console.log(`${prefix} ${msg}`, ...args),
-      warn: (msg: string, ...args: unknown[]) => console.warn(`${prefix} ${msg}`, ...args),
-      error: (msg: string, ...args: unknown[]) => console.error(`${prefix} ${msg}`, ...args),
-      debug: (msg: string, ...args: unknown[]) => console.debug(`${prefix} ${msg}`, ...args)
-    };
-  }
-};
-
-const log = createRuntimeLogger();
+const log = createRuntimeLogger('pimono-runtime');
 
 /**
  * 构造 OpenAI Chat Completions 兼容的 Model 对象
@@ -105,7 +67,7 @@ const log = createRuntimeLogger();
 function createOpenAICompatModel(
   modelName: string,
   baseURL: string,
-  modelMeta?: PiMonoAgentRuntimeOptions['modelMeta']
+  modelMeta?: AgentRuntimeOptions['modelMeta']
 ): Model<'openai-completions'> {
   const reasoning = modelMeta?.reasoning ?? true;
   const contextWindow = modelMeta?.contextWindow ?? 204800;
@@ -115,7 +77,7 @@ function createOpenAICompatModel(
     id: modelName,
     name: modelName,
     api: 'openai-completions',
-    provider: CUSTOM_PROVIDER,
+    provider: PI_OPENAI_COMPAT_PROVIDER,
     baseUrl: baseURL,
     reasoning,
     input: ['text'],
@@ -150,37 +112,38 @@ function createOpenAICompatModel(
  * 5. 管理会话生命周期
  */
 export class PiMonoAgentRuntime extends AbstractAgentRuntime {
-  readonly type = 'agent' as const;
-  readonly id: string;
-  readonly options: PiMonoAgentRuntimeOptions;
-
   // pi-SDK 会话（initialize 后可用）
   private piSession!: AgentSession;
 
   // 会话
   private readonly sessionId: string;
-  private createdAt: number;
 
   // 当前执行的 AbortSignal（用于工具执行）
   private currentSignal?: AbortSignal;
 
-  constructor(options: PiMonoAgentRuntimeOptions) {
-    super();
-    this.options = options;
-    this.id = `pi-agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  constructor(options: AgentRuntimeOptions) {
+    super(options);
     this.sessionId = options.sessionId || `pi-session-${Date.now()}`;
-    this.createdAt = Date.now();
+    this.currentSignal = options.signal;
   }
 
-  get name(): string {
-    return this.options.name;
+  /**
+   * 直接请求 pi-SDK 中断当前对话（例如用户从 UI 点「停止」且需同步到 SDK 时）。
+   * 正常取消仍以 `ExecutionConfig.signal` 为主（与 `doStream` 内监听一致）。
+   */
+  override abort(): void {
+    try {
+      this.piSession?.agent.abort();
+    } catch (e: unknown) {
+      log.warn('[PiMonoRuntime] abort() failed:', e);
+    }
   }
 
   // ========== 生命周期 ==========
 
   async initialize(): Promise<void> {
-    const modelName = this.options.model || DEFAULT_MODEL;
-    const baseURL = this.options.baseURL || DEFAULT_BASE_URL;
+    const modelName = this.options.model;
+    const baseURL = this.options.baseURL;
     const thinkingLevel = this.options.thinkingLevel || 'medium';
 
     // 1. 构造 OpenAI 兼容的 Model 对象（从 coobee.json5 模型配置透传元数据）
@@ -190,13 +153,13 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     //    通过 AuthStorage 注入 API key，使用自定义 provider 名称
     //    新版本使用静态工厂方法 AuthStorage.inMemory() 创建实例
     const authStorage = AuthStorage.inMemory();
-    authStorage.setRuntimeApiKey(CUSTOM_PROVIDER, this.options.apiKey);
+    authStorage.setRuntimeApiKey(PI_OPENAI_COMPAT_PROVIDER, this.options.apiKey);
     const modelRegistry = ModelRegistry.inMemory(authStorage);
 
     // 3. Session 管理
     //    file 模式：使用 workspace/sessions/ 目录
     //    memory 模式：内存存储，sessionId 仅作标识
-    const cwd = this.options.cwd || process.cwd();
+    const cwd = process.cwd();
     const sessionDir = this.options.sessionDir
       ? path.join(this.options.sessionDir, 'sessions')
       : path.join(cwd, '.coobee-test', 'sessions', this.sessionId);
@@ -251,11 +214,11 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     const sandboxContext =
       this.options.sandboxContext ||
       createFallbackToolContext({
-        workspaceRoot: (this.options.cwd as string) || this.options.workspaceRoot || process.cwd(),
+        workspaceRoot: this.options.workspaceRoot || process.cwd(),
         sessionId: this.sessionId
       });
     const allSdkTools: PiToolDefinition[] = [
-      ...((this.options.sdkTools as PiToolDefinition[]) || []),
+      ...[],
       ...convertTools(this.options.tools || [], { sandboxContext, log, getSignal: () => this.currentSignal })
     ];
 
@@ -263,7 +226,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     //    有工具时：tools: [] 禁用内置 codingTools，通过 customTools 传入自定义工具
     //    无工具时：完全不传 tools/customTools，避免 API 收到空 tools 数组报 400
     const sessionConfig: Record<string, unknown> = {
-      cwd: this.options.cwd || process.cwd(),
+      cwd: process.cwd(),
       model,
       thinkingLevel,
       authStorage,
@@ -302,16 +265,6 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     log.info(`Destroyed: ${this.name}`);
   }
 
-  // ========== 错误恢复与动态控制 ==========
-
-  get thinkingLevel(): string | undefined {
-    return this.options.thinkingLevel;
-  }
-
-  setThinkingLevel(level: string): void {
-    this.options.thinkingLevel = level as ThinkingLevel;
-  }
-
   // ========== 执行方法 ==========
 
   // run() 由基类 AbstractAgentRuntime 提供（消费 stream()，自动继承快照功能）
@@ -331,13 +284,10 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
    */
   protected async *doStream(
     input: string,
-    config?: ExecutionConfig
+    _config?: ExecutionConfig
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const startTime = Date.now();
     const queue = new ChunkQueue<StreamChunk>();
-
-    // 保存当前的 AbortSignal，供工具执行使用
-    this.currentSignal = (config as Record<string, unknown>)?.signal as AbortSignal | undefined;
 
     log.info(`[PiMonoRuntime] Running stream: ${this.name}`);
 
@@ -489,7 +439,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     }));
 
     return {
-      model: this.options.model || 'unknown',
+      model: this.options.model,
       messages,
       ...(tools && tools.length > 0 ? { tools } : {}),
       stream: true,
@@ -498,65 +448,4 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   }
 
   // runStream() 由基类 AbstractAgentRuntime 提供
-
-  // ========== 会话管理 ==========
-
-  async getSession(): Promise<SessionInfo> {
-    const messages = this.piSession.messages || [];
-    return {
-      sessionId: this.sessionId,
-      createdAt: this.createdAt,
-      updatedAt: Date.now(),
-      messageCount: messages.length,
-      metadata: {
-        agentId: this.id,
-        agentName: this.name,
-        piSessionId: this.piSession.sessionId
-      }
-    };
-  }
-
-  async clearSession(): Promise<void> {
-    log.info(`Clearing session: ${this.sessionId}`);
-    // pi-SDK 的 SessionManager.inMemory() 在 dispose 后重建即可
-    // 对于 file 模式，需要重新创建会话
-  }
-
-  // ========== 可观测性（Observability） ==========
-
-  /**
-   * 获取 session 文件路径（仅 file 模式有值）
-   */
-  getSessionFilePath(): string | undefined {
-    return this.piSession?.sessionFile;
-  }
-
-  /**
-   * 获取 pi-SDK 的 session 上下文
-   *
-   * 返回 buildSessionContext() 的结果——即发送给 LLM 的完整消息列表。
-   * 含压缩摘要、用户消息、助手消息、工具结果等。
-   */
-  getSessionContext(): { messages: unknown[]; thinkingLevel: string; model: unknown } | null {
-    try {
-      return this.piSession?.sessionManager?.buildSessionContext() ?? null;
-    } catch (e) {
-      log.warn('Failed to get session context:', e);
-      return null;
-    }
-  }
-
-  /**
-   * 获取所有原始消息
-   */
-  getRawMessages(): unknown[] {
-    return this.piSession?.messages ?? [];
-  }
-
-  /**
-   * 获取 session 管理器（高级用法，供测试/调试使用）
-   */
-  getSessionManager(): unknown {
-    return this.piSession?.sessionManager ?? null;
-  }
 }

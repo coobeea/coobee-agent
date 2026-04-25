@@ -17,9 +17,10 @@ import type { StreamedRunResult, Tool } from '@openai/agents';
 import { FileSession } from './FileSession';
 import { SessionCompressor } from './SessionCompressor';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
-import { AbstractAgentRuntime } from '../AbstractAgentRuntime';
+import { AbstractAgentRuntime, createRuntimeLogger, generateRuntimeId } from '../AbstractAgentRuntime';
 import {
   buildInstructions,
+  type AgentRuntimeKind,
   type ExecutionConfig,
   type ExecutionResult,
   type StreamChunk,
@@ -35,35 +36,7 @@ const DEFAULT_MAX_TURNS = 25;
 /** 默认模型 */
 const DEFAULT_MODEL = 'gpt-4o';
 
-// ========== Logger ==========
-// 尝试使用 electron-log（生产环境），fallback 到 console（测试环境）
-// 这样无论在 Electron 还是 vitest 中都能输出日志
-
-interface RuntimeLogger {
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string, ...args: unknown[]): void;
-  debug(message: string, ...args: unknown[]): void;
-}
-
-const createRuntimeLogger = (): RuntimeLogger => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createLogger } = require('@main/common/logger');
-    return createLogger('agent-runtime') as RuntimeLogger;
-  } catch {
-    // Electron 环境不可用（如测试），fallback 到 console
-    const prefix = '[OpenAIAgentRuntime]';
-    return {
-      info: (msg: string, ...args: unknown[]) => console.log(`${prefix} ${msg}`, ...args),
-      warn: (msg: string, ...args: unknown[]) => console.warn(`${prefix} ${msg}`, ...args),
-      error: (msg: string, ...args: unknown[]) => console.error(`${prefix} ${msg}`, ...args),
-      debug: (msg: string, ...args: unknown[]) => console.debug(`${prefix} ${msg}`, ...args)
-    };
-  }
-};
-
-const log = createRuntimeLogger();
+const log = createRuntimeLogger('agent-runtime');
 
 /**
  * OpenAI Agent 运行时
@@ -77,12 +50,6 @@ const log = createRuntimeLogger();
  * 4. 处理 HITL 工具审批的暂停/恢复
  */
 export class OpenAIAgentRuntime extends AbstractAgentRuntime {
-  readonly type = 'agent' as const;
-  readonly id: string;
-
-  // Agent 配置（构造时传入，不可变）
-  readonly options: OpenAIAgentRuntimeOptions;
-
   // Agent 实例（initialize 后可用）
   private agent!: Agent;
 
@@ -105,7 +72,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   constructor(options: OpenAIAgentRuntimeOptions) {
     super();
     this.options = options;
-    this.id = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.id = generateRuntimeId('agent');
     this.sessionId = options.sessionId || `session-${Date.now()}`;
     this.createdAt = Date.now();
   }

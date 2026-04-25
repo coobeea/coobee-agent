@@ -1,28 +1,26 @@
 /**
- * AbstractAgentRuntime — 抽象基类
+ * AbstractAgentRuntime — 运行时抽象基类
  *
- * 提取 OpenAI、PiMono、Team、Swarm 的公共实现：
- *   - id 生成（crypto.randomUUID 或 timestamp+random）
- *   - run() 默认实现（消费 stream() 收集结果）
- *   - runStream(onChunk) 默认实现
- *   - createRuntimeLogger() 静态工厂
- *   - stripThinkTags() 静态工具
+ * 这层的职责很克制：它只服务于“已构建完成的 runtime 实例”。
+ * 它不负责：
+ *   - 选择具体 runtime
+ *   - 创建 builder
+ *   - 组装 provider / model / thinking level
  *
- * 子类只需实现：
- *   - stream() — 核心流式方法
- *   - initialize() / destroy() — 生命周期
- *   - getSession() / clearSession() — 会话管理
- *   - 以及必要的 HITL 方法（或使用默认的 throw 实现）
+ * 它负责的公共行为是：
+ *   - 固化运行时身份：`id` / `type` / `name` / `options`
+ *   - 提供 `stream()` 模板方法
+ *   - 在模板方法里统一做快照写入与错误恢复
+ *   - 提供 `run()` / `runStream()` 默认实现
+ *   - 提供统一 logger
+ *
+ * 子类只需要关注各自 SDK 的真实执行过程。
  */
 
 import type { AgentRuntime } from './AgentRuntime';
-import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from './types';
+import type { AgentRuntimeKind, AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from './types';
 import { saveContextSnapshot } from './ContextSnapshotWriter';
 import { defaultRecoveryChain } from './ErrorRecoveryChain';
-
-type RecoveryRuntime = Pick<AgentRuntime, 'thinkingLevel' | 'setThinkingLevel' | 'compressSession'> & {
-  compressor?: unknown;
-};
 
 // ==================== Logger 工具 ====================
 
@@ -55,24 +53,11 @@ export function createRuntimeLogger(moduleName: string): RuntimeLogger {
   }
 }
 
-// ==================== 文本工具 ====================
-
-/**
- * 去除文本中的 `<think>...</think>` 标签及其内容
- *
- * 部分 Provider（如 MiniMax）在 OpenAI 兼容模式下
- * 会将思考内容以 `<think>` 标签包裹在文本中返回。
- */
-export function stripThinkTags(text: string): string {
-  if (!text) return '';
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
-}
-
 // ==================== ID 生成 ====================
 
 /**
- * 生成 Runtime 唯一 ID
- * @param prefix 前缀标识（如 'agent', 'pi-agent', 'orchestrator', 'swarm'）
+ * 生成 Runtime 唯一 ID（时间戳 + 随机后缀，同进程内足够区分实例）
+ * @param prefix 通常传入 `AgentRuntimeKind`（如 `pi-mono`、`openai`）
  */
 export function generateRuntimeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -81,20 +66,30 @@ export function generateRuntimeId(prefix: string): string {
 // ==================== 抽象基类 ====================
 
 /**
- * Agent Runtime 抽象基类
+ * AgentRuntime 的模板基类
  *
- * 提供 run()、runStream() 等的默认实现。
- * 子类继承后只需聚焦于 stream() 的 SDK 特定逻辑。
+ * `stream()` 是统一入口，`doStream()` 是子类扩展点。
+ * 这样可以把快照、恢复、默认执行封装收在内层，不让各 runtime 重复实现。
  */
 export abstract class AbstractAgentRuntime implements AgentRuntime {
-  abstract readonly type: 'agent' | 'orchestrator' | 'swarm' | 'quality-loop';
-  abstract readonly id: string;
-  abstract readonly name: string;
-  abstract readonly options: AgentRuntimeOptions;
+  readonly id: string;
+  readonly type: AgentRuntimeKind;
+  readonly name: string;
+  readonly options: AgentRuntimeOptions;
+
+  constructor(options: AgentRuntimeOptions) {
+    this.options = options;
+    this.type = options.type;
+    this.name = options.name;
+    this.id = generateRuntimeId(this.type);
+  }
 
   // ========== 生命周期（子类必须实现） ==========
 
+  /** 做底层 SDK / session / resource 的运行前准备，不承担 builder 组装职责 */
   abstract initialize(): Promise<void>;
+
+  /** 释放底层资源、订阅、文件句柄或网络连接 */
   abstract destroy(): Promise<void>;
 
   // ========== 核心流式方法 ==========
@@ -102,8 +97,8 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
   /**
    * 子类实现此方法 — 核心流式逻辑
    *
-   * 不直接暴露给调用方，由 stream() 模板方法包装。
-   * 子类只需关注 SDK 特定的流式执行逻辑。
+   * 不直接暴露给调用方，由 `stream()` 模板方法包装。
+   * 子类在这里专注于“如何和具体 SDK 对接并产出标准 chunk”。
    */
   protected abstract doStream(
     input: string,
@@ -113,8 +108,10 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
   /**
    * 流式执行 — 模板方法（最终暴露给调用方）
    *
-   * 包装 doStream()，在执行完成后自动写入上下文快照。
-   * 子类不需要覆盖此方法，实现 doStream() 即可。
+   * 包装 `doStream()`，把公共控制逻辑统一收在这一层：
+   *   - 正常完成后写上下文快照
+   *   - 出错后按恢复链决定是否重试
+   * 子类通常不需要覆盖此方法，实现 `doStream()` 即可。
    *
    * 自动行为：
    *   - 透传 doStream() 的所有 StreamChunk
@@ -145,12 +142,11 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
       } catch (error: unknown) {
         if (!(error instanceof Error)) throw error;
 
-        // 渐进式错误恢复 — 注入 runtime 引用，供 ContextCompression / ThinkingLevel 策略使用
+        // 渐进式错误恢复（重试 / 延迟等由恢复链决定）
         const recovery = await defaultRecoveryChain.recover(error, {
           attempt,
           maxAttempts,
-          sessionId: config?.sessionId as string | undefined,
-          runtime: this.buildRecoveryRuntime() as AgentRuntime
+          sessionId: config?.sessionId as string | undefined
         });
 
         if (recovery.action === 'retry') {
@@ -174,48 +170,12 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
     }
   }
 
-  /**
-   * 为错误恢复链提供最小能力门面，避免策略层依赖完整 Runtime 实例。
-   */
-  protected buildRecoveryRuntime(): RecoveryRuntime {
-    const runtime = this as AbstractAgentRuntime &
-      Partial<AgentRuntime> & {
-        compressor?: unknown;
-        sessionCompressor?: {
-          compress?: () => Promise<unknown>;
-        };
-      };
-    const options = this.options as AgentRuntimeOptions & { thinkingLevel?: string };
-    const compressor = runtime.compressor ?? runtime.sessionCompressor;
-    const compressSession =
-      typeof runtime.compressSession === 'function'
-        ? runtime.compressSession.bind(this)
-        : typeof runtime.sessionCompressor?.compress === 'function'
-          ? async () => runtime.sessionCompressor!.compress!()
-          : undefined;
-
-    return {
-      compressor,
-      compressSession,
-      get thinkingLevel() {
-        return runtime.thinkingLevel ?? options.thinkingLevel;
-      },
-      setThinkingLevel(level: string) {
-        if (typeof runtime.setThinkingLevel === 'function') {
-          runtime.setThinkingLevel(level);
-          return;
-        }
-        options.thinkingLevel = level;
-      }
-    };
-  }
-
   // ========== 默认实现：run ==========
 
   /**
-   * 同步执行 — 消费 stream() 收集结果
+   * 非流式执行 — 消费 `stream()` 收集结果
    *
-   * 通过 stream() 模板方法执行，自动继承上下文快照功能。
+   * 通过 `stream()` 模板方法执行，自动继承快照与错误恢复能力。
    * 子类一般不需要覆盖此方法。
    */
   async run(input: string, config?: ExecutionConfig): Promise<ExecutionResult> {
@@ -227,12 +187,18 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
     return r.value;
   }
 
+  /**
+   * 中止当前执行：实现类应将取消传递到所用 SDK（例如中止底层 Agent / HTTP）。
+   * 与 `ExecutionConfig.signal` 配合使用；无在途任务时允许为空操作，可安全重复调用。
+   */
+  abstract abort(): void;
+
   // ========== 默认实现：runStream ==========
 
   /**
-   * 流式执行（回调模式 — stream() 的包装）
+   * 流式执行（回调模式）
    *
-   * 这是一个便捷方法，将 AsyncGenerator 转为回调模式。
+   * 这是一个便捷包装，把 AsyncGenerator 形式转换成回调消费形式。
    * 子类一般不需要覆盖。
    */
   async runStream(
@@ -248,9 +214,4 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
     }
     return r.value;
   }
-
-  // ========== 会话管理（子类必须实现） ==========
-
-  abstract getSession(): Promise<SessionInfo>;
-  abstract clearSession(): Promise<void>;
 }
