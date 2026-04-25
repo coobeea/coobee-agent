@@ -13,7 +13,6 @@
  */
 
 import { createLogger } from '@main/common/logger';
-import type { InternalAgentRuntime } from './AgentRuntime';
 
 const log = createLogger('error-recovery');
 
@@ -48,7 +47,11 @@ export interface RecoveryContext {
    *   - thinkingLevel: 当前思考级别（ThinkingLevelFallbackStrategy 使用）
    *   - setThinkingLevel: 修改思考级别
    */
-  runtime?: InternalAgentRuntime;
+  runtime?: {
+    compressSession?: () => Promise<void>;
+    thinkingLevel?: string;
+    setThinkingLevel?: (level: 'high' | 'medium' | 'low' | 'off') => void;
+  };
 }
 
 // ==================== Strategies ====================

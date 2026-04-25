@@ -26,10 +26,9 @@ import { createLogger } from '@main/common/logger';
 const log = createLogger('ai');
 
 import { SessionStatusManager, type SessionStatus } from './runtime/SessionStatusManager';
-import type { InternalAgentRuntime } from './runtime/AgentRuntime';
+import type { AgentRuntime } from './runtime/AgentRuntime';
 import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from './runtime/types';
-import { PiMonoBuilder } from './runtime/pimono/PiMonoBuilder';
-import { OpenAIBuilder } from './runtime/openai/OpenAIBuilder';
+import { AgentRuntimeBuilder } from './runtime/AgentRuntimeBuilder';
 import { createStreamEmitter, type IStreamEmitter } from './streaming/StreamEmitter';
 import type { StreamSource } from './streaming/types';
 import { injectEnv } from './AgentEnvInjector';
@@ -40,7 +39,7 @@ import { SkillManager } from './skills/SkillManager';
 // ==================== 类型定义 ====================
 
 /** 支持的 Builder 类型 */
-export type AgentBuilder = PiMonoBuilder | OpenAIBuilder;
+export type AgentBuilder = AgentRuntimeBuilder;
 
 /** 执行请求 */
 export interface ExecuteRequest {
@@ -51,7 +50,7 @@ export interface ExecuteRequest {
   /** Builder 实例（通过 agentExecutor.piMono() 或 agentExecutor.openai() 创建） */
   builder?: AgentBuilder;
   /** 预构建的 Runtime（Orchestrator / Swarm 等已初始化的运行时，跳过 Builder 流程） */
-  runtime?: InternalAgentRuntime;
+  runtime?: AgentRuntime;
   /** 流式事件回调（可选） */
   onChunk?: (chunk: StreamChunk) => void;
   /** 中止信号（Pipeline 传入，用于提前终止流式消费） */
@@ -66,6 +65,14 @@ export type { SessionStatus } from './runtime/SessionStatusManager';
 // ==================== AgentExecutor ====================
 
 class AgentExecutor {
+  private getRuntimeIdentity(runtime: AgentRuntime): { id: string; name: string } {
+    const candidate = runtime as AgentRuntime & { id?: string; name?: string };
+    return {
+      id: candidate.id ?? 'agent-runtime',
+      name: candidate.name ?? 'agent'
+    };
+  }
+
   /** 活跃会话状态管理 */
   private sessionStatus = new SessionStatusManager();
 
@@ -108,16 +115,18 @@ class AgentExecutor {
    * 调用方只需关心自己的业务配置（instructions、tools、name 等）。
    * 如需覆盖模型，在工厂返回后调 .model() 即可。
    */
-  piMono(): PiMonoBuilder {
-    const builder = new PiMonoBuilder();
+  piMono(): AgentRuntimeBuilder {
+    const builder = new AgentRuntimeBuilder().type('pi-mono');
     this.applyProviderConfig(builder);
     this.applyThinkingLevel(builder);
     return builder;
   }
 
   /** 创建 OpenAI Agent Builder */
-  openai(): OpenAIBuilder {
-    return new OpenAIBuilder();
+  openai(): AgentRuntimeBuilder {
+    const builder = new AgentRuntimeBuilder().type('openai');
+    this.applyProviderConfig(builder);
+    return builder;
   }
 
   // ========== 提交执行 ==========
@@ -417,7 +426,7 @@ class AgentExecutor {
    */
   private async *executePipeline(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const { sessionId, message, builder, onChunk, signal: externalSignal } = request;
-    let runtime: InternalAgentRuntime | null = null;
+    let runtime: AgentRuntime | null = null;
 
     log.info(`[AgentExecutor] Execute Pipeline: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
     const startTime = Date.now();
@@ -469,10 +478,11 @@ class AgentExecutor {
         }
 
         // agent:start 事件
+        const runtimeIdentity = this.getRuntimeIdentity(runtime);
         await this.emitAgentLifecycleEvent('agent:start', {
           sessionId,
-          agentId: runtime.id,
-          agentName: runtime.name,
+          agentId: runtimeIdentity.id,
+          agentName: runtimeIdentity.name,
           task: message.substring(0, 200)
         });
 
@@ -495,8 +505,8 @@ class AgentExecutor {
         // agent:done 事件
         await this.emitAgentLifecycleEvent('agent:done', {
           sessionId,
-          agentId: runtime.id,
-          agentName: runtime.name,
+          agentId: runtimeIdentity.id,
+          agentName: runtimeIdentity.name,
           success: true,
           durationMs: duration,
           summary: result.output?.substring(0, 500)
@@ -538,10 +548,11 @@ class AgentExecutor {
       }
 
       // agent:start 事件
+      const runtimeIdentity = this.getRuntimeIdentity(runtime);
       await this.emitAgentLifecycleEvent('agent:start', {
         sessionId,
-        agentId: runtime.id,
-        agentName: runtime.name,
+        agentId: runtimeIdentity.id,
+        agentName: runtimeIdentity.name,
         task: message.substring(0, 200)
       });
 
@@ -564,7 +575,7 @@ class AgentExecutor {
 
       // === Extension Hooks: run_completed（fire-and-forget）===
       if (!isLightweight) {
-        const stableAgentId = builderAgentId || runtime.id;
+        const stableAgentId = builderAgentId || runtimeIdentity.id;
         this.runExtensionEndHooks(sessionId, stableAgentId, result, duration).catch((err) => {
           log.warn(`[AgentExecutor] Extension end hooks failed: sessionId=${sessionId}`, err);
         });
@@ -573,8 +584,8 @@ class AgentExecutor {
       // agent:done 事件
       await this.emitAgentLifecycleEvent('agent:done', {
         sessionId,
-        agentId: runtime.id,
-        agentName: runtime.name,
+        agentId: runtimeIdentity.id,
+        agentName: runtimeIdentity.name,
         success: true,
         durationMs: duration,
         summary: result.output?.substring(0, 500)
@@ -587,10 +598,11 @@ class AgentExecutor {
 
       // agent:done 事件（失败）
       if (runtime) {
+        const runtimeIdentity = this.getRuntimeIdentity(runtime);
         await this.emitAgentLifecycleEvent('agent:done', {
           sessionId,
-          agentId: runtime.id,
-          agentName: runtime.name,
+          agentId: runtimeIdentity.id,
+          agentName: runtimeIdentity.name,
           success: false,
           durationMs: duration,
           error: error instanceof Error ? error.message : String(error)
@@ -647,20 +659,24 @@ class AgentExecutor {
   }
 
   /** 创建 StreamEmitter */
-  private createEmitter(sessionId: string, runtime: InternalAgentRuntime): IStreamEmitter {
+  private createEmitter(sessionId: string, runtime: AgentRuntime): IStreamEmitter {
+    const runtimeIdentity = this.getRuntimeIdentity(runtime);
     const source: StreamSource = {
       type: 'agent',
-      id: runtime.id,
-      name: runtime.name
+      id: runtimeIdentity.id,
+      name: runtimeIdentity.name
     };
     return createStreamEmitter(sessionId, source);
   }
 
   /** 安全销毁 Runtime */
-  private async destroyRuntime(runtime: InternalAgentRuntime | null): Promise<void> {
+  private async destroyRuntime(runtime: AgentRuntime | null): Promise<void> {
     if (!runtime) return;
     try {
-      await runtime.destroy();
+      const destroyable = runtime as AgentRuntime & { destroy?: () => Promise<void> };
+      if (typeof destroyable.destroy === 'function') {
+        await destroyable.destroy();
+      }
     } catch (e: unknown) {
       log.warn('[AgentExecutor] Runtime destroy warning:', e);
     }
@@ -679,7 +695,7 @@ class AgentExecutor {
   }
 
   private buildRuntimeOptions(
-    runtime: InternalAgentRuntime,
+    runtime: AgentRuntime,
     sessionId: string,
     signal?: AbortSignal,
     executionConfig?: ExecutionConfig
@@ -831,5 +847,8 @@ export function getAgentExecutor(): AgentExecutor {
 }
 
 // Re-export builders for consumers
-export { PiMonoBuilder } from './runtime/pimono/PiMonoBuilder';
-export { OpenAIBuilder } from './runtime/openai/OpenAIBuilder';
+export {
+  AgentRuntimeBuilder,
+  AgentRuntimeBuilder as PiMonoBuilder,
+  AgentRuntimeBuilder as OpenAIBuilder
+} from './runtime/AgentRuntimeBuilder';

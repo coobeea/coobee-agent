@@ -129,7 +129,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
           attempt,
           maxAttempts,
           sessionId: runtimeOptions.sessionId,
-          runtime: this as unknown as import('./AgentRuntime').InternalAgentRuntime
+          runtime: this as unknown
         });
 
         if (recovery.action === 'retry') {

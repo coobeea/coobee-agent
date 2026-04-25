@@ -45,14 +45,3 @@ export interface AgentRuntime {
    */
   run(input: string): Promise<ExecutionResult>;
 }
-
-/**
- * Runtime 内部接口（Executor 使用）
- */
-export interface InternalAgentRuntime extends AgentRuntime {
-  id: string;
-  name: string;
-  type: AgentRuntimeOptions['type'];
-  initialize(): Promise<void>;
-  destroy(): Promise<void>;
-}
