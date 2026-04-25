@@ -109,6 +109,10 @@ export class AgentRuntimeBuilder {
     return this;
   }
 
+  hasTools(): boolean {
+    return !!this.options.tools && this.options.tools.length > 0;
+  }
+
   maxTurns(maxTurns: number): this {
     this.options.maxTurns = maxTurns;
     return this;

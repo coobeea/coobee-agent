@@ -128,8 +128,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
         const recovery = await defaultRecoveryChain.recover(error, {
           attempt,
           maxAttempts,
-          sessionId: runtimeOptions.sessionId,
-          runtime: this as unknown
+          sessionId: runtimeOptions.sessionId
         });
 
         if (recovery.action === 'retry') {

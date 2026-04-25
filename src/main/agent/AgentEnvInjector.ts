@@ -28,7 +28,7 @@ import { AgentHomeManager } from './agents/AgentHomeManager';
 import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
-import type { AgentBuilder } from './AgentExecutor';
+import type { AgentRuntimeBuilder as AgentBuilder } from './runtime/AgentRuntimeBuilder';
 import { AgentContextResolver } from './context/AgentContextResolver';
 import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 
@@ -48,13 +48,11 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
 
     // 1. 获取/创建工作空间
     // 🆕 检查是否已手动设置 workspace（如子 Agent 手动设置了 workspaceRoot）
-    const existingWorkspace = (
-      builder as unknown as { getWorkspaceRoot?: () => string | undefined }
-    ).getWorkspaceRoot?.();
+    const existingWorkspace = builder.getWorkspaceRoot?.();
     const workspace = existingWorkspace || (await Env.getAgentWorkspaceDir(sessionId));
 
     // 2. 初始化 Agent Home（如果有 agentId）
-    const agentId = (builder as unknown as { getAgentId?: () => string | undefined }).getAgentId?.();
+    const agentId = builder.getAgentId?.();
     let agentHome: string | undefined;
     let homeManager: AgentHomeManager | undefined;
     if (agentId) {
@@ -171,7 +169,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
       // 8c. 注入工具到 builder（如果 builder 还没有设置工具）
       //     从 ToolRegistry 获取所有已注册的工具（builtin + Extension）
       //     过滤：应用 Agent 定义的 excludeTools 黑名单
-      if (!(builder as unknown as { _tools?: unknown })._tools) {
+      if (!builder.hasTools()) {
         const { ToolRegistry } = await import('./tools/registry');
         const allTools = ToolRegistry.getInstance().getAll();
 
