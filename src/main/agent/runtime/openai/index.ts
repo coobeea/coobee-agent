@@ -20,7 +20,6 @@ export { countTokens, countItemTokens, countItemsTokens, isWithinLimit, formatTo
 
 // OpenAI 特有类型
 export type {
-  OpenAIAgentRuntimeOptions,
   OpenAIApprovalItem,
   SessionItem,
   SummaryMeta,

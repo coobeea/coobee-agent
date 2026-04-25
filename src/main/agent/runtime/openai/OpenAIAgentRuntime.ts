@@ -4,7 +4,7 @@
  * 基于 OpenAI Agents SDK 实现 AgentRuntime 接口。
  *
  * 核心能力：
- * - 纯参数驱动：name, instructions, tools, handoffs 全部由调用方传入
+ * - 纯参数驱动：name, instructions, tools 全部由调用方传入
  * - FileSession：JSONL 持久化，带序号的 SessionItem 格式（智能上下文构建）
  * - 完整流式事件：覆盖 doc 15 所有 RunStreamEvent（text, reasoning, tool, handoff, approval 等）
  * - HITL 工具审批：暂停/审批/恢复执行流程
@@ -15,7 +15,6 @@
 import { run, Agent, tool } from '@openai/agents';
 import type { StreamedRunResult, Tool } from '@openai/agents';
 import { FileSession } from './FileSession';
-import { SessionCompressor } from './SessionCompressor';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import {
@@ -23,10 +22,8 @@ import {
   type AgentRuntimeOptions,
   type ExecutionResult,
   type StreamChunk,
-  type SessionInfo,
   type ToolDefinition
 } from '../types';
-import type { OpenAIAgentRuntimeOptions, ContextSnapshot, CompressionResult } from './types';
 import { createFallbackToolContext } from '../shared/ToolExecutionPipeline';
 
 /** 默认最大执行轮次 */
@@ -49,88 +46,6 @@ const log = createRuntimeLogger('agent-runtime');
  * 4. 处理 HITL 工具审批的暂停/恢复
  */
 export class OpenAIAgentRuntime extends AbstractAgentRuntime {
-  // Agent 实例（initialize 后可用）
-  private agent!: Agent;
-
-  // 会话
-  private session!: FileSession;
-  private readonly sessionId: string;
-
-  // Runtime 内部异步回调产生的 chunk，统一由 stream generator yield 给 AgentExecutor。
-  private pendingRuntimeChunks: StreamChunk[] = [];
-
-  // Session 压缩器
-  private compressor?: SessionCompressor;
-
-  // 当前执行的 AbortSignal（用于工具执行）
-  private currentSignal?: AbortSignal;
-
-  // 时间
-  private createdAt: number;
-
-  constructor(options: OpenAIAgentRuntimeOptions) {
-    super(options);
-    this.sessionId = options.sessionId || `session-${Date.now()}`;
-    this.createdAt = Date.now();
-  }
-
-  // ========== 生命周期 ==========
-
-  async initialize(): Promise<void> {
-    // 1. 合并工具：sdkTools（SDK 原生）+ tools（统一 ToolDefinition 转换后）
-    const allTools: Tool[] = [...(this.options.sdkTools || []), ...this.convertTools(this.options.tools || [])];
-
-    // 2. 构建最终系统提示词：instructions + skills + appendInstructions
-    const finalInstructions = buildInstructions(
-      this.options.instructions,
-      this.options.skills,
-      this.options.appendInstructions
-    );
-
-    // 3. 创建 SDK Agent（纯配置，成本极低）
-    this.agent = new Agent({
-      name: this.options.name,
-      instructions: finalInstructions,
-      model: this.options.model || DEFAULT_MODEL,
-      ...(this.options.modelSettings ? { modelSettings: this.options.modelSettings } : {}),
-      ...(allTools.length > 0 ? { tools: allTools } : {}),
-      ...(this.options.handoffs && this.options.handoffs.length > 0 ? { handoffs: this.options.handoffs } : {})
-    });
-
-    // 2. 创建 FileSession（单层持久化）
-    this.session = new FileSession(this.sessionId, this.options.sessionDir);
-
-    // 4. 创建 Session 压缩器（如果配置启用）
-    if (this.options.compression?.enabled) {
-      this.compressor = new SessionCompressor(this.options.compression);
-    }
-
-    log.info(
-      `Initialized: ${this.name} ` +
-        `(tools: ${allTools.length}, ` +
-        `skills: ${this.options.skills?.length || 0}, ` +
-        `handoffs: ${this.options.handoffs?.length || 0}, ` +
-        `compression: ${this.options.compression?.enabled ? 'on' : 'off'}, ` +
-        `session: ${this.sessionId})`
-    );
-  }
-
-  async destroy(): Promise<void> {
-    log.info(`Destroyed: ${this.name}`);
-  }
-
-  // ========== 错误恢复与动态控制 ==========
-
-  get thinkingLevel(): string | undefined {
-    // @ts-expect-error thinkingLevel is not officially in OpenAIAgentRuntimeOptions yet, but we support it dynamically
-    return this.options.thinkingLevel;
-  }
-
-  setThinkingLevel(level: string): void {
-    // @ts-expect-error thinkingLevel is not officially in OpenAIAgentRuntimeOptions yet, but we support it dynamically
-    this.options.thinkingLevel = level;
-  }
-
   // ========== 执行方法 ==========
 
   // run() 由基类 AbstractAgentRuntime 提供（消费 stream()，自动继承快照功能）
@@ -147,44 +62,75 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     input: string,
     options: AgentRuntimeOptions
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+    const runtimeOptions = options;
+    const pendingRuntimeChunks: StreamChunk[] = [];
+    const allTools: Tool[] = [
+      ...(runtimeOptions.sdkTools || []),
+      ...this.convertTools(runtimeOptions.tools || [], runtimeOptions, pendingRuntimeChunks, runtimeOptions.signal)
+    ];
+    const finalInstructions = buildInstructions(
+      runtimeOptions.instructions,
+      runtimeOptions.skills,
+      runtimeOptions.appendInstructions
+    );
+    const sessionId = runtimeOptions.sessionId || `session-${Date.now()}`;
+    const agent = new Agent({
+      name: runtimeOptions.name,
+      instructions: finalInstructions,
+      model: runtimeOptions.model || DEFAULT_MODEL,
+      ...(allTools.length > 0 ? { tools: allTools } : {})
+    });
+    const session = new FileSession(sessionId, runtimeOptions.sessionDir);
+
+    log.info(
+      `Initialized: ${runtimeOptions.name} ` +
+        `(tools: ${allTools.length}, ` +
+        `skills: ${runtimeOptions.skills?.length || 0}, ` +
+        `session: ${sessionId})`
+    );
+
     const startTime = Date.now();
-    const maxTurns = options.maxTurns ?? this.options.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTurns = options.maxTurns ?? runtimeOptions.maxTurns ?? DEFAULT_MAX_TURNS;
 
-    // 保存当前的 AbortSignal，供工具执行使用
-    this.currentSignal = options.signal;
-
-    log.info(`Running stream: ${this.name}`);
+    log.info(`Running stream: ${runtimeOptions.name}`);
 
     try {
       // 1. run:start
       yield { type: 'run:start', content: '' };
 
-      // 1.5 执行前检查 session 压缩
-      const compressionChunks = await this.compressSessionWithChunks();
-      for (const chunk of compressionChunks) {
-        yield chunk;
-      }
-
       // 2. SDK 流式执行
-      const streamRunResult = await run(this.agent, input, {
+      const streamRunResult = await run(agent, input, {
         stream: true,
-        session: this.session,
+        session,
         maxTurns,
-        signal: this.currentSignal
+        signal: runtimeOptions.signal
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const streamResult = streamRunResult as StreamedRunResult<unknown, any>;
 
       // 3. 消费流事件（AsyncGenerator — 直接 yield）
       let fullOutput = '';
-      for await (const chunk of this.generateStreamEvents(streamResult, (text) => {
-        fullOutput += text;
-      })) {
+      let apiError: string | null = null;
+      for await (const chunk of this.generateStreamEvents(
+        streamResult,
+        (text) => {
+          fullOutput += text;
+        },
+        (errorMessage) => {
+          apiError = errorMessage;
+        },
+        () => this.drainPendingRuntimeChunks(pendingRuntimeChunks)
+      )) {
         yield chunk;
       }
 
       // 4. 等待完成
       await streamResult.completed;
+      // 与 PiMono 对齐：给尾部异步回调一个微任务周期，避免最后一批 tool:delta 丢失
+      await Promise.resolve();
+      for (const chunk of this.drainPendingRuntimeChunks(pendingRuntimeChunks)) {
+        yield chunk;
+      }
 
       // HITL 审批现在由 tool-approval Extension 在 prepare_tool_call Hook 中处理，
       // 不再依赖 SDK 的 interruptions 机制。
@@ -199,11 +145,12 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
 
       return {
         output,
+        ...(apiError ? { error: apiError } : {}),
         toolCalls: this.extractToolCalls(streamResult.newItems),
         duration,
         metadata: {
-          agentId: this.id,
-          sessionId: this.sessionId
+          agentId: runtimeOptions.type,
+          sessionId
         }
       };
     } catch (error: unknown) {
@@ -214,62 +161,13 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       };
       log.error(`Stream execution failed:`, error);
       throw error;
+    } finally {
+      pendingRuntimeChunks.length = 0;
     }
   }
 
   // runStream() 由基类 AbstractAgentRuntime 提供
   // HITL 审批由 tool-approval Extension 在 prepare_tool_call Hook 中处理
-
-  // ========== 会话管理 ==========
-
-  async getSession(): Promise<SessionInfo> {
-    const count = await this.session.getItemCount();
-    return {
-      sessionId: this.sessionId,
-      createdAt: this.createdAt,
-      updatedAt: Date.now(),
-      messageCount: count,
-      metadata: {
-        agentId: this.id,
-        agentName: this.name
-      }
-    };
-  }
-
-  async clearSession(): Promise<void> {
-    log.info(`Clearing session: ${this.sessionId}`);
-    await this.session.clearSession();
-  }
-
-  /**
-   * 获取上下文快照（调试/监控用）
-   *
-   * 返回当前 Session 的完整状态：
-   *   - contextItems：getItems() 返回的内容（即下次 LLM 调用时的上下文）
-   *   - allSessionItems：getAllSessionItems() 返回的完整存储记录
-   *   - lastSummary：最后一个 summary 的元数据
-   *   - stats：统计信息（消息数、summary 数、总 token 估算）
-   */
-  async getContextSnapshot(): Promise<ContextSnapshot> {
-    const contextItems = await this.session.getItems();
-    const allSessionItems = await this.session.getAllSessionItems();
-    const lastSummary = await this.session.getLastSummary();
-
-    const messageCount = allSessionItems.filter((si) => si.type === 'message').length;
-    const summaryCount = allSessionItems.filter((si) => si.type === 'summary').length;
-
-    return {
-      contextItems,
-      allSessionItems,
-      lastSummary: lastSummary || null,
-      stats: {
-        contextItemCount: contextItems.length,
-        totalSessionItems: allSessionItems.length,
-        messageCount,
-        summaryCount
-      }
-    };
-  }
 
   // ========== 内部方法 ==========
 
@@ -290,7 +188,9 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   private async *generateStreamEvents(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     streamResult: StreamedRunResult<unknown, any>,
-    onTextDelta: (text: string) => void
+    onTextDelta: (text: string) => void,
+    onApiError: (errorMessage: string) => void,
+    drainPendingRuntimeChunks: () => StreamChunk[]
   ): AsyncGenerator<StreamChunk, void, unknown> {
     const state = {
       turnIndex: 0,
@@ -347,7 +247,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
 
       switch (event.type) {
         case 'raw_model_stream_event':
-          this.handleRawModelStreamEvent(event, state, thinkParser, emit);
+          this.handleRawModelStreamEvent(event, state, thinkParser, emit, onApiError);
           break;
         case 'run_item_stream_event':
           this.handleRunItemStreamEvent(event, emit);
@@ -358,7 +258,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       }
 
       // yield 本轮收集的所有 chunk
-      for (const chunk of [...buffer, ...this.drainPendingRuntimeChunks()]) {
+      for (const chunk of [...buffer, ...drainPendingRuntimeChunks()]) {
         yield chunk;
       }
     }
@@ -368,13 +268,13 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       buffer.length = 0;
       thinkParser.flush();
       // flush 可能产生额外 chunk
-      for (const chunk of [...buffer, ...this.drainPendingRuntimeChunks()]) {
+      for (const chunk of [...buffer, ...drainPendingRuntimeChunks()]) {
         yield chunk;
       }
       yield { type: 'turn:done', content: '', data: { turnIndex: state.turnIndex } };
     }
 
-    for (const chunk of this.drainPendingRuntimeChunks()) {
+    for (const chunk of drainPendingRuntimeChunks()) {
       yield chunk;
     }
   }
@@ -415,7 +315,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       fullReasoningText: string;
     },
     thinkParser: ThinkTagParser,
-    emit: (chunk: StreamChunk) => void
+    emit: (chunk: StreamChunk) => void,
+    onApiError: (errorMessage: string) => void
   ): void {
     const rawEvent = event.data;
     if (!rawEvent || typeof rawEvent !== 'object') return;
@@ -489,6 +390,20 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
               }
             : undefined
         }
+      });
+    }
+
+    // 某些服务端错误只出现在流事件里，不会由 SDK 抛异常
+    if (rawType === 'response_failed' || rawType === 'error') {
+      const errMsg =
+        (rawEvent as { error?: { message?: string }; message?: string }).error?.message ||
+        (rawEvent as { message?: string }).message ||
+        'Model response failed';
+      onApiError(errMsg);
+      emit({
+        type: 'run:error',
+        content: errMsg,
+        data: { message: errMsg }
       });
     }
   }
@@ -620,15 +535,20 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    *   不再使用 SDK 的 needsApproval 机制，改由 tool-approval Extension
    *   在 prepare_tool_call Hook 中统一处理（适用于所有 Runtime）。
    */
-  private convertTools(defs: ToolDefinition[]): Tool[] {
+  private convertTools(
+    defs: ToolDefinition[],
+    options: AgentRuntimeOptions,
+    pendingRuntimeChunks: StreamChunk[],
+    signal?: AbortSignal
+  ): Tool[] {
     if (!defs.length) return [];
 
     // 优先使用注入的工具执行上下文，否则降级为最小上下文
     const sandboxContext =
-      this.options.sandboxContext ||
+      options.sandboxContext ||
       createFallbackToolContext({
-        workspaceRoot: this.options.workspaceRoot || process.cwd(),
-        sessionId: this.sessionId
+        workspaceRoot: options.workspaceRoot || process.cwd(),
+        sessionId: options.sessionId || 'session'
       });
 
     return defs.map((def) =>
@@ -644,13 +564,13 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
             sandboxContext,
             onUpdate: (update) => {
               // 工具增量输出也回到 yield 链路，由 AgentExecutor 统一广播和持久化。
-              this.pendingRuntimeChunks.push({
+              pendingRuntimeChunks.push({
                 type: 'tool:delta',
                 content: update.content,
                 data: { delta: update.content }
               });
             },
-            signal: this.currentSignal // 传入当前的 AbortSignal
+            signal
           });
           return result.resultText;
         }
@@ -658,99 +578,11 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     );
   }
 
-  private drainPendingRuntimeChunks(): StreamChunk[] {
-    if (this.pendingRuntimeChunks.length === 0) return [];
-    const chunks = [...this.pendingRuntimeChunks];
-    this.pendingRuntimeChunks.length = 0;
+  private drainPendingRuntimeChunks(pendingRuntimeChunks: StreamChunk[]): StreamChunk[] {
+    if (pendingRuntimeChunks.length === 0) return [];
+    const chunks = [...pendingRuntimeChunks];
+    pendingRuntimeChunks.length = 0;
     return chunks;
   }
 
-  // ========== Session 压缩 ==========
-
-  /**
-   * 检查并执行 session 压缩（如果需要），返回产生的 StreamChunk 数组
-   *
-   * 压缩由 Runtime 自身负责，扩展只会通过统一的 compression:start/done 事件收到通知。
-   */
-  private async compressSessionWithChunks(): Promise<StreamChunk[]> {
-    if (!this.compressor) return [];
-
-    const chunks: StreamChunk[] = [];
-
-    try {
-      const model = this.options.model || DEFAULT_MODEL;
-
-      const status = await this.compressor.getCompressionStatus(this.session);
-      if (!status) return [];
-
-      // 检查是否达到压缩阈值（避免在未达阈值时触发压缩事件）
-      if (status.totalTokens < status.threshold) return [];
-
-      const result = await this.compressor.compressIfNeeded(this.session, model);
-
-      if (result.compressed && status) {
-        chunks.push({
-          type: 'compression:start',
-          content: 'Session compression triggered',
-          data: {
-            reason: `tokens ${status.totalTokens} >= threshold ${status.threshold}`,
-            totalTokens: status.totalTokens,
-            threshold: status.threshold
-          }
-        });
-        chunks.push({
-          type: 'compression:done',
-          content: `Compressed ${result.summarizedCount} messages`,
-          data: {
-            summarizedSeqs: result.summarizedSeqs || [],
-            endSeq: result.endSeq || 0,
-            originalTokens: result.originalTokens || 0,
-            summaryTokens: result.summaryTokens || 0,
-            compressionRatio: result.compressionRatio || 0,
-            duration: result.duration || 0
-          }
-        });
-
-        log.info(
-          `Session compressed: ` +
-            `${result.summarizedCount} messages summarized ` +
-            `(seq ${result.summarizedSeqs?.[0]}-${result.endSeq}), ` +
-            `${result.keptCount} kept, ${result.duration}ms`
-        );
-      }
-    } catch (error) {
-      log.error('Session compression failed (non-fatal):', error);
-    }
-
-    return chunks;
-  }
-
-  /**
-   * 手动触发 session 压缩
-   */
-  async compressSession(options?: { force?: boolean }): Promise<CompressionResult> {
-    const model = this.options.model || DEFAULT_MODEL;
-
-    if (options?.force) {
-      const forceCompressor = new SessionCompressor({
-        enabled: true,
-        minMessageCount: 2,
-        contextWindowSize: 1,
-        thresholdRatio: 0,
-        keepRatio: this.options.compression?.keepRatio ?? 0.3,
-        summaryModel: this.options.compression?.summaryModel,
-        debug: this.options.compression?.debug
-      });
-      return forceCompressor.compressIfNeeded(this.session, model);
-    }
-
-    const compressor =
-      this.compressor ||
-      new SessionCompressor({
-        enabled: true,
-        ...(this.options.compression || {})
-      });
-
-    return compressor.compressIfNeeded(this.session, model);
-  }
 }

@@ -5,27 +5,7 @@
  * 包括：Session 存储格式、压缩配置、上下文快照等。
  */
 
-import type { Agent, AgentInputItem, Handoff, Tool, ModelSettings, RunToolApprovalItem } from '@openai/agents';
-import type { AgentRuntimeOptions } from '../types';
-
-// ========== OpenAI Agent 运行时选项 ==========
-
-/**
- * OpenAI AgentRuntime 创建选项
- *
- * 扩展通用 AgentRuntimeOptions，添加 OpenAI SDK 特有配置。
- */
-export interface OpenAIAgentRuntimeOptions extends AgentRuntimeOptions {
-  /** 模型参数（温度、top_p 等） */
-  modelSettings?: ModelSettings;
-  /** SDK 原生 Tool 实例列表（高级用法，优先于 tools） */
-  sdkTools?: Tool[];
-  /** SDK Handoff 配置（Agent 或 Handoff 实例） */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handoffs?: (Agent<any, any> | Handoff<any, any>)[];
-  /** Session 压缩配置 */
-  compression?: SessionCompressionOptions;
-}
+import type { AgentInputItem, RunToolApprovalItem } from '@openai/agents';
 
 // ========== HITL 审批（OpenAI 特有） ==========
 
