@@ -9,7 +9,7 @@ import path from 'node:path';
 
 import type { ProviderConfig } from '@main/agent/provider/types';
 
-import type { AgentRuntime } from './AgentRuntime';
+import type { InternalAgentRuntime } from './AgentRuntime';
 import type { AgentMode, ToolDefinition, SkillDefinition } from './types';
 
 export abstract class BaseAgentBuilder {
@@ -182,7 +182,7 @@ export abstract class BaseAgentBuilder {
   }
 
   /** 构建并初始化 Runtime（子类实现） */
-  abstract build(defaultSessionDir?: string): Promise<AgentRuntime>;
+  abstract build(defaultSessionDir?: string): Promise<InternalAgentRuntime>;
 }
 
 /**

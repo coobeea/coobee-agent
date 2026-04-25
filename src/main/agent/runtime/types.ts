@@ -428,8 +428,8 @@ export interface ExecutionConfig {
   streaming?: boolean;
   /** 覆盖最大轮次 */
   maxTurns?: number;
-  /** 为兼容不同 runtime 的临时扩展位；新公共字段优先显式定义 */
-  [key: string]: unknown;
+  /** 取消信号 */
+  signal?: AbortSignal;
 }
 
 /**

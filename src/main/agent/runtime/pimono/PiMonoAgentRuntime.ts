@@ -31,18 +31,24 @@
  */
 
 import type { Model } from '@mariozechner/pi-ai';
-import type { AgentSession, ToolDefinition as PiToolDefinition } from '@mariozechner/pi-coding-agent';
+import type {
+  AgentSession,
+  CreateAgentSessionOptions,
+  ToolDefinition as PiToolDefinition,
+  ResourceLoader
+} from '@mariozechner/pi-coding-agent';
 import {
   AuthStorage,
   createAgentSession,
   createExtensionRuntime,
+  createSyntheticSourceInfo,
   ModelRegistry,
   SessionManager,
   SettingsManager
 } from '@mariozechner/pi-coding-agent';
 import path from 'node:path';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
-import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from '../types';
+import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from '../types';
 import { ChunkQueue } from './ChunkQueue';
 import { setupEventSubscription } from './PiMonoStreamAdapter';
 import { convertTools } from './PiMonoToolConverter';
@@ -112,141 +118,45 @@ function createOpenAICompatModel(
  * 5. 管理会话生命周期
  */
 export class PiMonoAgentRuntime extends AbstractAgentRuntime {
-  // pi-SDK 会话（initialize 后可用）
-  private piSession!: AgentSession;
-
-  // 会话
-  private readonly sessionId: string;
-
-  // 当前执行的 AbortSignal（用于工具执行）
-  private currentSignal?: AbortSignal;
-
-  constructor(options: AgentRuntimeOptions) {
-    super(options);
-    this.sessionId = options.sessionId || `pi-session-${Date.now()}`;
-    this.currentSignal = options.signal;
-  }
-
   /**
-   * 直接请求 pi-SDK 中断当前对话（例如用户从 UI 点「停止」且需同步到 SDK 时）。
-   * 正常取消仍以 `ExecutionConfig.signal` 为主（与 `doStream` 内监听一致）。
+   * 创建 AgentSession
+   * @param options 运行时选项
+   * @returns AgentSession
    */
-  override abort(): void {
-    try {
-      this.piSession?.agent.abort();
-    } catch (e: unknown) {
-      log.warn('[PiMonoRuntime] abort() failed:', e);
-    }
-  }
-
-  // ========== 生命周期 ==========
-
-  async initialize(): Promise<void> {
-    const modelName = this.options.model;
-    const baseURL = this.options.baseURL;
-    const thinkingLevel = this.options.thinkingLevel || 'medium';
+  async createSession(options: AgentRuntimeOptions): Promise<AgentSession> {
+    const modelName = options.model;
+    const baseURL = options.baseURL;
+    const thinkingLevel = options.thinkingLevel || 'medium';
+    const cwd = options.workspaceRoot || process.cwd();
 
     // 1. 构造 OpenAI 兼容的 Model 对象（从 coobee.json5 模型配置透传元数据）
-    const model = createOpenAICompatModel(modelName, baseURL, this.options.modelMeta);
+    const model = createOpenAICompatModel(modelName, baseURL, options.modelMeta);
 
     // 2. 认证配置
     //    通过 AuthStorage 注入 API key，使用自定义 provider 名称
     //    新版本使用静态工厂方法 AuthStorage.inMemory() 创建实例
-    const authStorage = AuthStorage.inMemory();
-    authStorage.setRuntimeApiKey(PI_OPENAI_COMPAT_PROVIDER, this.options.apiKey);
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
-
-    // 3. Session 管理
-    //    file 模式：使用 workspace/sessions/ 目录
-    //    memory 模式：内存存储，sessionId 仅作标识
-    const cwd = process.cwd();
-    const sessionDir = this.options.sessionDir
-      ? path.join(this.options.sessionDir, 'sessions')
-      : path.join(cwd, '.coobee-test', 'sessions', this.sessionId);
-    const sessionManager =
-      this.options.sessionMode === 'file'
-        ? SessionManager.continueRecent(cwd, sessionDir)
-        : SessionManager.inMemory(cwd);
-
-    // 4. Settings（压缩/重试配置）
-    const settingsManager = SettingsManager.inMemory({
-      compaction: { enabled: this.options.compaction?.enabled ?? false },
-      retry: {
-        enabled: this.options.retry?.enabled ?? true,
-        maxRetries: this.options.retry?.maxRetries ?? 3,
-        baseDelayMs: this.options.retry?.baseDelayMs ?? 1000
-      }
-    });
-
-    // 5. 自定义 ResourceLoader（不发现文件系统资源，通过选项注入）
-    //    - getSystemPrompt: 返回基础 instructions
-    //    - getAppendSystemPrompt: 返回追加指令片段
-    //    - getSkills: 返回 SkillDefinition → pi-SDK Skill 的转换结果
-    const stubRuntime = createExtensionRuntime();
-    const piSkills = (this.options.skills || []).map((s) => ({
-      name: s.name,
-      description: s.description,
-      filePath: s.filePath || '',
-      baseDir: '',
-      source: 'runtime-options',
-      disableModelInvocation: false
-    }));
-    // Skill 提示由 PromptAssemblyService / AgentEnvInjector 统一注入。
-    // 这里仅保留 getSkills()，供 pi-SDK 识别可用 Skill，避免 prompt 中重复出现技能摘要。
-    const allAppendParts = this.options.appendInstructions || [];
-
-    const resourceLoader = {
-      getExtensions: () => ({ extensions: [], errors: [], runtime: stubRuntime }),
-      getSkills: () => ({ skills: piSkills, diagnostics: [] }),
-      getPrompts: () => ({ prompts: [], diagnostics: [] }),
-      getThemes: () => ({ themes: [], diagnostics: [] }),
-      getAgentsFiles: () => ({ agentsFiles: [] as Array<{ path: string; content: string }> }),
-      getSystemPrompt: () => this.options.instructions,
-      getAppendSystemPrompt: () => allAppendParts,
-      getPathMetadata: () => new Map(),
-      extendResources: () => {},
-      reload: async () => {}
-    };
-
-    // 6. 合并工具：sdkTools（SDK 原生）+ tools（统一 ToolDefinition 转换后）
-    // 优先使用注入的工具执行上下文，否则降级为最小上下文
-    const { createFallbackToolContext } = await import('../shared/ToolExecutionPipeline');
-    const sandboxContext =
-      this.options.sandboxContext ||
-      createFallbackToolContext({
-        workspaceRoot: this.options.workspaceRoot || process.cwd(),
-        sessionId: this.sessionId
-      });
-    const allSdkTools: PiToolDefinition[] = [
-      ...[],
-      ...convertTools(this.options.tools || [], { sandboxContext, log, getSignal: () => this.currentSignal })
-    ];
-
-    // 7. 创建 AgentSession
-    //    有工具时：tools: [] 禁用内置 codingTools，通过 customTools 传入自定义工具
-    //    无工具时：完全不传 tools/customTools，避免 API 收到空 tools 数组报 400
-    const sessionConfig: Record<string, unknown> = {
-      cwd: process.cwd(),
+    const authStorage = this.createAuthStorage(options);
+    const modelRegistry = this.createModelRegistry(authStorage, options);
+    const sessionManager = await this.createSessionManager(cwd, options);
+    const settingsManager = this.createSettingsManager(options);
+    const { resourceLoader, piSkills } = this.createResourceLoader(options);
+    const allSdkTools = await this.createSdkTools(options);
+    const sessionConfig = this.createSessionConfig({
+      cwd,
       model,
       thinkingLevel,
       authStorage,
       modelRegistry,
       sessionManager,
       settingsManager,
-      resourceLoader
-    };
+      resourceLoader,
+      allSdkTools
+    });
 
-    if (allSdkTools.length > 0) {
-      sessionConfig.customTools = allSdkTools;
-      sessionConfig.tools = []; // 禁用内置 codingTools，仅使用 customTools
-    }
-
-    const { session } = await createAgentSession(sessionConfig as Parameters<typeof createAgentSession>[0]);
-
-    this.piSession = session;
+    const { session } = await createAgentSession(sessionConfig);
 
     log.info(
-      `Initialized: ${this.name} ` +
+      `Initialized: ${options.name} ` +
         `(api: openai-completions, model: ${modelName}, ` +
         `baseURL: ${baseURL}, ` +
         `thinking: ${thinkingLevel}, ` +
@@ -254,20 +164,10 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         `reasoningEffort: ${model.compat?.supportsReasoningEffort ?? false}, ` +
         `tools: ${allSdkTools.length}, ` +
         `skills: ${piSkills.length}, ` +
-        `session: ${this.sessionId})`
+        `session: ${options.sessionId})`
     );
+    return session;
   }
-
-  async destroy(): Promise<void> {
-    if (this.piSession) {
-      this.piSession.dispose();
-    }
-    log.info(`Destroyed: ${this.name}`);
-  }
-
-  // ========== 执行方法 ==========
-
-  // run() 由基类 AbstractAgentRuntime 提供（消费 stream()，自动继承快照功能）
 
   /**
    * 流式执行 Agent（核心实现 — 由基类 stream() 模板方法包装）
@@ -284,15 +184,17 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
    */
   protected async *doStream(
     input: string,
-    _config?: ExecutionConfig
+    options: AgentRuntimeOptions
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const startTime = Date.now();
     const queue = new ChunkQueue<StreamChunk>();
+    const executionSignal = options.signal;
+    log.info(`[PiMonoRuntime] Running stream: ${options.name}`);
 
-    log.info(`[PiMonoRuntime] Running stream: ${this.name}`);
+    const piSession = await this.createSession(options);
 
-    // 🆕 构造原始 API 请求体（用于审计和调试）
-    const rawApiRequest = this.buildRawApiRequest(input);
+    // 构造请求预览（用于调试；并非 SDK 最终发出的逐字原始请求）
+    const rawApiRequest = this.buildRequestPreview(input, options, piSession);
 
     try {
       // 1. run:start
@@ -304,7 +206,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       const toolCalls: ExecutionResult['toolCalls'] = [];
 
       const unsubscribe = setupEventSubscription(
-        this.piSession,
+        piSession,
         {
           onChunk: (chunk) => queue.push(chunk),
           onTextDelta: (text) => {
@@ -321,19 +223,19 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       // 2.5. 监听 AbortSignal，调用 Agent 的 abort() 方法
       const abortListener = (): void => {
         log.info(`[PiMonoRuntime] Aborting session via Agent.abort()`);
-        this.piSession.agent.abort();
+        piSession.agent.abort();
       };
-      if (this.currentSignal) {
-        this.currentSignal.addEventListener('abort', abortListener, { once: true });
+      if (executionSignal) {
+        executionSignal.addEventListener('abort', abortListener, { once: true });
       }
 
       // 3. SDK 执行，完成后结束 queue
-      this.piSession
+      piSession
         .prompt(input)
         .then(async () => {
           // 清理 abort 监听器
-          if (this.currentSignal) {
-            this.currentSignal.removeEventListener('abort', abortListener);
+          if (executionSignal) {
+            executionSignal.removeEventListener('abort', abortListener);
           }
           unsubscribe();
           // 等待一个微任务周期，确保 SDK 已排队的事件回调有机会执行完毕
@@ -354,8 +256,8 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         })
         .catch(async (err: unknown) => {
           // 清理 abort 监听器
-          if (this.currentSignal) {
-            this.currentSignal.removeEventListener('abort', abortListener);
+          if (executionSignal) {
+            executionSignal.removeEventListener('abort', abortListener);
           }
 
           unsubscribe();
@@ -379,8 +281,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         toolCalls,
         duration: Date.now() - startTime,
         metadata: {
-          agentId: this.id,
-          sessionId: this.sessionId
+          sessionId: options.sessionId
         },
         rawApiRequest
       };
@@ -392,28 +293,169 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       };
       log.error(`Stream execution failed:`, error);
       throw error;
+    } finally {
+      piSession.dispose();
     }
   }
 
   /**
-   * 构造原始 API 请求体（OpenAI Chat Completions 格式）
+   * 解析当前运行使用的 session 根目录
    *
-   * 用于审计和调试，保存实际发送给 LLM 的请求内容。
+   * `sessionDir` 在 runtime 选项里已经表示“会话根目录”，这里不再额外拼接 `/sessions`。
    */
-  private buildRawApiRequest(userInput: string): ExecutionResult['rawApiRequest'] {
+  private getSessionRoot(cwd: string, options: AgentRuntimeOptions): string {
+    return options.sessionDir || path.join(cwd, '.coobee-test', 'sessions');
+  }
+
+  private createAuthStorage(options: AgentRuntimeOptions): AuthStorage {
+    const authStorage = AuthStorage.inMemory();
+    authStorage.setRuntimeApiKey(PI_OPENAI_COMPAT_PROVIDER, options.apiKey);
+    return authStorage;
+  }
+
+  private createModelRegistry(authStorage: AuthStorage, _options: AgentRuntimeOptions): ModelRegistry {
+    return ModelRegistry.inMemory(authStorage);
+  }
+
+  private async createSessionManager(cwd: string, options: AgentRuntimeOptions): Promise<SessionManager> {
+    if (options.sessionMode !== 'file') {
+      return SessionManager.inMemory(cwd);
+    }
+
+    const sessionDir = this.getSessionRoot(cwd, options);
+    const existingSessions = await SessionManager.list(cwd, sessionDir);
+    const existing = existingSessions.find((session) => session.id === options.sessionId);
+    if (existing) {
+      return SessionManager.open(existing.path, sessionDir);
+    }
+
+    const sessionManager = SessionManager.create(cwd, sessionDir);
+    sessionManager.newSession({ id: options.sessionId });
+    return sessionManager;
+  }
+
+  private createSettingsManager(options: AgentRuntimeOptions): SettingsManager {
+    return SettingsManager.inMemory({
+      compaction: { enabled: options.compaction?.enabled ?? false },
+      retry: {
+        enabled: options.retry?.enabled ?? true,
+        maxRetries: options.retry?.maxRetries ?? 3,
+        baseDelayMs: options.retry?.baseDelayMs ?? 1000
+      }
+    });
+  }
+
+  private createResourceLoader(options: AgentRuntimeOptions): {
+    resourceLoader: ResourceLoader;
+    piSkills: Array<{
+      name: string;
+      description: string;
+      filePath: string;
+      baseDir: string;
+      sourceInfo: ReturnType<typeof createSyntheticSourceInfo>;
+      disableModelInvocation: boolean;
+    }>;
+  } {
+    const stubRuntime = createExtensionRuntime();
+    const piSkills = (options.skills || []).map((s) => ({
+      name: s.name,
+      description: s.description,
+      filePath: s.filePath || '',
+      baseDir: '',
+      sourceInfo: createSyntheticSourceInfo(s.filePath || `/virtual/skills/${s.name}/SKILL.md`, {
+        source: 'runtime-options',
+        scope: 'temporary',
+        origin: 'top-level'
+      }),
+      disableModelInvocation: false
+    }));
+    const allAppendParts = options.appendInstructions || [];
+
+    const resourceLoader: ResourceLoader = {
+      getExtensions: () => ({ extensions: [], errors: [], runtime: stubRuntime }),
+      getSkills: () => ({ skills: piSkills, diagnostics: [] }),
+      getPrompts: () => ({ prompts: [], diagnostics: [] }),
+      getThemes: () => ({ themes: [], diagnostics: [] }),
+      getAgentsFiles: () => ({ agentsFiles: [] as Array<{ path: string; content: string }> }),
+      getSystemPrompt: () => options.instructions,
+      getAppendSystemPrompt: () => allAppendParts,
+      extendResources: () => {},
+      reload: async () => {}
+    };
+
+    return { resourceLoader, piSkills };
+  }
+
+  private async createSdkTools(options: AgentRuntimeOptions): Promise<PiToolDefinition[]> {
+    const { createFallbackToolContext } = await import('../shared/ToolExecutionPipeline');
+    const sandboxContext =
+      options.sandboxContext ||
+      createFallbackToolContext({
+        workspaceRoot: options.workspaceRoot || process.cwd(),
+        sessionId: options.sessionId
+      });
+
+    return convertTools(options.tools || [], {
+      sandboxContext,
+      log,
+      getSignal: () => options.signal
+    });
+  }
+
+  private createSessionConfig(args: {
+    cwd: string;
+    model: Model<'openai-completions'>;
+    thinkingLevel: string;
+    authStorage: AuthStorage;
+    modelRegistry: ModelRegistry;
+    sessionManager: SessionManager;
+    settingsManager: SettingsManager;
+    resourceLoader: ResourceLoader;
+    allSdkTools: PiToolDefinition[];
+  }): CreateAgentSessionOptions {
+    const sessionConfig: CreateAgentSessionOptions = {
+      cwd: args.cwd,
+      model: args.model,
+      thinkingLevel: args.thinkingLevel as CreateAgentSessionOptions['thinkingLevel'],
+      authStorage: args.authStorage,
+      modelRegistry: args.modelRegistry,
+      sessionManager: args.sessionManager,
+      settingsManager: args.settingsManager,
+      resourceLoader: args.resourceLoader
+    };
+
+    if (args.allSdkTools.length > 0) {
+      sessionConfig.customTools = args.allSdkTools;
+      sessionConfig.tools = [];
+    }
+
+    return sessionConfig;
+  }
+
+  /**
+   * 构造请求预览（OpenAI Chat Completions 风格）
+   *
+   * 这不是 SDK 真正发出的逐字请求体，而是基于 runtime 已知信息推导出的调试预览。
+   * 用于排障时快速理解本次运行的大致上下文构成。
+   */
+  private buildRequestPreview(
+    userInput: string,
+    options: AgentRuntimeOptions,
+    piSession: AgentSession
+  ): ExecutionResult['rawApiRequest'] {
     const messages: Array<{ role: string; content: string }> = [];
 
     // 1. System Message（instructions + appendInstructions）
-    let systemContent = this.options.instructions || '';
-    if (this.options.appendInstructions && this.options.appendInstructions.length > 0) {
-      systemContent += '\n\n' + this.options.appendInstructions.join('\n\n');
+    let systemContent = options.instructions || '';
+    if (options.appendInstructions && options.appendInstructions.length > 0) {
+      systemContent += '\n\n' + options.appendInstructions.join('\n\n');
     }
     if (systemContent) {
       messages.push({ role: 'system', content: systemContent });
     }
 
     // 2. 历史消息（从 pi-session 获取）
-    const sessionMessages = this.piSession?.messages || [];
+    const sessionMessages = piSession.messages || [];
     for (const msg of sessionMessages) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const msgAny = msg as any;
@@ -430,7 +472,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
 
     // 4. Tools（如果有）
     // 注：parameters 是 Zod Schema，这里简化存储为工具名称列表
-    const tools = this.options.tools?.map((t) => ({
+    const tools = options.tools?.map((t) => ({
       type: 'function',
       function: {
         name: t.name,
@@ -439,11 +481,13 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     }));
 
     return {
-      model: this.options.model,
+      source: 'runtime-synthesized-preview',
+      sdk: 'pi-coding-agent',
+      model: options.model,
       messages,
       ...(tools && tools.length > 0 ? { tools } : {}),
       stream: true,
-      ...(this.options.thinkingLevel ? { thinking_level: this.options.thinkingLevel } : {})
+      ...(options.thinkingLevel ? { thinking_level: options.thinkingLevel } : {})
     };
   }
 

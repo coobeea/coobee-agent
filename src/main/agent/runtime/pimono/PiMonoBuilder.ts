@@ -5,7 +5,7 @@
  * 通过 agentExecutor.piMono() 获取。
  */
 
-import type { AgentRuntime } from '../AgentRuntime';
+import type { InternalAgentRuntime } from '../AgentRuntime';
 import { BaseAgentBuilder, getDefaultSessionDir } from '../BaseAgentBuilder';
 import type { PiMonoAgentRuntimeOptions, ThinkingLevel } from './types';
 
@@ -73,7 +73,7 @@ export class PiMonoBuilder extends BaseAgentBuilder {
   }
 
   /** 构建并初始化 Runtime（内部方法，由 Executor 调用） */
-  override async build(defaultSessionDir?: string): Promise<AgentRuntime> {
+  override async build(defaultSessionDir?: string): Promise<InternalAgentRuntime> {
     // 解析 API Key: providerConfig > 显式设置 > 环境变量
     const apiKey = this.resolveApiKey();
     if (!apiKey) {
@@ -84,9 +84,11 @@ export class PiMonoBuilder extends BaseAgentBuilder {
 
     const opts: PiMonoAgentRuntimeOptions = {
       name: this._name,
+      type: 'pi-mono',
       instructions: this._instructions,
       apiKey,
       model: this.resolveModel(),
+      apiType: 'openai-compatible',
       baseURL: this.resolveBaseURL()
     };
 

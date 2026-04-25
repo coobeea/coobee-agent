@@ -11,14 +11,14 @@
  *   - 固化运行时身份：`id` / `type` / `name` / `options`
  *   - 提供 `stream()` 模板方法
  *   - 在模板方法里统一做快照写入与错误恢复
- *   - 提供 `run()` / `runStream()` 默认实现
+ *   - 提供 `run()` 默认实现
  *   - 提供统一 logger
  *
  * 子类只需要关注各自 SDK 的真实执行过程。
  */
 
 import type { AgentRuntime } from './AgentRuntime';
-import type { AgentRuntimeKind, AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from './types';
+import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types';
 import { saveContextSnapshot } from './ContextSnapshotWriter';
 import { defaultRecoveryChain } from './ErrorRecoveryChain';
 
@@ -72,28 +72,6 @@ export function generateRuntimeId(prefix: string): string {
  * 这样可以把快照、恢复、默认执行封装收在内层，不让各 runtime 重复实现。
  */
 export abstract class AbstractAgentRuntime implements AgentRuntime {
-  readonly id: string;
-  readonly type: AgentRuntimeKind;
-  readonly name: string;
-  readonly options: AgentRuntimeOptions;
-
-  constructor(options: AgentRuntimeOptions) {
-    this.options = options;
-    this.type = options.type;
-    this.name = options.name;
-    this.id = generateRuntimeId(this.type);
-  }
-
-  // ========== 生命周期（子类必须实现） ==========
-
-  /** 做底层 SDK / session / resource 的运行前准备，不承担 builder 组装职责 */
-  abstract initialize(): Promise<void>;
-
-  /** 释放底层资源、订阅、文件句柄或网络连接 */
-  abstract destroy(): Promise<void>;
-
-  // ========== 核心流式方法 ==========
-
   /**
    * 子类实现此方法 — 核心流式逻辑
    *
@@ -102,7 +80,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    */
   protected abstract doStream(
     input: string,
-    config?: ExecutionConfig
+    options: AgentRuntimeOptions
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
 
   /**
@@ -119,13 +97,14 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    *   - 快照写入失败不阻断主流程
    *   - 错误时尝试渐进式恢复（重试）
    */
-  async *stream(input: string, config?: ExecutionConfig): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  async *stream(input: string, options: AgentRuntimeOptions): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const maxAttempts = 3;
     let attempt = 0;
+    const runtimeOptions = options;
 
     while (true) {
       try {
-        const gen = this.doStream(input, config);
+        const gen = this.doStream(input, runtimeOptions);
         let r = await gen.next();
         while (!r.done) {
           yield r.value;
@@ -136,7 +115,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
 
         // 自动写入上下文快照（异步，不阻塞返回）
         // 从 result 中提取 rawApiRequest 并传递给 snapshot
-        saveContextSnapshot(this.options, this.type, input, result, result.rawApiRequest).catch(() => {});
+        saveContextSnapshot(runtimeOptions, options.type, input, result, result.rawApiRequest).catch(() => {});
 
         return result;
       } catch (error: unknown) {
@@ -146,7 +125,8 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
         const recovery = await defaultRecoveryChain.recover(error, {
           attempt,
           maxAttempts,
-          sessionId: config?.sessionId as string | undefined
+          sessionId: runtimeOptions.sessionId,
+          runtime: this
         });
 
         if (recovery.action === 'retry') {
@@ -178,38 +158,10 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    * 通过 `stream()` 模板方法执行，自动继承快照与错误恢复能力。
    * 子类一般不需要覆盖此方法。
    */
-  async run(input: string, config?: ExecutionConfig): Promise<ExecutionResult> {
-    const gen = this.stream(input, config);
+  async run(input: string, options: AgentRuntimeOptions): Promise<ExecutionResult> {
+    const gen = this.stream(input, options);
     let r = await gen.next();
     while (!r.done) {
-      r = await gen.next();
-    }
-    return r.value;
-  }
-
-  /**
-   * 中止当前执行：实现类应将取消传递到所用 SDK（例如中止底层 Agent / HTTP）。
-   * 与 `ExecutionConfig.signal` 配合使用；无在途任务时允许为空操作，可安全重复调用。
-   */
-  abstract abort(): void;
-
-  // ========== 默认实现：runStream ==========
-
-  /**
-   * 流式执行（回调模式）
-   *
-   * 这是一个便捷包装，把 AsyncGenerator 形式转换成回调消费形式。
-   * 子类一般不需要覆盖。
-   */
-  async runStream(
-    input: string,
-    config: ExecutionConfig,
-    onChunk: (chunk: StreamChunk) => void
-  ): Promise<ExecutionResult> {
-    const gen = this.stream(input, config);
-    let r = await gen.next();
-    while (!r.done) {
-      onChunk(r.value);
       r = await gen.next();
     }
     return r.value;

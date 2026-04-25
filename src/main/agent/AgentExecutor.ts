@@ -26,8 +26,8 @@ import { createLogger } from '@main/common/logger';
 const log = createLogger('ai');
 
 import { SessionStatusManager, type SessionStatus } from './runtime/SessionStatusManager';
-import type { AgentRuntime } from './runtime/AgentRuntime';
-import type { ExecutionResult, StreamChunk } from './runtime/types';
+import type { InternalAgentRuntime } from './runtime/AgentRuntime';
+import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from './runtime/types';
 import { PiMonoBuilder } from './runtime/pimono/PiMonoBuilder';
 import { OpenAIBuilder } from './runtime/openai/OpenAIBuilder';
 import { createStreamEmitter, type IStreamEmitter } from './streaming/StreamEmitter';
@@ -51,13 +51,13 @@ export interface ExecuteRequest {
   /** Builder 实例（通过 agentExecutor.piMono() 或 agentExecutor.openai() 创建） */
   builder?: AgentBuilder;
   /** 预构建的 Runtime（Orchestrator / Swarm 等已初始化的运行时，跳过 Builder 流程） */
-  runtime?: AgentRuntime;
+  runtime?: InternalAgentRuntime;
   /** 流式事件回调（可选） */
   onChunk?: (chunk: StreamChunk) => void;
   /** 中止信号（Pipeline 传入，用于提前终止流式消费） */
   signal?: AbortSignal;
-  /** 执行配置（传递给 Runtime.stream/run，用于指定 executionMode 等） */
-  executionConfig?: import('./runtime/types').ExecutionConfig;
+  /** 执行配置（传递给 Runtime.stream/run，用于指定 maxTurns / signal 等） */
+  executionConfig?: ExecutionConfig;
 }
 
 /** 执行状态（从 SessionStatusManager re-export） */
@@ -417,7 +417,7 @@ class AgentExecutor {
    */
   private async *executePipeline(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const { sessionId, message, builder, onChunk, signal: externalSignal } = request;
-    let runtime: AgentRuntime | null = null;
+    let runtime: InternalAgentRuntime | null = null;
 
     log.info(`[AgentExecutor] Execute Pipeline: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
     const startTime = Date.now();
@@ -476,8 +476,8 @@ class AgentExecutor {
           task: message.substring(0, 200)
         });
 
-        const streamConfig = { signal, ...request.executionConfig };
-        const gen = runtime.stream(message, streamConfig);
+        const runtimeOptions = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
+        const gen = runtime.stream(message, runtimeOptions);
         const runtimeAgentId = builder ? builder.getAgentId?.() : undefined;
 
         const result = yield* this.consumeAndForward(
@@ -546,7 +546,8 @@ class AgentExecutor {
       });
 
       // 2. 流式执行
-      const gen = runtime.stream(message, { signal });
+      const runtimeOptions = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
+      const gen = runtime.stream(message, runtimeOptions);
       const builderAgentId = builder.getAgentId?.();
 
       const result = yield* this.consumeAndForward(
@@ -646,9 +647,9 @@ class AgentExecutor {
   }
 
   /** 创建 StreamEmitter */
-  private createEmitter(sessionId: string, runtime: AgentRuntime): IStreamEmitter {
+  private createEmitter(sessionId: string, runtime: InternalAgentRuntime): IStreamEmitter {
     const source: StreamSource = {
-      type: runtime.type,
+      type: 'agent',
       id: runtime.id,
       name: runtime.name
     };
@@ -656,7 +657,7 @@ class AgentExecutor {
   }
 
   /** 安全销毁 Runtime */
-  private async destroyRuntime(runtime: AgentRuntime | null): Promise<void> {
+  private async destroyRuntime(runtime: InternalAgentRuntime | null): Promise<void> {
     if (!runtime) return;
     try {
       await runtime.destroy();
@@ -675,6 +676,20 @@ class AgentExecutor {
         `[AgentExecutor] Completed: sessionId=${sessionId}${durationStr}, output=${result.output.slice(0, 100)}...`
       );
     }
+  }
+
+  private buildRuntimeOptions(
+    runtime: InternalAgentRuntime,
+    sessionId: string,
+    signal?: AbortSignal,
+    executionConfig?: ExecutionConfig
+  ): AgentRuntimeOptions {
+    return {
+      ...runtime.options,
+      sessionId,
+      ...(executionConfig?.maxTurns !== undefined ? { maxTurns: executionConfig.maxTurns } : {}),
+      ...(signal ? { signal } : {})
+    };
   }
 
   /** 根据 StreamChunk 触发 Agent 运行过程中的派生 Hook。 */

@@ -5,7 +5,7 @@
  * 通过 agentExecutor.openai() 获取。
  */
 
-import type { AgentRuntime } from '../AgentRuntime';
+import type { InternalAgentRuntime } from '../AgentRuntime';
 import { BaseAgentBuilder, getDefaultSessionDir } from '../BaseAgentBuilder';
 import type { SkillDefinition } from '../types';
 import type { OpenAIAgentRuntimeOptions, SessionCompressionOptions } from './types';
@@ -40,11 +40,15 @@ export class OpenAIBuilder extends BaseAgentBuilder {
   }
 
   /** 构建并初始化 Runtime */
-  override async build(defaultSessionDir?: string): Promise<AgentRuntime> {
+  override async build(defaultSessionDir?: string): Promise<InternalAgentRuntime> {
     const opts: OpenAIAgentRuntimeOptions = {
       name: this._name,
+      type: 'openai',
       instructions: this._instructions,
-      model: this._model || process.env.VITE_LLM_MODEL || 'qwen3-max'
+      model: this._model || process.env.VITE_LLM_MODEL || 'qwen3-max',
+      apiKey: process.env.OPENAI_API_KEY || process.env.VITE_LLM_API_KEY || 'runtime-unset',
+      apiType: 'openai-compatible',
+      baseURL: process.env.VITE_LLM_BASE_URL || 'https://api.openai.com/v1'
     };
 
     if (this._appendInstructions.length > 0) opts.appendInstructions = this._appendInstructions;

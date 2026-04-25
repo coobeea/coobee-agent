@@ -17,11 +17,10 @@ import type { StreamedRunResult, Tool } from '@openai/agents';
 import { FileSession } from './FileSession';
 import { SessionCompressor } from './SessionCompressor';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
-import { AbstractAgentRuntime, createRuntimeLogger, generateRuntimeId } from '../AbstractAgentRuntime';
+import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import {
   buildInstructions,
-  type AgentRuntimeKind,
-  type ExecutionConfig,
+  type AgentRuntimeOptions,
   type ExecutionResult,
   type StreamChunk,
   type SessionInfo,
@@ -70,15 +69,9 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   private createdAt: number;
 
   constructor(options: OpenAIAgentRuntimeOptions) {
-    super();
-    this.options = options;
-    this.id = generateRuntimeId('agent');
+    super(options);
     this.sessionId = options.sessionId || `session-${Date.now()}`;
     this.createdAt = Date.now();
-  }
-
-  get name(): string {
-    return this.options.name;
   }
 
   // ========== 生命周期 ==========
@@ -152,13 +145,13 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    */
   protected async *doStream(
     input: string,
-    config?: ExecutionConfig
+    options: AgentRuntimeOptions
   ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const startTime = Date.now();
-    const maxTurns = config?.maxTurns ?? this.options.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTurns = options.maxTurns ?? this.options.maxTurns ?? DEFAULT_MAX_TURNS;
 
     // 保存当前的 AbortSignal，供工具执行使用
-    this.currentSignal = (config as Record<string, unknown>)?.signal as AbortSignal | undefined;
+    this.currentSignal = options.signal;
 
     log.info(`Running stream: ${this.name}`);
 
