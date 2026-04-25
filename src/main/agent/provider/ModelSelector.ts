@@ -7,7 +7,7 @@
  * 3. 全局默认 (config agents.defaults.model)
  * 4. 内置默认 (fallbackDefault)
  *
- * 注：Agent 定义中的 model 字段由 chat.ts 的 createBuilderFromDefinition 直接处理，
+ * 注：Agent 定义中的 model 字段会在进入 AgentExecutor 前解析成 modelOverride，
  *     不经过 ModelSelector。
  */
 import type { CoobeeConfig } from '@main/common/config/schema';

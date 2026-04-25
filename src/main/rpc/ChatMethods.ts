@@ -118,11 +118,11 @@ export const chatMethods: MethodGroup = {
 
       log.info(`发送消息: threadId=${threadId}, message="${message.substring(0, 50)}..."`);
 
-      // 1. 通过统一工厂创建 Builder，保持 RPC / HTTP / 恢复路径配置一致
-      let builder: Awaited<ReturnType<ThreadExecutionFactory['createBuilder']>>;
+      // 1. 通过统一工厂创建运行参数，保持 RPC / HTTP / 恢复路径配置一致
+      let runConfig: Awaited<ReturnType<ThreadExecutionFactory['createRunConfig']>>;
       try {
         const factory = ThreadExecutionFactory.getInstance(agentExecutor);
-        builder = await factory.createBuilder({
+        runConfig = await factory.createRunConfig({
           threadId: thread.id,
           sessionMode: 'file'
         });
@@ -137,7 +137,7 @@ export const chatMethods: MethodGroup = {
       const gen = agentExecutor.stream({
         sessionId: thread.id,
         message: message as string,
-        builder
+        ...runConfig
       });
 
       // 3. 异步消费流（触发 WebSocket 事件推送）

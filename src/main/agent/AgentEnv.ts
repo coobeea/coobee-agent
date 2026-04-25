@@ -201,7 +201,7 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
     userExtensionsDir: Env.paths.userExtensionsDir,
     loadedExtensions,
 
-    // Agent Home（由 injectEnv 在获取到 agentId 后补充）
+    // Agent Home（由 prepareAgentEnv 在获取到 agentId 后补充）
     agentId: undefined,
     agentName: undefined,
     agentHome: undefined,

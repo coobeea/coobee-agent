@@ -8,7 +8,7 @@
  *
  * 架构位置：
  *   AgentExecutor（调度层）
- *     → injectEnv() 设置 contextDir = {workspace}
+ *     → prepareAgentEnv() 准备 contextDir = {workspace}
  *     → Builder.contextDir(dir) → 传入 Runtime options
  *   Runtime 层（实际写入）
  *     → stream()/run() 完成后调用 saveContextSnapshot()

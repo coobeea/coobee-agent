@@ -1,7 +1,7 @@
 /**
  * ProviderInjector — Provider 配置注入
  *
- * 负责将 Provider 配置注入到 PiMonoBuilder：
+ * 负责将 Provider 配置注入到 AgentRuntimeBuilder：
  *   - API Key + model + baseURL
  *   - 默认思维链级别
  *
@@ -11,10 +11,13 @@
  */
 
 import { Models, Providers } from '@main/config';
-import type { BaseAgentBuilder } from '../runtime/BaseAgentBuilder';
+import type { ProviderConfig } from './types';
 import { resolveApiKey } from './ApiKeyResolver';
 
-interface ProviderConfigurableBuilder extends Pick<BaseAgentBuilder, 'fromProviderConfig' | 'model'> {
+interface ProviderConfigurableBuilder {
+  fromProviderConfig(config: ProviderConfig, modelId?: string): unknown;
+  model(model: string): unknown;
+  thinkingLevel?(level: unknown): unknown;
 }
 
 export class ProviderInjector {
@@ -52,8 +55,7 @@ export class ProviderInjector {
       }
 
       // 注入到 Builder
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      builder.fromProviderConfig(provider as any, resolved.model.id);
+      builder.fromProviderConfig(provider as ProviderConfig, resolved.model.id);
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
       // 注意：只传递模型 ID，不包含 provider 前缀，因为 OpenAI 兼容 API 只接受模型 ID
@@ -72,23 +74,20 @@ export class ProviderInjector {
    * 注意：这是同步方法，使用延迟导入避免循环依赖。
    */
   applyThinkingLevel(builder: ProviderConfigurableBuilder): void {
-    const thinkingBuilder = builder as ProviderConfigurableBuilder & {
-      thinkingLevel?: (level: unknown) => unknown;
-    };
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { configStoreInstance } = require('@main/common/config/ConfigStore');
       const config = configStoreInstance?.getAll?.();
       const level = config?.models?.defaults?.thinkingLevel;
-      if (level && typeof thinkingBuilder.thinkingLevel === 'function') {
-        thinkingBuilder.thinkingLevel(level);
+      if (level && typeof builder.thinkingLevel === 'function') {
+        builder.thinkingLevel(level);
         return;
       }
     } catch {
       // 静默回退
     }
-    if (typeof thinkingBuilder.thinkingLevel === 'function') {
-      thinkingBuilder.thinkingLevel('medium');
+    if (typeof builder.thinkingLevel === 'function') {
+      builder.thinkingLevel('medium');
     }
   }
 }

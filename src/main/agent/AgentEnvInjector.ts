@@ -1,12 +1,12 @@
 /**
  * Agent 环境注入器
  *
- * 在 Builder 构建前注入运行时环境：
+ * 在 Runtime 构建前准备运行时环境：
  *   1. 获取/创建 Agent 工作空间
  *   2. 扫描并加载 Skill（仅 agent 模式）
- *   3. 根据 Agent 配置注入 Skills（仅 agent 模式）
- *   4. 注入运行时路径 + Skill 发现提示 + Agent 发现提示（仅 agent 模式）
- *   5. 设置会话存储目录、工作目录、上下文快照目录
+ *   3. 根据 Agent 配置收集 Skills（仅 agent 模式）
+ *   4. 准备运行时路径 + Skill 发现提示 + Agent 发现提示（仅 agent 模式）
+ *   5. 返回会话存储目录、工作目录、上下文快照目录
  *
  * 运行模式差异：
  *   - chat: 只设置基础环境（workspace, sessionDir, contextDir），不注入工具/Skill
@@ -17,7 +17,7 @@
  *   - 完全根据 Agent 配置文件中的 skills 数组决定
  *   - 空数组 = 不注入任何 Skill
  *
- * 从 AgentExecutor 中提取，专注于环境准备职责。
+ * 只返回配置，不直接修改 AgentRuntimeBuilder。
  */
 
 import path from 'node:path';
@@ -28,31 +28,46 @@ import { AgentHomeManager } from './agents/AgentHomeManager';
 import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
-import type { AgentRuntimeBuilder as AgentBuilder } from './runtime/AgentRuntimeBuilder';
+import type { AgentMode, SkillDefinition, ToolDefinition } from './runtime/types';
 import { AgentContextResolver } from './context/AgentContextResolver';
 import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 
 const log = createLogger('ai');
 
+export interface PrepareAgentEnvOptions {
+  sessionId: string;
+  mode: AgentMode;
+  workspaceRoot?: string;
+  agentId?: string;
+  agentName?: string;
+  hasRequestTools?: boolean;
+}
+
+export interface PreparedAgentEnv {
+  workspace: string;
+  sessionDir: string;
+  workspaceRoot: string;
+  contextDir: string;
+  appendInstructions: string[];
+  skills: SkillDefinition[];
+  tools?: ToolDefinition[];
+  sandboxContext?: ToolExecutionContext;
+}
+
 /**
- * 注入运行时环境到 Builder
+ * 准备运行时环境配置。
  *
- * @param sessionId - 会话 ID
- * @param builder - Builder 实例
- * @returns workspace 路径（或 undefined）
+ * 注意：这里不再接收/修改 Builder。调用方拿到返回值后，统一在最后创建 Builder 并 build Runtime。
  */
-export async function injectEnv(sessionId: string, builder: AgentBuilder): Promise<string | undefined> {
+export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<PreparedAgentEnv | undefined> {
   try {
     const { Env } = await import('@main/common/env');
-    const mode = builder.getMode();
+    const { sessionId, mode, agentId, agentName } = options;
 
     // 1. 获取/创建工作空间
-    // 🆕 检查是否已手动设置 workspace（如子 Agent 手动设置了 workspaceRoot）
-    const existingWorkspace = builder.getWorkspaceRoot?.();
-    const workspace = existingWorkspace || (await Env.getAgentWorkspaceDir(sessionId));
+    const workspace = options.workspaceRoot || (await Env.getAgentWorkspaceDir(sessionId));
 
     // 2. 初始化 Agent Home（如果有 agentId）
-    const agentId = builder.getAgentId?.();
     let agentHome: string | undefined;
     let homeManager: AgentHomeManager | undefined;
     if (agentId) {
@@ -67,8 +82,6 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
     if (agentId && agentHome) {
       agentEnv.agentId = agentId;
       agentEnv.agentHome = agentHome;
-      // 获取 Agent 名称
-      const agentName = builder.getName?.();
       if (agentName) {
         agentEnv.agentName = agentName;
       }
@@ -76,6 +89,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
 
     // 6. P1 重构：使用 AgentContextResolver 解析运行时上下文
     let agentDefinedSkills: string[] | undefined;
+    let excludeTools: string[] = [];
     if (agentId) {
       try {
         // 使用 AgentContextResolver 统一解析路径和上下文
@@ -96,12 +110,22 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         const agentDef = await store.get(agentId);
         if (agentDef) {
           agentDefinedSkills = agentDef.skills;
+          excludeTools = agentDef.excludeTools || [];
           log.debug(`[EnvInjector] Agent defined skills: ${agentDefinedSkills?.join(', ') || '(none)'}`);
         }
       } catch (error) {
         log.warn(`[EnvInjector] Failed to resolve agent context for ${agentId}:`, error);
       }
     }
+
+    const prepared: PreparedAgentEnv = {
+      workspace,
+      sessionDir: workspace,
+      workspaceRoot: workspace,
+      contextDir: workspace,
+      appendInstructions: [],
+      skills: []
+    };
 
     // ====== Agent 模式独有：Skill + 执行协议 + 运行时路径 ======
     if (mode === 'agent') {
@@ -141,7 +165,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         extensionInstructions
       });
 
-      builder.appendInstructions(...promptAssembly.toInstructions(promptBlocks));
+      prepared.appendInstructions.push(...promptAssembly.toInstructions(promptBlocks));
 
       // 8b. 根据 Agent 配置注入 Skills（不再强制注入核心 Skills）
       //     只注入 Agent 配置文件中指定的 skills
@@ -151,7 +175,7 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
           .filter((s): s is NonNullable<typeof s> => s !== null);
 
         if (skillDefs.length > 0) {
-          builder.skills(skillDefs);
+          prepared.skills.push(...skillDefs);
           log.info(
             `[EnvInjector] Injected ${skillDefs.length} agent skills: ${skillDefs.map((s) => s.name).join(', ')}`
           );
@@ -166,34 +190,22 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
         log.debug(`[EnvInjector] No skills configured for agent ${agentId || '(unknown)'}`);
       }
 
-      // 8c. 注入工具到 builder（如果 builder 还没有设置工具）
+      // 8c. 收集工具（如果请求没有显式传入工具）
       //     从 ToolRegistry 获取所有已注册的工具（builtin + Extension）
       //     过滤：应用 Agent 定义的 excludeTools 黑名单
-      if (!builder.hasTools()) {
+      if (!options.hasRequestTools) {
         const { ToolRegistry } = await import('./tools/registry');
         const allTools = ToolRegistry.getInstance().getAll();
 
-        // 从 AgentStore 加载 Agent 定义（如果有 agentId）
-        let excludeTools: string[] = [];
-        if (agentId) {
-          try {
-            const { AgentStore } = await import('./agents/AgentStore');
-            const store = await AgentStore.getInstance();
-            const agentDef = await store.get(agentId);
-            if (agentDef?.excludeTools) {
-              excludeTools = agentDef.excludeTools;
-              log.info(`[EnvInjector] Agent ${agentId} excludes tools: ${excludeTools.join(', ')}`);
-            }
-          } catch (error) {
-            log.warn(`[EnvInjector] Failed to load agent definition for ${agentId}:`, error);
-          }
+        if (agentId && excludeTools.length > 0) {
+          log.info(`[EnvInjector] Agent ${agentId} excludes tools: ${excludeTools.join(', ')}`);
         }
 
         // 应用黑名单过滤
         const excludeSet = new Set(excludeTools);
         const filteredTools = allTools.filter((t) => !excludeSet.has(t.name));
 
-        builder.tools(filteredTools);
+        prepared.tools = filteredTools;
         log.info(
           `[EnvInjector] Injected ${filteredTools.length} tools from ToolRegistry` +
             (excludeTools.length > 0 ? ` (excluded ${excludeTools.length})` : '')
@@ -211,25 +223,14 @@ export async function injectEnv(sessionId: string, builder: AgentBuilder): Promi
       const envVars = buildSkillEnvVars(agentEnv);
       const toolCtx = await buildToolExecutionContext(effectiveCwd, sessionId, envVars, {
         agentId: agentId || undefined,
-        agentName: builder.getName?.() || undefined,
+        agentName,
         agentMode: mode
       });
-      builder.sandboxContext(toolCtx);
+      prepared.sandboxContext = toolCtx;
     }
 
-    // ====== Chat & Agent 共享：基础环境设置 ======
-
-    // 9. 设置会话存储目录（扁平化结构，直接使用 workspace）
-    builder.sessionDir(workspace);
-
-    // 10. 工作目录：统一使用 workspace（当前不区分 workspace 和 projectDir）
-    builder.workspaceRoot(workspace);
-
-    // 11. 设置上下文快照目录（扁平化结构，直接使用 workspace）
-    builder.contextDir(workspace);
-
-    log.info(`[EnvInjector] Injected: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}`);
-    return workspace;
+    log.info(`[EnvInjector] Prepared: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}`);
+    return prepared;
   } catch (error) {
     log.warn(`[EnvInjector] Failed, continuing without env:`, error);
     return undefined;

@@ -170,7 +170,7 @@ export function registerChatRoutes(router: Router): void {
       //   // provider.baseUrl, model.maxOutputTokens 等完整信息
       // P1 重构：使用 ThreadExecutionFactory 统一 Builder 配置
       const factory = ThreadExecutionFactory.getInstance(agentExecutor);
-      const builder = await factory.createBuilder({
+      const runConfig = await factory.createRunConfig({
         threadId: thread.id,
         sessionMode: 'file'
       });
@@ -179,7 +179,7 @@ export function registerChatRoutes(router: Router): void {
       const gen = agentExecutor.stream({
         sessionId: thread.id,
         message: body.message,
-        builder
+        ...runConfig
       });
 
       // 异步处理流

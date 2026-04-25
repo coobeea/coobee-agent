@@ -166,40 +166,20 @@ function createExtensionServices(): ExtensionServices {
         }
 
         const sessionId = `ext-agent-${agentId}-${generateSnowflakeId()}`;
-        const builder = agentExecutor
-          .piMono()
-          .lightweight(true)
-          .mode('chat')
-          .name(agentId)
-          .sessionMode('memory')
-          .maxTurns(1);
-
-        // 设置 instructions（包括空字符串）
-        if (agentDef.instructions !== undefined) {
-          builder.instructions(agentDef.instructions);
-        }
-
-        if (agentDef.model) {
-          agentExecutor.applyProviderConfig(builder, { modelOverride: agentDef.model });
-        }
-
-        const builderAny = builder as Parameters<typeof agentExecutor.stream>[0]['builder'] & {
-          _modelMeta?: Record<string, unknown>;
-        };
-
-        const defAny = agentDef as unknown as Record<string, unknown>;
-        if (typeof defAny.temperature === 'number' || typeof defAny.maxTokens === 'number') {
-          builderAny._modelMeta = builderAny._modelMeta || {};
-          if (typeof defAny.temperature === 'number') {
-            builderAny._modelMeta.temperature = defAny.temperature;
-          }
-          if (typeof defAny.maxTokens === 'number') {
-            builderAny._modelMeta.max_tokens = defAny.maxTokens;
-          }
-        }
 
         let output = '';
-        const gen = agentExecutor.stream({ sessionId, message, builder });
+        const gen = agentExecutor.stream({
+          sessionId,
+          message,
+          runtimeType: 'pi-mono',
+          lightweight: true,
+          mode: 'chat',
+          name: agentId,
+          sessionMode: 'memory',
+          maxTurns: 1,
+          instructions: agentDef.instructions,
+          modelOverride: agentDef.model
+        });
         for await (const chunk of gen) {
           if (chunk.type === 'text:delta' && chunk.content) {
             output += chunk.content;

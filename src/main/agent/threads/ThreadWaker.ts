@@ -165,7 +165,7 @@ export class ThreadWaker {
 
       // P1 重构：使用 ThreadExecutionFactory 统一 Builder 配置（与 ChatRoutes 一致）
       const factory = ThreadExecutionFactory.getInstance(agentExecutor);
-      const builder = await factory.createBuilder({
+      const runConfig = await factory.createRunConfig({
         threadId,
         sessionMode: 'file',
         isResume: true
@@ -174,7 +174,7 @@ export class ThreadWaker {
       log.info(`[ThreadWaker] Resuming thread ${threadId}`);
 
       // 提交执行
-      const result = agentExecutor.submit({ sessionId: threadId, message, builder });
+      const result = agentExecutor.submit({ sessionId: threadId, message, ...runConfig });
 
       if (result.status === 'busy') {
         log.error(`[ThreadWaker] Thread ${threadId} is busy`);

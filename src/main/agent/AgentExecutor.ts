@@ -5,11 +5,11 @@
  * 位于 API 层和 Runtime 层之间，职责聚焦于：
  *   1. 并发控制 — 同一 session 串行执行（busy 锁）
  *   2. 无状态生命周期 — 每次请求创建 Runtime → 执行 → 销毁
- *   3. Builder 工厂 — piMono() / openai()
+ *   3. Runtime 构建 — 在执行管道末端统一创建 Builder 并 build()
  *
  * 已提取的职责：
- *   - Builder 实现 → runtime/pimono/PiMonoBuilder.ts, runtime/openai/OpenAIBuilder.ts
- *   - 环境注入 → AgentEnvInjector.ts
+ *   - Builder 实现 → runtime/AgentRuntimeBuilder.ts
+ *   - 环境准备 → AgentEnvInjector.ts
  *   - 事件广播 / 持久化 → StreamEmitter.ts + StreamConsumersManager.ts
  *   - 执行协议 → AgentEnvInjector.ts (buildExecutionProtocol)
  *   - HITL 审批 → extensions/tool-approval（通过 prepare_tool_call Hook）
@@ -27,19 +27,25 @@ const log = createLogger('ai');
 
 import { SessionStatusManager, type SessionStatus } from './runtime/SessionStatusManager';
 import type { AgentRuntime } from './runtime/AgentRuntime';
-import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk } from './runtime/types';
+import type {
+  AgentMode,
+  AgentRuntimeKind,
+  AgentRuntimeOptions,
+  ExecutionConfig,
+  ExecutionResult,
+  SkillDefinition,
+  StreamChunk,
+  ToolDefinition
+} from './runtime/types';
 import { AgentRuntimeBuilder } from './runtime/AgentRuntimeBuilder';
 import { createStreamEmitter, type IStreamEmitter } from './streaming/StreamEmitter';
 import type { StreamSource } from './streaming/types';
-import { injectEnv } from './AgentEnvInjector';
+import { prepareAgentEnv, type PreparedAgentEnv } from './AgentEnvInjector';
 import { streamConsumersManager } from './streaming/StreamConsumersManager';
 import { ProviderInjector } from './provider/ProviderInjector';
 import { SkillManager } from './skills/SkillManager';
 
 // ==================== 类型定义 ====================
-
-/** 支持的 Builder 类型 */
-export type AgentBuilder = AgentRuntimeBuilder;
 
 /** 执行请求 */
 export interface ExecuteRequest {
@@ -47,10 +53,32 @@ export interface ExecuteRequest {
   sessionId: string;
   /** 用户消息 */
   message: string;
-  /** Builder 实例（通过 agentExecutor.piMono() 或 agentExecutor.openai() 创建） */
-  builder?: AgentBuilder;
-  /** 预构建的 Runtime（Orchestrator / Swarm 等已初始化的运行时，跳过 Builder 流程） */
-  runtime?: AgentRuntime;
+  /** Runtime 实现类型（默认 pi-mono） */
+  runtimeType?: AgentRuntimeKind;
+  /** 运行模式（默认 agent） */
+  mode?: AgentMode;
+  /** 会话持久化方式（默认 file） */
+  sessionMode?: 'memory' | 'file';
+  /** 轻量模式：跳过环境准备、Extension Hook 和事件广播 */
+  lightweight?: boolean;
+  /** Agent 定义 ID */
+  agentId?: string;
+  /** Runtime 名称 */
+  name?: string;
+  /** 基础系统提示词 */
+  instructions?: string;
+  /** 模型覆盖（provider/model 或 model id） */
+  modelOverride?: string;
+  /** 手动指定工作区 */
+  workspaceRoot?: string;
+  /** 最大执行轮次 */
+  maxTurns?: number;
+  /** 调用方显式追加的指令 */
+  appendInstructions?: string[];
+  /** 调用方显式传入的 Skills */
+  skills?: SkillDefinition[];
+  /** 调用方显式传入的 Tools */
+  tools?: ToolDefinition[];
   /** 流式事件回调（可选） */
   onChunk?: (chunk: StreamChunk) => void;
   /** 中止信号（Pipeline 传入，用于提前终止流式消费） */
@@ -89,8 +117,8 @@ class AgentExecutor {
    *
    * 供 chat.ts、Orchestrator Worker、Swarm Role 等所有创建 Agent 的地方使用。
    */
-  applyProviderConfig(
-    builder: AgentBuilder,
+  private applyProviderConfig(
+    builder: AgentRuntimeBuilder,
     opts?: { modelOverride?: string; sessionId?: string; agentId?: string }
   ): void {
     this.providerInjector.applyProviderConfig(builder, opts);
@@ -99,7 +127,7 @@ class AgentExecutor {
   /**
    * 注入默认思维链级别到 Builder
    */
-  applyThinkingLevel(builder: AgentBuilder): void {
+  private applyThinkingLevel(builder: AgentRuntimeBuilder): void {
     this.providerInjector.applyThinkingLevel(builder);
   }
 
@@ -399,110 +427,62 @@ class AgentExecutor {
    * 统一处理所有的 Hooks、环境注入、事件分发和生命周期。
    */
   private async *executePipeline(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const { sessionId, message, builder, onChunk, signal: externalSignal } = request;
+    const { sessionId, message, onChunk, signal: externalSignal } = request;
     let runtime: AgentRuntime | null = null;
 
     log.info(`[AgentExecutor] Execute Pipeline: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
     const startTime = Date.now();
 
     // 创建或使用外部提供的 AbortController
-    let internalController: AbortController | undefined;
     let signal = externalSignal;
 
     if (!signal) {
-      internalController = new AbortController();
-      signal = internalController.signal;
-      this.abortControllers.set(sessionId, internalController);
+      const controller = new AbortController();
+      signal = controller.signal;
+      this.abortControllers.set(sessionId, controller);
     }
 
     let workspaceDir: string | undefined;
     let loader: import('../extension/ExtensionLoader').ExtensionLoader | null = null;
-
-    // 检查是否轻量模式
-    const isLightweight = builder ? (builder.getLightweight?.() ?? false) : false;
-
-    if (!isLightweight) {
-      const { Env } = await import('@main/common/env');
-      if (builder) {
-        workspaceDir = builder.getWorkspaceRoot?.();
-      }
-      if (!workspaceDir) {
-        workspaceDir = await Env.getAgentWorkspaceDir(sessionId);
-      }
-
-      // 加载任务级 Extension（如果存在）
-      const { ExtensionManager } = await import('@main/extension');
-      loader = ExtensionManager.getLoader?.() || null;
-      if (loader) {
-        await loader.loadWorkspaceExtensions(sessionId, workspaceDir).catch((err: unknown) => {
-          log.warn(`[AgentExecutor] Failed to load workspace extensions for ${sessionId}:`, err);
-        });
-      }
-    }
+    let preparedEnv: PreparedAgentEnv | undefined;
+    const mode = request.mode ?? 'agent';
+    const isLightweight = request.lightweight ?? false;
+    const agentName = request.name ?? request.agentId ?? 'agent';
 
     let emitter: IStreamEmitter | null = null;
 
     try {
-      if (request.runtime) {
-        // === 预构建 Runtime 路径（Orchestrator / Swarm / Discussion） ===
-        runtime = request.runtime;
-
-        if (!isLightweight) {
-          emitter = this.createEmitter(sessionId, runtime);
+      if (!isLightweight) {
+        const { Env } = await import('@main/common/env');
+        workspaceDir = request.workspaceRoot;
+        if (!workspaceDir) {
+          workspaceDir = await Env.getAgentWorkspaceDir(sessionId);
         }
 
-        // agent:start 事件
-        const runtimeIdentity = this.getRuntimeIdentity(runtime);
-        await this.emitAgentLifecycleEvent('agent:start', {
+        // 加载任务级 Extension（如果存在）
+        const { ExtensionManager } = await import('@main/extension');
+        loader = ExtensionManager.getLoader?.() || null;
+        if (loader) {
+          await loader.loadWorkspaceExtensions(sessionId, workspaceDir).catch((err: unknown) => {
+            log.warn(`[AgentExecutor] Failed to load workspace extensions for ${sessionId}:`, err);
+          });
+        }
+
+        preparedEnv = await prepareAgentEnv({
           sessionId,
-          agentId: runtimeIdentity.id,
-          agentName: runtimeIdentity.name,
-          task: message.substring(0, 200)
+          mode,
+          workspaceRoot: workspaceDir,
+          agentId: request.agentId,
+          agentName,
+          hasRequestTools: !!request.tools?.length
         });
-
-        runtime.options = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
-        const gen = runtime.stream(message);
-        const runtimeAgentId = builder ? builder.getAgentId?.() : undefined;
-
-        const result = yield* this.consumeAndForward(
-          gen,
-          emitter,
-          sessionId,
-          onChunk,
-          signal,
-          workspaceDir,
-          runtimeAgentId
-        );
-
-        const duration = Date.now() - startTime;
-
-        // agent:done 事件
-        await this.emitAgentLifecycleEvent('agent:done', {
-          sessionId,
-          agentId: runtimeIdentity.id,
-          agentName: runtimeIdentity.name,
-          success: true,
-          durationMs: duration,
-          summary: result.output?.substring(0, 500)
-        });
-
-        this.logCompletion(sessionId, result, duration);
-        return result;
-      }
-
-      // === Builder 路径（标准 Agent / Chat） ===
-      if (!builder) {
-        throw new Error('ExecuteRequest requires either builder or runtime');
-      }
-
-      // 0. 注入运行时环境
-      if (!isLightweight) {
-        const workspace = await injectEnv(sessionId, builder);
-        workspaceDir = workspace;
+        workspaceDir = preparedEnv?.workspace ?? workspaceDir;
 
         // 写入用户消息到 history.jsonl
         streamConsumersManager.writeUserMessage(sessionId, message);
       }
+
+      const builder = this.createBuilder(request, preparedEnv);
 
       // === Extension Hooks: message_received + run_started + prepare_run_input ===
       if (!isLightweight) {
@@ -515,7 +495,7 @@ class AgentExecutor {
       }
 
       // 1. 创建 Runtime + 创建 Emitter
-      runtime = await builder.sessionId(sessionId).build();
+      runtime = await builder.build();
 
       if (!isLightweight) {
         emitter = this.createEmitter(sessionId, runtime);
@@ -531,9 +511,12 @@ class AgentExecutor {
       });
 
       // 2. 流式执行
-      runtime.options = this.buildRuntimeOptions(runtime, sessionId, signal, request.executionConfig);
+      runtime.options = this.buildRuntimeOptions(runtime, sessionId, signal, {
+        ...request.executionConfig,
+        maxTurns: request.executionConfig?.maxTurns ?? request.maxTurns
+      });
       const gen = runtime.stream(message);
-      const builderAgentId = builder.getAgentId?.();
+      const requestAgentId = request.agentId;
 
       const result = yield* this.consumeAndForward(
         gen,
@@ -542,14 +525,14 @@ class AgentExecutor {
         onChunk,
         signal,
         workspaceDir,
-        builderAgentId
+        requestAgentId
       );
 
       const duration = Date.now() - startTime;
 
       // === Extension Hooks: run_completed（fire-and-forget）===
       if (!isLightweight) {
-        const stableAgentId = builderAgentId || runtimeIdentity.id;
+        const stableAgentId = requestAgentId || runtimeIdentity.id;
         this.runExtensionEndHooks(sessionId, stableAgentId, result, duration).catch((err) => {
           log.warn(`[AgentExecutor] Extension end hooks failed: sessionId=${sessionId}`, err);
         });
@@ -668,6 +651,75 @@ class AgentExecutor {
     }
   }
 
+  /**
+   * 根据 ExecuteRequest 和环境准备结果创建 Builder。
+   *
+   * Builder 只在这里创建一次，随后在 executePipeline 里 build() 一次。
+   */
+  private createBuilder(request: ExecuteRequest, preparedEnv?: PreparedAgentEnv): AgentRuntimeBuilder {
+    const mode = request.mode ?? 'agent';
+    const runtimeType = request.runtimeType ?? 'pi-mono';
+    const sessionMode = request.sessionMode ?? 'file';
+    const name = request.name ?? request.agentId ?? 'agent';
+
+    const builder = new AgentRuntimeBuilder()
+      .type(runtimeType)
+      .mode(mode)
+      .lightweight(request.lightweight ?? false)
+      .sessionId(request.sessionId)
+      .sessionMode(sessionMode)
+      .name(name)
+      .instructions(request.instructions ?? '');
+
+    if (request.agentId) {
+      builder.agentId(request.agentId);
+    }
+
+    this.applyProviderConfig(builder, {
+      modelOverride: request.modelOverride,
+      sessionId: request.sessionId,
+      agentId: request.agentId
+    });
+    this.applyThinkingLevel(builder);
+
+    if (request.workspaceRoot) {
+      builder.workspaceRoot(request.workspaceRoot);
+    }
+    if (request.maxTurns !== undefined) {
+      builder.maxTurns(request.maxTurns);
+    }
+    if (request.appendInstructions?.length) {
+      builder.appendInstructions(...request.appendInstructions);
+    }
+    if (request.skills?.length) {
+      builder.skills(request.skills);
+    }
+    if (request.tools?.length) {
+      builder.tools(request.tools);
+    }
+
+    if (preparedEnv) {
+      builder.sessionDir(preparedEnv.sessionDir);
+      builder.workspaceRoot(preparedEnv.workspaceRoot);
+      builder.contextDir(preparedEnv.contextDir);
+
+      if (preparedEnv.appendInstructions.length > 0) {
+        builder.appendInstructions(...preparedEnv.appendInstructions);
+      }
+      if (preparedEnv.skills.length > 0) {
+        builder.skills(preparedEnv.skills);
+      }
+      if (preparedEnv.tools && preparedEnv.tools.length > 0) {
+        builder.tools(preparedEnv.tools);
+      }
+      if (preparedEnv.sandboxContext) {
+        builder.sandboxContext(preparedEnv.sandboxContext);
+      }
+    }
+
+    return builder;
+  }
+
   private buildRuntimeOptions(
     runtime: AgentRuntime,
     sessionId: string,
@@ -755,7 +807,7 @@ class AgentExecutor {
    * 执行 Extension 前置 Hook
    * message_received → run_started → prepare_run_input
    */
-  private async runExtensionHooks(sessionId: string, message: string, builder: AgentBuilder): Promise<void> {
+  private async runExtensionHooks(sessionId: string, message: string, builder: AgentRuntimeBuilder): Promise<void> {
     try {
       const { ExtensionManager } = await import('../extension');
       const runner = ExtensionManager.getHookRunner();

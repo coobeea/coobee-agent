@@ -272,14 +272,14 @@ export interface AgentRuntimeOptions {
    * 以 JSON 文件写入此目录，用于调试和 Prompt 优化。
    *
    * 文件命名格式：{ISO 时间戳}.json（自然排序 = 时间顺序）
-   * 由 AgentExecutor.injectEnv() 自动设置为 {workspace}/contexts/
+   * 由 AgentEnvInjector.prepareAgentEnv() 准备为 {workspace}/contexts/
    */
   contextDir?: string;
   /**
    * 工作区根目录
    *
    * 所有文件工具（read/write/edit）的路径边界，exec 命令的工作目录。
-   * 由 AgentExecutor.injectEnv() 自动设置为 Agent 的 workspace 目录。
+   * 由 AgentEnvInjector.prepareAgentEnv() 准备为 Agent 的 workspace 目录。
    * 不传则降级为 process.cwd()。
    */
   workspaceRoot?: string;
@@ -332,7 +332,7 @@ export interface AgentRuntimeOptions {
   /**
    * 模型元数据（从 coobee.json5 模型配置透传）
    *
-   * 用于动态构造 pi-SDK Model 对象。由 PiMonoBuilder.build() 从 ProviderConfig 中提取并注入。
+   * 用于动态构造 pi-SDK Model 对象。由 AgentRuntimeBuilder.build() 从 ProviderConfig 中提取并注入。
    */
   modelMeta?: {
     reasoning?: boolean;

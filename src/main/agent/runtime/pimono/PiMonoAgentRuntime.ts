@@ -26,7 +26,6 @@
  * - PiMonoToolConverter.ts  — 工具转换（ToolDefinition → PiToolDefinition）
  * - PiMonoStreamAdapter.ts  — 流式事件适配（AgentSessionEvent → StreamChunk）
  * - ChunkQueue.ts           — 推送→拉取桥接器
- * - PiMonoBuilder.ts        — 构建器
  * - types.ts                — 类型定义
  */
 
