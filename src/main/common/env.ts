@@ -145,7 +145,7 @@ class EnvClass {
       builtinExtensionsDir: path.join(app.getAppPath(), 'resources', 'extensions'),
       userExtensionsDir: path.join(_userHome, 'extensions'),
       builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
-      homesDir: path.join(_userHome, 'agents'), // 合并到 agents 目录
+      homesDir: path.join(_userHome, 'homes'),
       agentsMdPath: path.join(_userHome, 'agents.md'),
       workspacesDir: path.join(_userHome, 'workspaces'),
       threadsDir: path.join(_userHome, 'threads'),

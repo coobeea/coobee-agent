@@ -157,8 +157,6 @@ export interface ExtensionServices {
   };
   /** LLM 调用服务 */
   llm: {
-    /** 调用 LLM 进行对话（使用默认模型） */
-    chat(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>): Promise<string>;
     /**
      * 通过指定 Agent 执行一次对话
      *
@@ -168,17 +166,11 @@ export interface ExtensionServices {
      * @param message 用户输入内容
      */
     runAgent(agentId: string, message: string): Promise<string>;
-    /** 生成文本的 embedding 向量 */
-    embed(texts: string[], options?: { model?: string }): Promise<number[][]>;
   };
   /** Agent 相关服务 */
   agent: {
-    /** 获取 AgentExecutor 实例 */
-    getExecutor(): Promise<ReturnType<typeof import('../agent/AgentExecutor').getAgentExecutor>>;
     /** 获取 AgentStore 实例 */
     getStore(): Promise<import('../agent/agents/AgentStore').AgentStore>;
-    /** 获取内置工具列表 */
-    getBuiltinTools(): Promise<Array<import('../agent/tools/types').ToolDefinition>>;
     /** 获取 ToolRegistry 实例 */
     getToolRegistry(): Promise<import('../agent/tools/registry').ToolRegistry>;
     /** 获取 SkillManager 实例 */

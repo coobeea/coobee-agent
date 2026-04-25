@@ -120,10 +120,11 @@ function createExtensionServices(): ExtensionServices {
     },
     paths: {
       async getWorkspace(sessionId) {
-        const { Env } = await import('../common/env');
-        return Env.getAgentWorkspaceDir(sessionId);
+        const { Threads } = await import('../config');
+        return Threads.getWorkspaceDir(sessionId);
       },
       async getAgentHome(agentId) {
+        // 这里先保持与主运行时一致的 home 路径来源；AgentsConfig 仍在单独收敛中。
         const { Env } = await import('../common/env');
         return Env.getAgentHomeDir(agentId);
       },
@@ -132,13 +133,11 @@ function createExtensionServices(): ExtensionServices {
         return Env.paths.userHome;
       },
       async getDataDir(extensionId) {
-        const { Env } = await import('../common/env');
+        const { Extensions } = await import('../config');
         const path = await import('node:path');
-        const dataDir = path.default.join(Env.paths.userHome, 'extensions', extensionId, 'data');
-        const fs = await import('node:fs');
-        if (!fs.default.existsSync(dataDir)) {
-          fs.default.mkdirSync(dataDir, { recursive: true });
-        }
+        const { mkdirp } = await import('mkdirp');
+        const dataDir = path.default.join(Extensions.user, extensionId, 'data');
+        await mkdirp(dataDir);
         return dataDir;
       },
       async getConfigDir() {
@@ -150,14 +149,11 @@ function createExtensionServices(): ExtensionServices {
         return Env.paths.secretsDir;
       },
       async getWorkspacesDir() {
-        const { Env } = await import('../common/env');
-        return Env.paths.workspacesDir;
+        const { Threads } = await import('../config');
+        return Threads.workspaces;
       }
     },
     llm: {
-      async chat(_messages) {
-        throw new Error('Not implemented');
-      },
       async runAgent(agentId, message) {
         const { agentExecutor } = await import('../agent/AgentExecutor');
         const { AgentStore } = await import('../agent/agents/AgentStore');
@@ -210,22 +206,12 @@ function createExtensionServices(): ExtensionServices {
           }
         }
         return output;
-      },
-      async embed(_texts, _options) {
-        throw new Error('Not implemented');
       }
     },
     agent: {
-      async getExecutor() {
-        const { agentExecutor } = await import('../agent/AgentExecutor');
-        return agentExecutor;
-      },
       async getStore() {
         const { AgentStore } = await import('../agent/agents/AgentStore');
         return AgentStore.getInstance();
-      },
-      async getBuiltinTools() {
-        return []; // placeholder
       },
       async getToolRegistry() {
         const { ToolRegistry } = await import('../agent/tools/registry');
