@@ -12,7 +12,6 @@ export {
   TabChannels,
   AppChannels,
   EventChannels,
-  AgentChannels,
   OnboardingChannels
 } from './channels';
 
@@ -22,7 +21,6 @@ export type {
   TabChannel,
   AppChannel,
   EventChannel,
-  AgentChannel,
   OnboardingChannel
 } from './channels';
 

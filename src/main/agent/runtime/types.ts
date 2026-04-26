@@ -115,11 +115,11 @@ export type AgentMode = 'chat' | 'agent';
  *
  * 它和 `AgentMode` 不同：
  *   - `AgentMode` 决定能力语义（chat / agent）
- *   - `RuntimeKind` 决定实现类型（pimono / openai）
+ *   - `RuntimeKind` 决定实现类型（pimono / openai / claude）
  *
  * 入口层通常不应该直接 `new` 具体 Builder，而应把这层选择收口到 runtime 工厂里。
  */
-export type RuntimeKind = 'pimono' | 'openai';
+export type RuntimeKind = 'pimono' | 'openai' | 'claude';
 
 /**
  * 会话持久化语义
@@ -188,7 +188,7 @@ export interface RuntimeBuilderRequest {
  *
  * 当前两者的取值几乎一一对应，但语义阶段不同，所以仍然分别保留。
  */
-export type AgentRuntimeKind = 'pi-mono' | 'openai';
+export type AgentRuntimeKind = 'pi-mono' | 'openai' | 'claude';
 
 /**
  * 思考级别
@@ -309,7 +309,7 @@ export interface AgentRuntimeOptions {
   apiKey: string;
 
   /** API 格式 */
-  apiType: 'openai-compatible';
+  apiType: 'openai-compatible' | 'anthropic' | 'google';
 
   /**
    * OpenAI 兼容 API 的 Base URL（由 Builder / 调用方解析后注入）

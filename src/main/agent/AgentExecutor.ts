@@ -22,6 +22,7 @@
  */
 
 import { createLogger } from '@main/common/logger';
+import { Models } from '@main/config';
 
 const log = createLogger('ai');
 
@@ -52,7 +53,7 @@ export interface ExecuteRequest {
   sessionId: string;
   /** 用户消息 */
   message: string;
-  /** Runtime 实现类型（默认 pi-mono） */
+  /** Runtime 实现类型；不传则按模型 Provider 自动选择 */
   runtimeType?: AgentRuntimeKind;
   /** 运行模式（默认 agent） */
   mode?: AgentMode;
@@ -494,14 +495,7 @@ class AgentExecutor {
       const gen = runtime.stream(message);
       const requestAgentId = request.agentId;
 
-      const result = yield* this.consumeAndForward(
-        gen,
-        emitter,
-        sessionId,
-        onChunk,
-        signal,
-        requestAgentId
-      );
+      const result = yield* this.consumeAndForward(gen, emitter, sessionId, onChunk, signal, requestAgentId);
 
       const duration = Date.now() - startTime;
 
@@ -644,7 +638,7 @@ class AgentExecutor {
     runInputPatch?: RunInputPatch
   ): AgentRuntimeBuilder {
     const mode = request.mode ?? 'agent';
-    const runtimeType = request.runtimeType ?? 'pi-mono';
+    const runtimeType = this.resolveRuntimeType(request);
     const sessionMode = request.sessionMode ?? 'file';
     const name = request.name ?? request.agentId ?? 'agent';
     const instructions = runInputPatch?.instructions ?? request.instructions ?? '';
@@ -707,6 +701,23 @@ class AgentExecutor {
     }
 
     return builder;
+  }
+
+  private resolveRuntimeType(request: ExecuteRequest): AgentRuntimeKind {
+    if (request.runtimeType) {
+      return request.runtimeType;
+    }
+
+    try {
+      const resolved = Models.resolveModel(request.modelOverride);
+      if (resolved.provider.api === 'anthropic') {
+        return 'claude';
+      }
+    } catch (error) {
+      log.debug('[AgentExecutor] Runtime auto-select fallback to pi-mono:', error);
+    }
+
+    return 'pi-mono';
   }
 
   /** 根据 StreamChunk 触发 Agent 运行过程中的派生 Hook。 */

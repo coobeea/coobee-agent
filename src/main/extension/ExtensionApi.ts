@@ -171,7 +171,6 @@ function createExtensionServices(): ExtensionServices {
         const gen = agentExecutor.stream({
           sessionId,
           message,
-          runtimeType: 'pi-mono',
           lightweight: true,
           mode: 'chat',
           name: agentId,

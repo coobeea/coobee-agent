@@ -6,6 +6,7 @@ import type { AgentRuntimeKind, AgentRuntimeOptions, AgentMode, ThinkingLevel } 
 import type { AgentRuntime } from './AgentRuntime';
 import { PiMonoAgentRuntime } from './pimono/PiMonoAgentRuntime';
 import { OpenAIAgentRuntime } from './openai/OpenAIAgentRuntime';
+import { ClaudeAgentRuntime } from './claude/ClaudeAgentRuntime';
 import type { SkillDefinition, ToolDefinition } from './types';
 
 /**
@@ -152,7 +153,7 @@ export class AgentRuntimeBuilder {
     return this;
   }
 
-  apiType(apiType: 'openai-compatible'): this {
+  apiType(apiType: AgentRuntimeOptions['apiType']): this {
     this.options.apiType = apiType;
     return this;
   }
@@ -189,6 +190,9 @@ export class AgentRuntimeBuilder {
       const fromProvider = resolveApiKey(this._providerConfig.apiKey, this._providerConfig.id);
       if (fromProvider) return fromProvider;
     }
+    if (this.resolveApiType() === 'anthropic') {
+      return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
+    }
     return process.env.DASHSCOPE_API_KEY || process.env.OPENAI_API_KEY || process.env.VITE_LLM_API_KEY || '';
   }
 
@@ -201,9 +205,16 @@ export class AgentRuntimeBuilder {
   private resolveBaseURL(): string {
     if (this.options.baseURL) return this.options.baseURL;
     if (this._providerConfig?.baseUrl) return this._providerConfig.baseUrl;
+    if (this.resolveApiType() === 'anthropic') {
+      return process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+    }
     return this.options.type === 'pi-mono'
       ? process.env.VITE_LLM_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
       : process.env.VITE_LLM_BASE_URL || 'https://api.openai.com/v1';
+  }
+
+  private resolveApiType(): AgentRuntimeOptions['apiType'] {
+    return this._providerConfig?.api || this.options.apiType || 'openai-compatible';
   }
 
   async build(): Promise<AgentRuntime> {
@@ -211,10 +222,11 @@ export class AgentRuntimeBuilder {
       ...this.options,
       model: this.resolveModel(),
       apiKey: this.resolveApiKey(),
+      apiType: this.resolveApiType(),
       baseURL: this.resolveBaseURL()
     };
 
-    if (!resolved.apiKey) {
+    if (!resolved.apiKey && resolved.type !== 'claude') {
       throw new Error('API Key 未配置');
     }
 
@@ -223,6 +235,8 @@ export class AgentRuntimeBuilder {
       runtime = new PiMonoAgentRuntime(resolved);
     } else if (this.options.type === 'openai') {
       runtime = new OpenAIAgentRuntime(resolved);
+    } else if (this.options.type === 'claude') {
+      runtime = new ClaudeAgentRuntime(resolved);
     } else {
       throw new Error(`Unsupported runtime type: ${this.options.type}`);
     }

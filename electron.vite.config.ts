@@ -134,6 +134,7 @@ export default defineConfig({
         // 原生模块标记为外部依赖
         external: [
           'better-sqlite3-multiple-ciphers',
+          '@anthropic-ai/claude-agent-sdk',
           'fs-ext',
           'node-pty',
           'electron',

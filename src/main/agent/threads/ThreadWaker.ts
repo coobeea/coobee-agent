@@ -190,7 +190,6 @@ export class ThreadWaker {
         modelOverride: thread.overrideModel || agent.model,
         workspaceRoot: thread.metadata?.workspacePath as string | undefined,
         mode: 'agent',
-        runtimeType: 'pi-mono',
         sessionMode: 'file'
       });
 

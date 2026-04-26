@@ -17,6 +17,7 @@ import { resolveApiKey } from './ApiKeyResolver';
 interface ProviderConfigurableBuilder {
   fromProviderConfig(config: ProviderConfig, modelId?: string): unknown;
   model(model: string): unknown;
+  apiType?(apiType: ProviderConfig['api']): unknown;
   thinkingLevel?(level: unknown): unknown;
 }
 
@@ -57,13 +58,14 @@ export class ProviderInjector {
 
       // 解析 API Key
       const apiKey = resolveApiKey(provider.apiKey, provider.id);
-      if (!apiKey) {
+      if (!apiKey && provider.api !== 'anthropic') {
         console.warn(`[ProviderInjector] API Key 未配置: ${provider.id}`);
         return;
       }
 
       // 注入到 Builder
       builder.fromProviderConfig(provider as ProviderConfig, resolved.model.id);
+      builder.apiType?.(provider.api);
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
       // 注意：只传递模型 ID，不包含 provider 前缀，因为 OpenAI 兼容 API 只接受模型 ID
