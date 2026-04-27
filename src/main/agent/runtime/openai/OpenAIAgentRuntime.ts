@@ -295,23 +295,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    * 记录原始 SDK 事件的 debug 日志
    */
   private logStreamEvent(event: { type: string; data?: unknown; item?: unknown; name?: string }): void {
-    if (event.type === 'raw_model_stream_event') {
-      const rawEvent = event.data as { type?: string; event?: { type?: string } } | undefined;
-      const rawType = rawEvent?.type;
-      const innerType = rawType === 'model' ? rawEvent?.event?.type : undefined;
-      log.debug(
-        `[SDK Event] ${event.type} | rawType=${rawType}${innerType ? ` | innerType=${innerType}` : ''}`,
-        JSON.stringify(event.data)
-      );
-    } else if (event.type === 'run_item_stream_event') {
-      const itemType = (event.item as { type?: string })?.type;
-      log.debug(
-        `[SDK Event] ${event.type} | name=${event.name} | itemType=${itemType}`,
-        JSON.stringify((event.item as { rawItem?: unknown })?.rawItem ?? event.item)
-      );
-    } else {
-      log.debug(`[SDK Event] ${event.type}`, JSON.stringify(event));
-    }
+    log.debug(`[SDK Event] ${event.type}`, JSON.stringify(event));
   }
 
   /**
