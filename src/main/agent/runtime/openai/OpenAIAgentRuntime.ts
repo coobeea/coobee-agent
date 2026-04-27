@@ -665,7 +665,9 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         description: def.description,
         parameters: def.parameters,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (params: any) => {
+        execute: async (params: any, _context?: any, details?: any) => {
+          // 从 SDK 的 details.toolCall.callId 获取工具调用 ID
+          const callId: string | undefined = details?.toolCall?.callId;
           // 使用共享管线：hook + policy + execute + post-hooks
           const { executeToolPipeline } = await import('../shared/ToolExecutionPipeline');
           const result = await executeToolPipeline(def, params as Record<string, unknown>, {
@@ -675,7 +677,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
               pendingRuntimeChunks.push({
                 type: 'tool:delta',
                 content: update.content,
-                data: { delta: update.content }
+                data: { callId, details }
               });
             },
             signal
