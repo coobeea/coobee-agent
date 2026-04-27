@@ -13,7 +13,7 @@
  */
 
 import { run, Agent, tool, OpenAIResponsesModel } from '@openai/agents';
-import type { StreamedRunResult, Tool, Model } from '@openai/agents';
+import type { StreamedRunResult, Tool, Model, ModelSettings } from '@openai/agents';
 import OpenAI from 'openai';
 
 import { CompressedFileSession } from './CompressedFileSession';
@@ -78,6 +78,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       name: runtimeOptions.name,
       instructions: finalInstructions,
       model,
+      modelSettings: this.buildModelSettings(runtimeOptions),
       ...(allTools.length > 0 ? { tools: allTools } : {})
     });
     const session = new CompressedFileSession(sessionId, runtimeOptions.sessionDir, {
@@ -171,6 +172,33 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       baseURL: options.baseURL
     });
     return new OpenAIResponsesModel(client, options.model);
+  }
+
+  /**
+   * 从 AgentRuntimeOptions 构建 SDK ModelSettings
+   *
+   * 接线：
+   *   - thinkingLevel → reasoning.effort（SDK 原生 reasoning 控制）
+   *   - modelMeta.maxOutputTokens → maxTokens
+   *
+   * thinkingLevel 为 "off" 时不设置 reasoning，完全禁用推理。
+   */
+  private buildModelSettings(options: AgentRuntimeOptions): ModelSettings {
+    const settings: ModelSettings = {};
+
+    // thinkingLevel → reasoning.effort
+    if (options.modelMeta?.reasoning) {
+      settings.reasoning = {
+        effort: !options.thinkingLevel || options.thinkingLevel === 'off' ? 'none' : options.thinkingLevel
+      };
+    }
+
+    // modelMeta → maxTokens
+    if (options.modelMeta?.maxOutputTokens) {
+      settings.maxTokens = options.modelMeta.maxOutputTokens;
+    }
+
+    return settings;
   }
 
   /**
