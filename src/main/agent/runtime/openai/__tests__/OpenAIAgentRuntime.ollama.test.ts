@@ -7,7 +7,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
 // ===== Electron 环境 stub（必须，OpenAIAgentRuntime 依赖 electron） =====
 
@@ -30,13 +30,50 @@ vi.mock('electron', () => {
 
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }));
 
+// 日志缓冲区：vi.mock 内部无法使用顶层 fs，先用内存收集
+const logBuffer: string[] = [];
+const logPath = path.join(process.cwd(), 'test-results', 'logs', 'openai-ollama-test.log');
+
+function flushLogBuffer(): void {
+  if (logBuffer.length > 0) {
+    const logDir = path.dirname(logPath);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    fs.appendFileSync(logPath, logBuffer.join(''), 'utf-8');
+    logBuffer.length = 0;
+  }
+}
+
+// RuntimeLogger fallbacks to console.debug in test env.
+// Intercept console.debug to capture runtime logs to file.
+const originalConsoleDebug = console.debug;
+console.debug = (...args: unknown[]) => {
+  const message = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+  logBuffer.push(`[${new Date().toISOString()}] [DEBUG] ${message}\n`);
+  originalConsoleDebug(...args);
+};
 vi.mock('electron-log', () => {
-  const noop = (): void => {};
+  const addToBuffer = (level: string, ...args: unknown[]): void => {
+    const timestamp = new Date().toISOString();
+    const message = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    logBuffer.push(`[${timestamp}] [${level}] ${message}\n`);
+  };
+
   const transports = {
-    file: { level: 'info', getFile: () => ({ path: '/tmp/test.log' }) },
+    file: { level: 'debug', getFile: () => ({ path: logPath }) },
     console: { level: 'info' }
   };
-  const logger = { info: noop, warn: noop, error: noop, debug: noop, verbose: noop, transports };
+
+  const logger = {
+    info: (...args: unknown[]) => addToBuffer('INFO', ...args),
+    warn: (...args: unknown[]) => addToBuffer('WARN', ...args),
+    error: (...args: unknown[]) => addToBuffer('ERROR', ...args),
+    debug: (...args: unknown[]) => addToBuffer('DEBUG', ...args),
+    verbose: (...args: unknown[]) => addToBuffer('VERBOSE', ...args),
+    transports
+  };
+
   return {
     default: Object.assign(logger, {
       create: () => ({ ...logger, transports: { ...transports } })
@@ -59,7 +96,20 @@ const OLLAMA_CONFIG = {
 
 // ===== 测试 =====
 
+// 确保日志目录存在
+const logDir = path.join(process.cwd(), 'test-results', 'logs');
+fs.mkdirSync(logDir, { recursive: true });
+
+// 测试日志写入是否工作（删除旧的测试文件）
+const testLogFile = path.join(logDir, 'test-write.log');
+fs.writeFileSync(testLogFile, `[${new Date().toISOString()}] [TEST] 日志系统初始化成功\n`, 'utf-8');
+
 describe('Ollama 最简测试', () => {
+  // 每个测试完成后刷日志到文件
+  afterEach(() => {
+    flushLogBuffer();
+  });
+
   it('步骤1：发送一句话，得到回复', { timeout: 60_000 }, async () => {
     const sessionId = `ollama-test-${Date.now()}`;
     const runtime = new OpenAIAgentRuntime({
