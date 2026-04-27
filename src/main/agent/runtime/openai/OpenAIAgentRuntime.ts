@@ -17,7 +17,7 @@ import type { StreamedRunResult, Tool, Model } from '@openai/agents';
 
 import { aisdk } from '@openai/agents-extensions/ai-sdk';
 import { createOpenAI } from '@ai-sdk/openai';
-import { FileSession } from './FileSession';
+import { CompressedFileSession } from './CompressedFileSession';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import {
@@ -81,7 +81,10 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       model,
       ...(allTools.length > 0 ? { tools: allTools } : {})
     });
-    const session = new FileSession(sessionId, runtimeOptions.sessionDir);
+    const session = new CompressedFileSession(sessionId, runtimeOptions.sessionDir, {
+      model,
+      compression: { enabled: runtimeOptions.compaction.enabled !== false }
+    });
 
     log.info(
       `Initialized: ${runtimeOptions.name} ` +

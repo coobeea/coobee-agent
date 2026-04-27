@@ -5,7 +5,7 @@
  * 包括：Session 存储格式、压缩配置、上下文快照等。
  */
 
-import type { AgentInputItem, RunToolApprovalItem } from '@openai/agents';
+import type { AgentInputItem, RunToolApprovalItem, Model } from '@openai/agents';
 
 // ========== HITL 审批（OpenAI 特有） ==========
 
@@ -87,7 +87,7 @@ export interface SessionCompressionOptions {
   /** 触发压缩的最小消息数（默认 10，低于此数不压缩） */
   minMessageCount?: number;
   /** 用于生成总结的模型（不传则使用 Agent 自身的模型） */
-  summaryModel?: string;
+  summaryModel?: Model;
   /** 是否调试模式 */
   debug?: boolean;
 }

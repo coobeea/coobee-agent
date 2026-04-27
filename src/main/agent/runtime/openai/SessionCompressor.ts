@@ -20,6 +20,7 @@
  */
 
 import { Agent, run } from '@openai/agents';
+import type { Model } from '@openai/agents';
 import type { AgentInputItem } from '@openai/agents';
 import { createLogger } from '@main/common/logger';
 import type { FileSession } from './FileSession';
@@ -28,63 +29,22 @@ import { countTokens, countItemsTokens } from './tokenCounter';
 
 const log = createLogger('SessionCompressor');
 
-/** 默认配置 */
-const DEFAULTS: Required<SessionCompressionOptions> = {
-  enabled: false,
-  contextWindowSize: 128000,
-  thresholdRatio: 0.7,
-  keepRatio: 0.3,
-  minMessageCount: 10,
-  summaryModel: '',
-  debug: false
-};
-
 /** 总结 Agent 的 system prompt */
-const SUMMARY_INSTRUCTIONS = `你是一个专业的对话总结工具。你的唯一任务是：从对话记录中提取并列出所有关键信息。
-
-**严格要求**：
-- 直接输出总结内容，不要输出任何思考过程
-- 不要使用 <think> 标签
-- 不要添加任何解释或评论
-- 只输出结构化的信息列表
-
-**输出格式**（直接用以下 Markdown 格式输出）：
-
-## 用户信息
-- 姓名：XXX
-- 年龄：XXX
-- 职业：XXX
-- 工作地点：XXX
-- 其他个人信息...
-
-## 项目信息
-- 项目名：XXX
-- 项目类型：XXX
-- 技术栈：XXX
-- 其他项目细节...
-
-## 对话要点
-- 要点 1
-- 要点 2
-
-## 用户偏好与决策
-- 偏好 1
-- 决策 1
-
-## 待办/下一步
-- 事项 1
-
-**关键规则**：
-1. 用户提到的姓名、年龄、职业、工作单位 → 必须逐项列出，不可省略
-2. 项目名称、技术栈（每一项）→ 必须逐项列出
-3. 如果某个部分无信息，写"无"
-4. 如果有上一次的总结内容，在此基础上更新和合并，不丢失旧信息`;
+const SUMMARY_INSTRUCTIONS = `总结以下对话的关键信息，包括：用户信息、项目背景、技术决策、对话要点和待办事项。输出简洁的 Markdown 列表，不要输出思考过程。如果有历史总结，请合并更新。`;
 
 export class SessionCompressor {
-  private readonly options: Required<SessionCompressionOptions>;
+  private readonly options: Omit<Required<SessionCompressionOptions>, 'summaryModel'> & { summaryModel?: Model };
 
   constructor(options?: SessionCompressionOptions) {
-    this.options = { ...DEFAULTS, ...options };
+    this.options = {
+      enabled: false,
+      contextWindowSize: 128000,
+      thresholdRatio: 0.7,
+      keepRatio: 0.3,
+      minMessageCount: 10,
+      debug: false,
+      ...options
+    };
   }
 
   /**
@@ -94,7 +54,7 @@ export class SessionCompressor {
    * @param model 默认模型名称（当 summaryModel 未配置时使用）
    * @returns 压缩结果
    */
-  async compressIfNeeded(session: FileSession, model: string): Promise<CompressionResult> {
+  async compressIfNeeded(session: FileSession, model: Model): Promise<CompressionResult> {
     if (!this.options.enabled) {
       return { compressed: false };
     }
@@ -158,7 +118,7 @@ export class SessionCompressor {
     session: FileSession,
     unsummarized: SessionItem[],
     lastSummary: SessionItem | undefined,
-    model: string,
+    model: Model,
     totalTokens: number,
     _threshold: number
   ): Promise<CompressionResult> {
@@ -260,7 +220,7 @@ export class SessionCompressor {
   /**
    * 调用 LLM 生成总结
    */
-  private async generateSummary(content: string, model: string): Promise<string> {
+  private async generateSummary(content: string, model: Model): Promise<string> {
     const summaryAgent = new Agent({
       name: 'SessionSummarizer',
       instructions: SUMMARY_INSTRUCTIONS,
