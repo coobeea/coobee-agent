@@ -7,6 +7,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { z } from 'zod';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
 // ===== Electron 环境 stub（必须，OpenAIAgentRuntime 依赖 electron） =====
@@ -88,6 +89,8 @@ vi.mock('mkdirp', () => ({ mkdirp: vi.fn().mockResolvedValue(undefined) }));
 // ===== 真实 import =====
 
 import { OpenAIAgentRuntime } from '../OpenAIAgentRuntime';
+import type { ToolDefinition } from '../../../tools/types';
+import { ToolCategory } from '../../../tools/types';
 
 // ===== Ollama 配置 =====
 
@@ -363,5 +366,129 @@ describe('Ollama 最简测试', () => {
     } else {
       console.log('⚠️  模型仍然输出了推理过程（thinkingLevel=off 未完全生效）');
     }
+  });
+
+  it('步骤5：多轮工具调用（两个工具，让 LLM 自行决定调用）', { timeout: 120_000 }, async () => {
+    // ===== 定义工具 1：加法计算器 =====
+    const calculatorTool: ToolDefinition = {
+      name: 'calculator',
+      description: '执行简单的加减乘除运算。输入两个数字和运算符 (+, -, *, /)，返回计算结果。',
+      category: ToolCategory.Execute,
+      parameters: z.object({
+        a: z.number().describe('第一个数字'),
+        b: z.number().describe('第二个数字'),
+        op: z.enum(['+', '-', '*', '/']).describe('运算符：+, -, *, /')
+      }),
+      execute: async function* (params) {
+        const { a, b, op } = params as { a: number; b: number; op: string };
+        let result: number;
+        switch (op) {
+          case '+':
+            result = a + b;
+            break;
+          case '-':
+            result = a - b;
+            break;
+          case '*':
+            result = a * b;
+            break;
+          case '/':
+            result = b !== 0 ? a / b : NaN;
+            break;
+          default:
+            result = NaN;
+        }
+        yield { type: 'progress', content: `正在计算 ${a} ${op} ${b}...` };
+        return {
+          success: true,
+          llmContent: `${a} ${op} ${b} = ${Number.isFinite(result) ? result : '错误（除数为零）'}`
+        };
+      }
+    };
+
+    // ===== 定义工具 2：字符串反转 =====
+    const reverseTool: ToolDefinition = {
+      name: 'reverse_string',
+      description: '将输入的字符串反转后返回。例如 "hello" → "olleh"。',
+      category: ToolCategory.Execute,
+      parameters: z.object({
+        text: z.string().describe('要反转的字符串')
+      }),
+      execute: async function* (params) {
+        const { text } = params as { text: string };
+        yield { type: 'progress', content: `正在反转字符串 "${text}"...` };
+        const reversed = text.split('').reverse().join('');
+        return {
+          success: true,
+          llmContent: `"${text}" 反转后是 "${reversed}"`
+        };
+      }
+    };
+
+    const sessionId = `ollama-tool-test-${Date.now()}`;
+    const runtime = new OpenAIAgentRuntime({
+      type: 'openai',
+      name: 'OllamaToolTest',
+      instructions:
+        '你是一个可以调用工具的助手。' +
+        '当用户需要计算时，使用 calculator 工具。' +
+        '当用户需要反转字符串时，使用 reverse_string 工具。' +
+        '你需要根据用户的问题，自行决定调用哪个工具，然后根据工具返回的结果回答用户。',
+      provider: 'ollama',
+      apiType: 'openai-compatible',
+      apiKey: 'ollama',
+      baseURL: OLLAMA_CONFIG.baseURL,
+      model: OLLAMA_CONFIG.model,
+      sessionId,
+      sessionDir: `/tmp/openai-ollama-tool-${Date.now()}`,
+      sessionMode: 'memory',
+      thinkingLevel: 'off',
+      modelMeta: { reasoning: false },
+      compaction: { enabled: false },
+      tools: [calculatorTool, reverseTool],
+      maxTurns: 10
+    });
+
+    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step5-tools-${Date.now()}.jsonl`);
+    fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
+    fs.writeFileSync(streamLogFile, '', 'utf-8');
+
+    // 提出一个需要调用两个工具的问题
+    const prompt =
+      '请帮我做两件事：1) 计算 123 + 456 的结果；2) 把 "coobee" 这个字符串反转。最后把两个结果一起告诉我。';
+    console.log('步骤5输入:', prompt);
+
+    const gen = runtime.stream(prompt);
+
+    let deltaCount = 0;
+
+    let r = await gen.next();
+    while (!r.done) {
+      const chunk = r.value;
+      deltaCount++;
+
+      // 工具事件带上 callId，方便并行调用时区分
+      const d = chunk.data as { callId?: string } | undefined;
+      const callId = d?.callId ? ` [${d.callId}]` : '';
+      console.log(`  [${chunk.type}]${callId}`, chunk.content || '');
+
+      // 记录所有 chunk 到文件（单行 JSON）
+      fs.appendFileSync(streamLogFile, JSON.stringify(chunk) + '\n', 'utf-8');
+
+      r = await gen.next();
+    }
+    const result = r.value;
+
+    console.log('步骤5输出文件:', streamLogFile);
+    console.log('=== 多轮工具调用测试 ===');
+    console.log('总事件数:', deltaCount);
+    console.log('最终输出:', result.output);
+    console.log('工具调用详情:', JSON.stringify(result.toolCalls, null, 2));
+    console.log('耗时:', result.duration, 'ms');
+
+    // 验证
+    expect(deltaCount).toBeGreaterThan(0);
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(result.duration).toBeGreaterThan(0);
   });
 });

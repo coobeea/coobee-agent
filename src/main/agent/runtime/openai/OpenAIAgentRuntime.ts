@@ -290,7 +290,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
           this.handleRawModelStreamEvent(event, state, thinkParser, emit, onApiError);
           break;
         case 'run_item_stream_event':
-          this.handleRunItemStreamEvent(event, emit);
+          this.handleRunItemStreamEvent(event, emit, state);
           break;
         case 'agent_updated_stream_event':
           this.handleAgentUpdatedStreamEvent(event, emit);
@@ -506,7 +506,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    */
   private handleRunItemStreamEvent(
     event: { type: 'run_item_stream_event'; item?: unknown; name?: string },
-    emit: (chunk: StreamChunk) => void
+    emit: (chunk: StreamChunk) => void,
+    state: { reasoningDoneEmitted: boolean; reasoningStartEmitted: boolean; reasoningViaModelEvents: boolean }
   ): void {
     const item = event.item;
     if (!item) return;
@@ -516,7 +517,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     if (eventName === 'tool_called' && (item as { type?: string }).type === 'tool_call_item') {
       const rawItem = (item as { rawItem?: Record<string, unknown> }).rawItem;
       const toolName = (rawItem as { name?: string })?.name || 'unknown';
-      const callId = (rawItem as { call_id?: string })?.call_id;
+      const callId = (rawItem as { callId?: string })?.callId;
       const args = (rawItem as { arguments?: unknown })?.arguments;
       emit({ type: 'tool:start', content: toolName, data: { toolName, callId, arguments: args } });
     }
@@ -536,7 +537,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     }
 
     // reasoning_item_created → 推理内容完整回调（fallback：若未通过 model events 收到增量 delta）
-    if (eventName === 'reasoning_item_created') {
+    // 若推理已通过 model events 处理，不再重复发射 reasoning:done
+    if (eventName === 'reasoning_item_created' && !state.reasoningDoneEmitted) {
       const rawItem = (item as { rawItem?: { content?: Array<{ text?: string }> } }).rawItem;
       const reasoningText = rawItem?.content?.map((c) => c.text || '').join('') || '';
       if (reasoningText) {
