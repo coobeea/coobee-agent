@@ -79,8 +79,27 @@ describe('Ollama 最简测试', () => {
       compaction: { enabled: false }
     });
 
-    const result = await runtime.run('用一句话介绍你自己');
+    // 用 stream() 接收数据并写入文件
+    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step1-${Date.now()}.jsonl`);
+    fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
+    fs.writeFileSync(streamLogFile, '', 'utf-8');
 
+    const chunks: string[] = [];
+    let deltaCount = 0;
+    const gen = runtime.stream('用一句话介绍你自己');
+    let r = await gen.next();
+    while (!r.done) {
+      const chunk = r.value;
+      deltaCount++;
+      chunks.push(chunk.content);
+      // 将整个 chunk 对象 JSON 序列化写入文件，方便研究原始结构
+      fs.appendFileSync(streamLogFile, JSON.stringify(chunk, null, 2) + '\n\n', 'utf-8');
+      r = await gen.next();
+    }
+    const result = r.value;
+
+    console.log('步骤1输出文件:', streamLogFile);
+    console.log('总 delta 数:', deltaCount);
     console.log('输出:', result.output);
     console.log('耗时:', result.duration, 'ms');
 
@@ -109,7 +128,7 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用 stream() 逐个收 chunk，模拟 SSE 场景
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-stream-openai-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step2-stream-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 
@@ -127,7 +146,7 @@ describe('Ollama 最简测试', () => {
     }
     const result = r.value;
 
-    console.log('流输出文件:', streamLogFile);
+    console.log('步骤2输出文件:', streamLogFile);
     console.log('总 delta 数:', deltaCount);
     console.log('拼接内容:', chunks.join(''));
     console.log('最终输出:', result.output);
@@ -158,6 +177,10 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用一个需要思考的复杂问题来测试
+    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step3-reasoning-${Date.now()}.jsonl`);
+    fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
+    fs.writeFileSync(streamLogFile, '', 'utf-8');
+
     const gen = runtime.stream('请分析一下为什么大多数编程教程都从 Hello World 开始？这个传统有什么深层原因？');
 
     const chunks: string[] = [];
@@ -184,12 +207,16 @@ describe('Ollama 最简测试', () => {
         }
       }
 
+      // 将整个 chunk 对象 JSON 序列化写入文件，方便研究原始结构
+      fs.appendFileSync(streamLogFile, JSON.stringify(chunk, null, 2) + '\n\n', 'utf-8');
+
       r = await gen.next();
     }
     const result = r.value;
 
     const fullThinkContent = thinkContent.join('');
 
+    console.log('步骤3输出文件:', streamLogFile);
     console.log('=== 思维链测试 ===');
     console.log('总 delta 数:', deltaCount);
     console.log('推理 delta 数:', thinkDeltaCount);
