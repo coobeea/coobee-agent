@@ -1,6 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 
+// Enable SDK internal debug logging via the debug npm package
+// Must be set before any module imports `debug`, or the logger stays disabled.
+process.env.DEBUG = process.env.DEBUG || 'openai-agents*';
+process.env.OPENAI_AGENTS_DONT_LOG_MODEL_DATA = process.env.OPENAI_AGENTS_DONT_LOG_MODEL_DATA || 'false';
+
 const aliases = [
   { find: '@main', replacement: resolve(__dirname, 'src/main') },
   { find: '@shared', replacement: resolve(__dirname, 'src/shared') },

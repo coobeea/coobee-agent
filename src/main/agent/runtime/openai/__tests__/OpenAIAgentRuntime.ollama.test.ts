@@ -30,9 +30,11 @@ vi.mock('electron', () => {
 
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }));
 
-// 日志缓冲区：vi.mock 内部无法使用顶层 fs，先用内存收集
-const logBuffer: string[] = [];
-const logPath = path.join(process.cwd(), 'test-results', 'logs', 'openai-ollama-test.log');
+// 日志缓冲区：mock 会在静态 import 前执行，必须用 vi.hoisted 避免 TDZ。
+const { logBuffer, logPath } = vi.hoisted(() => ({
+  logBuffer: [] as string[],
+  logPath: `${process.cwd()}/test-results/logs/openai-ollama-test.log`
+}));
 
 function flushLogBuffer(): void {
   if (logBuffer.length > 0) {
