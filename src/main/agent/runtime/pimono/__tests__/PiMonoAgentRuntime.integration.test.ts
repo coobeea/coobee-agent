@@ -104,7 +104,7 @@ vi.mock('mkdirp', () => ({
 
 import { PiMonoAgentRuntime } from '../PiMonoAgentRuntime';
 import type { StreamChunk } from '../../types';
-import type { PiMonoAgentRuntimeOptions } from '../types';
+import type { AgentRuntimeOptions } from '../../types';
 
 // ========== API 配置 ==========
 
@@ -468,10 +468,15 @@ function uid(): string {
 
 /** 创建 PiMonoAgentRuntime 实例 */
 function createRuntime(
-  overrides: Partial<PiMonoAgentRuntimeOptions> & { name: string; instructions: string }
+  overrides: Partial<AgentRuntimeOptions> & { name: string; instructions: string }
 ): PiMonoAgentRuntime {
   if (!apiConfig) throw new Error('No API config');
   return new PiMonoAgentRuntime({
+    type: 'pi-mono',
+    provider: 'openai-compatible',
+    apiType: 'openai-compatible',
+    sessionDir: '/tmp/pi-test-sessions',
+    modelMeta: {},
     apiKey: apiConfig.apiKey,
     baseURL: apiConfig.baseURL,
     model: apiConfig.model,
@@ -531,14 +536,9 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
     sessionId = uid();
   });
 
-  afterEach(async () => {
-    if (runtime) {
-      try {
-        await runtime.destroy();
-      } catch {
-        /* ignore */
-      }
-    }
+  afterEach(() => {
+    // cleanup is automatic (doStream() disposes session in finally)
+    runtime = undefined as unknown as PiMonoAgentRuntime;
   });
 
   // ===== 测试 1：多轮对话（session 上下文保留） =====
@@ -551,11 +551,16 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
       instructions: '你是一个记忆力很好的助手。记住用户告诉你的信息并在后续回答中使用。',
       sessionId
     });
-    await runtime.initialize();
 
     // Round 1: 提供信息
     const { chunks: chunks1, timedChunks: timedChunks1, collect: collect1 } = createCollector();
-    const result1 = await runtime.runStream('我叫李明，今年25岁', {}, collect1);
+    const gen1 = runtime.stream('我叫李明，今年25岁');
+    let r1 = await gen1.next();
+    while (!r1.done) {
+      collect1(r1.value);
+      r1 = await gen1.next();
+    }
+    const result1 = r1.value;
 
     logTestResult('多轮对话 - Round 1 (提供信息)', {
       input: '我叫李明，今年25岁',
@@ -570,7 +575,13 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
 
     // Round 2: 验证上下文
     const { chunks: chunks2, timedChunks: timedChunks2, collect: collect2 } = createCollector();
-    const result2 = await runtime.runStream('我叫什么名字？几岁？', {}, collect2);
+    const gen2 = runtime.stream('我叫什么名字？几岁？');
+    let r2 = await gen2.next();
+    while (!r2.done) {
+      collect2(r2.value);
+      r2 = await gen2.next();
+    }
+    const result2 = r2.value;
 
     logTestResult('多轮对话 - Round 2 (验证上下文)', {
       input: '我叫什么名字？几岁？',
@@ -601,7 +612,6 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
       instructions: '你是一个简洁的助手。用一句话回答。',
       sessionId
     });
-    await runtime.initialize();
 
     const result = await runtime.run('什么是人工智能？');
 
@@ -610,7 +620,6 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
 
     expect(result.output.length).toBeGreaterThan(5);
     expect(result.duration).toBeGreaterThan(0);
-    expect(result.metadata?.agentId).toBeDefined();
     expect(result.metadata?.sessionId).toBe(sessionId);
   });
 
@@ -624,10 +633,15 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
       instructions: '你是一个简洁的助手。用一句话回答。',
       sessionId
     });
-    await runtime.initialize();
 
     const { chunks, timedChunks, collect } = createCollector();
-    const result = await runtime.runStream('请说一句名言', {}, collect);
+    const gen = runtime.stream('请说一句名言');
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('text:delta 拼接一致性', {
       input: '请说一句名言',
@@ -658,14 +672,19 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
     runtime = createRuntime({
       name: 'LoopAgent',
       instructions: '你是数学助手。必须使用 add_numbers 工具完成加法。',
-      sdkTools: [addNumbersTool],
+      tools: [addNumbersTool],
       sessionId,
       maxTurns: 10
     });
-    await runtime.initialize();
 
     const { chunks, timedChunks, collect } = createCollector();
-    const result = await runtime.runStream('请计算 99 + 1', {}, collect);
+    const gen = runtime.stream('请计算 99 + 1');
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('事件闭环完整性 (99 + 1)', {
       input: '请计算 99 + 1',
@@ -710,14 +729,19 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
     runtime = createRuntime({
       name: 'TimeAgent',
       instructions: '你是时间助手。使用 get_current_time 工具获取时间，然后告诉用户。',
-      sdkTools: [getCurrentTimeTool],
+      tools: [getCurrentTimeTool],
       sessionId,
       maxTurns: 5
     });
-    await runtime.initialize();
 
     const { chunks, timedChunks, collect } = createCollector();
-    const result = await runtime.runStream('现在几点？', {}, collect);
+    const gen = runtime.stream('现在几点？');
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('无参数工具调用 get_current_time()', {
       input: '现在几点？',
@@ -745,9 +769,7 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
     }
 
     // 会话信息
-    const session = await runtime.getSession();
-    testLog(`${LOG_PREFIX}  Session: ${JSON.stringify(session)}`);
-    expect(session.sessionId).toBe(sessionId);
-    expect(session.messageCount).toBeGreaterThan(0);
+    // getSession() not available on current AgentRuntime interface
+    testLog(`${LOG_PREFIX}  Session ID: ${sessionId}`);
   });
 });

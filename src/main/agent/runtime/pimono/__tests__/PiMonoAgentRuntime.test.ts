@@ -121,7 +121,7 @@ vi.mock('mkdirp', () => ({
 
 import { PiMonoAgentRuntime } from '../PiMonoAgentRuntime';
 import type { StreamChunk } from '../../types';
-import type { PiMonoAgentRuntimeOptions } from '../types';
+import type { AgentRuntimeOptions } from '../../types';
 
 // ========== API 配置 ==========
 
@@ -618,10 +618,15 @@ function assertReasoningSeparation(chunks: StreamChunk[], output: string, testNa
 
 /** 创建 PiMonoAgentRuntime 实例 */
 function createRuntime(
-  overrides: Partial<PiMonoAgentRuntimeOptions> & { name: string; instructions: string }
+  overrides: Partial<AgentRuntimeOptions> & { name: string; instructions: string }
 ): PiMonoAgentRuntime {
   if (!apiConfig) throw new Error('No API config');
   return new PiMonoAgentRuntime({
+    type: 'pi-mono',
+    provider: 'openai-compatible',
+    apiType: 'openai-compatible',
+    sessionDir: '/tmp/pi-test-sessions',
+    modelMeta: {},
     apiKey: apiConfig.apiKey,
     baseURL: apiConfig.baseURL,
     model: apiConfig.model,
@@ -688,14 +693,9 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
     sessionId = uid();
   });
 
-  afterEach(async () => {
-    if (runtime) {
-      try {
-        await runtime.destroy();
-      } catch {
-        /* ignore */
-      }
-    }
+  afterEach(() => {
+    // cleanup is automatic (doStream() disposes session in finally)
+    runtime = undefined as unknown as PiMonoAgentRuntime;
   });
 
   // ===== 场景 1：简单问答（无工具） =====
@@ -709,8 +709,13 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
       instructions: '你是一个简洁的助手。用一句话回答。',
       sessionId
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景1 - 简单问答', {
       input: inputText,
@@ -747,12 +752,17 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
     runtime = createRuntime({
       name: 'MathAgent',
       instructions: '你是数学助手。必须使用 add_numbers 工具完成加法。根据工具结果回答。',
-      sdkTools: [addNumbersTool],
+      tools: [addNumbersTool],
       sessionId,
       maxTurns: 5
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景2 - 单工具调用 add_numbers(17, 28)', {
       input: inputText,
@@ -791,12 +801,17 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
       instructions:
         '你是计算助手。加法用 add_numbers 工具，乘法用 multiply_numbers 工具。' +
         '必须分步执行：先调用 add_numbers 获得结果，再调用 multiply_numbers。',
-      sdkTools: [addNumbersTool, multiplyNumbersTool],
+      tools: [addNumbersTool, multiplyNumbersTool],
       sessionId,
       maxTurns: 10
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景3 - 链式工具调用（10+20 → 30×3）', {
       input: inputText,
@@ -839,12 +854,17 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
       instructions:
         '你是多功能助手。加法用 add_numbers，反转文本用 reverse_string。' +
         '如果有多个任务，请尽量一次性并行调用所有工具。根据工具结果汇总回答。',
-      sdkTools: [addNumbersTool, reverseStringTool],
+      tools: [addNumbersTool, reverseStringTool],
       sessionId,
       maxTurns: 10
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景4 - 并行工具调用 (add + reverse)', {
       input: inputText,
@@ -881,12 +901,17 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
       instructions:
         '你是全能助手。查天气用 get_weather，查时间用 get_current_time，算加法用 add_numbers。' +
         '对于多个任务，可以并行或按顺序调用工具。最后汇总所有结果回答。',
-      sdkTools: [getWeatherTool, getCurrentTimeTool, addNumbersTool],
+      tools: [getWeatherTool, getCurrentTimeTool, addNumbersTool],
       sessionId,
       maxTurns: 10
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景5 - 多种工具混合 (weather + time + add)', {
       input: inputText,
@@ -925,8 +950,13 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
       thinkingLevel: 'medium',
       sessionId
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景6 - 思考流独立', {
       input: inputText,
@@ -1004,8 +1034,13 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 真实执行测试（OpenAI 兼容格�
       ],
       sessionId
     });
-    await runtime.initialize();
-    const result = await runtime.runStream(inputText, {}, collect);
+    const gen = runtime.stream(inputText);
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
 
     logTestResult('场景7 - Skill + AppendInstructions 注入', {
       input: inputText,
