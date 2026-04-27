@@ -304,14 +304,12 @@ export class FileSession implements Session {
 
     const userItem = {
       role: 'user',
-      content:
-        '以下是我们之前对话的总结，请记住其中的所有信息（包括我的个人信息、项目细节、技术决策等），并在后续对话中使用：\n\n' +
-        cleanSummary
+      content: cleanSummary
     } as unknown as AgentInputItem;
 
     const assistantItem = {
       role: 'assistant',
-      content: [{ type: 'output_text', text: '好的，我已仔细阅读并记住了以上对话总结中的所有信息。请继续。' }]
+      content: '已了解以上历史上下文。'
     } as unknown as AgentInputItem;
 
     return [userItem, assistantItem];

@@ -22,7 +22,7 @@ import type { Session, AgentInputItem, Model } from '@openai/agents';
 import type {
   OpenAIResponsesCompactionAwareSession,
   OpenAIResponsesCompactionArgs,
-  OpenAIResponsesCompactionResult,
+  OpenAIResponsesCompactionResult
 } from '@openai/agents';
 import { RequestUsage } from '@openai/agents';
 import { FileSession } from './FileSession';
@@ -46,7 +46,7 @@ export class CompressedFileSession implements Session, OpenAIResponsesCompaction
     this.model = options.model;
     this.compressor = new SessionCompressor({
       enabled: true,
-      ...options.compression,
+      ...options.compression
     });
   }
 
@@ -84,8 +84,8 @@ export class CompressedFileSession implements Session, OpenAIResponsesCompaction
       return {
         usage: new RequestUsage({
           input_tokens: result.originalTokens,
-          output_tokens: result.summaryTokens,
-        }),
+          output_tokens: result.summaryTokens
+        })
       };
     }
     return null;
