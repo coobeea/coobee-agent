@@ -85,17 +85,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       compression: { enabled: runtimeOptions.compaction.enabled !== false }
     });
 
-    log.info(
-      `Initialized: ${runtimeOptions.name} ` +
-        `(tools: ${allTools.length}, ` +
-        `skills: ${runtimeOptions.skills?.length || 0}, ` +
-        `session: ${sessionId})`
-    );
-
     const startTime = Date.now();
     const maxTurns = runtimeOptions.maxTurns;
-
-    log.info(`Running stream: ${runtimeOptions.name}`);
 
     try {
       // 1. run:start
