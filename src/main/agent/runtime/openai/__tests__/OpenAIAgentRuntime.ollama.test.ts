@@ -172,7 +172,7 @@ describe('Ollama 最简测试', () => {
       sessionId,
       sessionDir: '/tmp/openai-ollama-test',
       sessionMode: 'memory',
-      thinkingLevel: 'minimal',
+      thinkingLevel: 'off',
       modelMeta: { reasoning: true },
       compaction: { enabled: true }
     });
@@ -247,11 +247,7 @@ describe('Ollama 最简测试', () => {
       if (chunk.content) {
         chunks.push(chunk.content);
         // 检查是否包含思考标签或推理内容
-        if (
-          chunk.type === 'reasoning:delta' ||
-          chunk.content.includes('<think>') ||
-          chunk.content.includes('</think>')
-        ) {
+        if (chunk.type === 'reasoning:delta') {
           thinkDeltaCount++;
           thinkContent.push(chunk.content);
         }

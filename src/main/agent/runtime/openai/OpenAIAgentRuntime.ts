@@ -12,11 +12,10 @@
  * - maxTurns：防止无限工具调用循环
  */
 
-import { run, Agent, tool } from '@openai/agents';
+import { run, Agent, tool, OpenAIResponsesModel } from '@openai/agents';
 import type { StreamedRunResult, Tool, Model } from '@openai/agents';
+import OpenAI from 'openai';
 
-import { aisdk } from '@openai/agents-extensions/ai-sdk';
-import { createOpenAI } from '@ai-sdk/openai';
 import { CompressedFileSession } from './CompressedFileSession';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
@@ -176,11 +175,11 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   // ========== 内部方法 ==========
 
   private buildModel(options: AgentRuntimeOptions): Model {
-    const openaiProvider = createOpenAI({
+    const client = new OpenAI({
       apiKey: options.apiKey,
       baseURL: options.baseURL
     });
-    return aisdk(openaiProvider(options.model));
+    return new OpenAIResponsesModel(client, options.model);
   }
 
   /**
@@ -209,6 +208,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       turnOpen: false,
       textStartEmitted: false,
       reasoningStartEmitted: false,
+      reasoningDoneEmitted: false,
+      reasoningViaModelEvents: false,
       fullReasoningText: ''
     };
 
@@ -300,6 +301,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
 
   /**
    * 处理 raw_model_stream_event：response_started、output_text_delta、response_done
+   * 以及 OpenAIResponsesModel 原始模型事件（reasoning_summary_text.delta 等）。
    */
   private handleRawModelStreamEvent(
     event: { type: 'raw_model_stream_event'; data?: unknown },
@@ -308,6 +310,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       turnOpen: boolean;
       textStartEmitted: boolean;
       reasoningStartEmitted: boolean;
+      reasoningDoneEmitted: boolean;
+      reasoningViaModelEvents: boolean;
       fullReasoningText: string;
     },
     thinkParser: ThinkTagParser,
@@ -329,6 +333,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       state.turnOpen = true;
       state.textStartEmitted = false;
       state.reasoningStartEmitted = false;
+      state.reasoningDoneEmitted = false;
+      state.reasoningViaModelEvents = false;
       state.fullReasoningText = '';
       thinkParser.reset();
       emit({ type: 'turn:start', content: '', data: { turnIndex: state.turnIndex } });
@@ -343,6 +349,59 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       }
     }
 
+    // ---- OpenAIResponsesModel 原始模型事件 ----
+    // SDK 双重发射：简化格式（output_text_delta）+ 原始格式（model.event.type）
+    // 推理内容（reasoning_summary_text.delta）只在原始格式中发送，必须在此处理。
+    if (rawType === 'model') {
+      const modelEvent = (rawEvent as { event?: Record<string, unknown> }).event;
+      if (!modelEvent) return;
+      const eventType = modelEvent.type as string;
+
+      // reasoning output_item.added → reasoning:start
+      if (eventType === 'response.output_item.added') {
+        const item = (modelEvent as { item?: { type?: string } }).item;
+        if (item?.type === 'reasoning') {
+          thinkParser.flush(); // 清空可能残留的 think 文本
+          if (!state.reasoningStartEmitted) {
+            state.reasoningStartEmitted = true;
+            state.reasoningViaModelEvents = true;
+            emit({ type: 'reasoning:start', content: '' });
+          }
+        }
+        return;
+      }
+
+      // reasoning_summary_text.delta → reasoning:delta
+      if (eventType === 'response.reasoning_summary_text.delta') {
+        const delta = (modelEvent as { delta?: string }).delta || '';
+        if (delta) {
+          if (!state.reasoningStartEmitted) {
+            state.reasoningStartEmitted = true;
+            state.reasoningViaModelEvents = true;
+            emit({ type: 'reasoning:start', content: '' });
+          }
+          state.fullReasoningText += delta;
+          emit({ type: 'reasoning:delta', content: delta, data: { delta } });
+        }
+        return;
+      }
+
+      // reasoning_summary_text.done → reasoning:done
+      if (eventType === 'response.reasoning_summary_text.done') {
+        if (state.reasoningStartEmitted && !state.reasoningDoneEmitted) {
+          state.reasoningDoneEmitted = true;
+          emit({
+            type: 'reasoning:done',
+            content: '',
+            data: { rawContent: state.fullReasoningText }
+          });
+        }
+        return;
+      }
+
+      return;
+    }
+
     // response_done → 关闭 reasoning/text + llm:done（携带 usage）
     if (rawType === 'response_done') {
       thinkParser.flush();
@@ -352,7 +411,18 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         | { inputTokens?: number; outputTokens?: number; totalTokens?: number }
         | undefined;
 
-      if (state.reasoningStartEmitted && thinkParser.isInThinking) {
+      // 仅当推理通过 <think> 标签（ThinkTagParser）检测时才在此关闭
+      // 若推理已通过 model events 处理，不再重复触发
+      if (state.reasoningStartEmitted && !state.reasoningViaModelEvents && thinkParser.isInThinking) {
+        emit({
+          type: 'reasoning:done',
+          content: '',
+          data: { rawContent: state.fullReasoningText }
+        });
+      }
+      // 若推理通过 model events 接收但未显式 done，补充关闭
+      if (state.reasoningStartEmitted && state.reasoningViaModelEvents && !state.reasoningDoneEmitted) {
+        state.reasoningDoneEmitted = true;
         emit({
           type: 'reasoning:done',
           content: '',
@@ -405,7 +475,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   }
 
   /**
-   * 处理 run_item_stream_event：tool_called、tool_output、handoff_requested、handoff_occurred
+   * 处理 run_item_stream_event：tool_called、tool_output、handoff_requested、handoff_occurred、reasoning_item_created
    */
   private handleRunItemStreamEvent(
     event: { type: 'run_item_stream_event'; item?: unknown; name?: string },
@@ -436,6 +506,19 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         content: typeof output === 'string' ? output : JSON.stringify(output),
         data: { toolName, callId, output }
       });
+    }
+
+    // reasoning_item_created → 推理内容完整回调（fallback：若未通过 model events 收到增量 delta）
+    if (eventName === 'reasoning_item_created') {
+      const rawItem = (item as { rawItem?: { content?: Array<{ text?: string }> } }).rawItem;
+      const reasoningText = rawItem?.content?.map((c) => c.text || '').join('') || '';
+      if (reasoningText) {
+        emit({
+          type: 'reasoning:done',
+          content: reasoningText,
+          data: { rawContent: reasoningText }
+        });
+      }
     }
 
     // handoff: 请求
