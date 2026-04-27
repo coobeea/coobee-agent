@@ -28,40 +28,18 @@ import type { SessionItem, SummaryMeta } from './types';
  */
 export class FileSession implements Session {
   private readonly filePath: string;
-  private readonly legacyFilePath: string;
   private initialized = false;
 
   /**
    * @param sessionId 会话 ID
    * @param sessionDir 会话存储根目录（指向 workspace/sessions/）。
-   *   不传则使用默认路径：{Electron userData}/sessions 或 ~/.coobee-test/sessions（测试环境）
    */
   constructor(
     private readonly sessionId: string,
-    sessionDir?: string
+    sessionDir: string
   ) {
-    const dir = sessionDir || FileSession.getDefaultSessionDir();
-
     // 会话文件放在 sessions 子目录下
-    this.filePath = join(dir, 'sessions', 'session.jsonl');
-    this.legacyFilePath = join(dir, this.sessionId, 'sessions', 'session.jsonl');
-  }
-
-  /**
-   * 获取默认会话存储目录
-   *
-   * Electron 环境：{userData}/sessions
-   * 非 Electron 环境（测试等）：~/.coobee-test/sessions
-   */
-  private static getDefaultSessionDir(): string {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { app } = require('electron');
-      return join(app.getPath('userData'), 'sessions');
-    } catch {
-      // 测试环境 fallback: 使用临时目录
-      return join(process.env.HOME || '/tmp', '.coobee-test', 'sessions');
-    }
+    this.filePath = join(sessionDir, 'sessions', 'session.jsonl');
   }
 
   /**
@@ -177,9 +155,6 @@ export class FileSession implements Session {
 
     try {
       await truncate(this.filePath, 0);
-      if (this.legacyFilePath !== this.filePath && existsSync(this.legacyFilePath)) {
-        await truncate(this.legacyFilePath, 0);
-      }
     } catch {
       // 文件可能不存在，忽略
       await writeFile(this.filePath, '', 'utf-8');
@@ -293,15 +268,8 @@ export class FileSession implements Session {
     }
   }
 
-  /**
-   * 读取当前会话文件，并兼容旧目录布局：{root}/{sessionId}/sessions/session.jsonl。
-   */
   private async readSessionContent(): Promise<string> {
-    const content = await readFile(this.filePath, 'utf-8');
-    if (content.trim() || !existsSync(this.legacyFilePath) || this.legacyFilePath === this.filePath) {
-      return content;
-    }
-    return readFile(this.legacyFilePath, 'utf-8');
+    return readFile(this.filePath, 'utf-8');
   }
 
   /**

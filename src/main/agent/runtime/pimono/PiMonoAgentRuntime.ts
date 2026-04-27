@@ -52,12 +52,37 @@ import { ChunkQueue } from './ChunkQueue';
 import { setupEventSubscription } from './PiMonoStreamAdapter';
 import { convertTools } from './PiMonoToolConverter';
 
-/**
- * 构造自定义 OpenAI 兼容 Model 时，在 pi-SDK AuthStorage 中注册 API Key 使用的 provider 键名（非用户可配业务默认值）。
- */
-const PI_OPENAI_COMPAT_PROVIDER = 'openai-compat';
-
 const log = createRuntimeLogger('pimono-runtime');
+
+/**
+ * 构造 Anthropic 模型对象
+ */
+function createAnthropicModel(
+  providerName: string,
+  modelName: string,
+  baseURL: string,
+  modelMeta?: AgentRuntimeOptions['modelMeta']
+): Model<'anthropic-messages'> {
+  const reasoning = modelMeta?.reasoning ?? true;
+  const contextWindow = modelMeta?.contextWindow ?? 204800;
+  const maxTokens = modelMeta?.maxOutputTokens ?? 131072;
+  return {
+    id: modelName,
+    name: modelName,
+    api: 'anthropic-messages',
+    provider: providerName,
+    baseUrl: baseURL,
+    reasoning,
+    input: ['text', 'image'],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow,
+    maxTokens,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      'X-Custom-Auth': 'bearer-token-here'
+    }
+  };
+}
 
 /**
  * 构造 OpenAI Chat Completions 兼容的 Model 对象
@@ -70,6 +95,7 @@ const log = createRuntimeLogger('pimono-runtime');
  * 当 reasoning=true 时启用 supportsReasoningEffort，使 SDK 正确解析 reasoning_content。
  */
 function createOpenAICompatModel(
+  providerName: string,
   modelName: string,
   baseURL: string,
   modelMeta?: AgentRuntimeOptions['modelMeta']
@@ -82,13 +108,13 @@ function createOpenAICompatModel(
     id: modelName,
     name: modelName,
     api: 'openai-completions',
-    provider: PI_OPENAI_COMPAT_PROVIDER,
+    provider: providerName,
     baseUrl: baseURL,
     reasoning,
-    input: ['text'],
+    input: ['text', 'image'],
     cost: {
-      input: 0.3,
-      output: 1.2,
+      input: 0,
+      output: 0,
       cacheRead: 0,
       cacheWrite: 0
     },
@@ -133,7 +159,10 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     const cwd = options.workspaceRoot || process.cwd();
 
     // 1. 构造 OpenAI 兼容的 Model 对象（从 coobee.json5 模型配置透传元数据）
-    const model = createOpenAICompatModel(modelName, baseURL, options.modelMeta);
+    const model =
+      options.apiKey == 'anthropic'
+        ? createAnthropicModel(options.provider, modelName, baseURL, options.modelMeta)
+        : createOpenAICompatModel(options.provider, modelName, baseURL, options.modelMeta);
 
     // 2. 认证配置
     //    通过 AuthStorage 注入 API key，使用自定义 provider 名称
@@ -164,7 +193,6 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         `baseURL: ${baseURL}, ` +
         `thinking: ${thinkingLevel}, ` +
         `reasoning: ${model.reasoning}, ` +
-        `reasoningEffort: ${model.compat?.supportsReasoningEffort ?? false}, ` +
         `tools: ${allSdkTools.length}, ` +
         `skills: ${piSkills.length}, ` +
         `session: ${options.sessionId})`
@@ -310,7 +338,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
 
   private createAuthStorage(options: AgentRuntimeOptions): AuthStorage {
     const authStorage = AuthStorage.inMemory();
-    authStorage.setRuntimeApiKey(PI_OPENAI_COMPAT_PROVIDER, options.apiKey);
+    authStorage.setRuntimeApiKey(options.provider, options.apiKey);
     return authStorage;
   }
 
@@ -405,7 +433,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
 
   private createSessionConfig(args: {
     cwd: string;
-    model: Model<'openai-completions'>;
+    model: Model<'openai-completions' | 'anthropic-messages'>;
     thinkingLevel: string;
     authStorage: AuthStorage;
     modelRegistry: ModelRegistry;

@@ -13,7 +13,10 @@
  */
 
 import { run, Agent, tool } from '@openai/agents';
-import type { StreamedRunResult, Tool } from '@openai/agents';
+import type { StreamedRunResult, Tool, Model } from '@openai/agents';
+
+import { aisdk } from '@openai/agents-extensions/ai-sdk';
+import { createOpenAI } from '@ai-sdk/openai';
 import { FileSession } from './FileSession';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
@@ -26,13 +29,7 @@ import {
 } from '../types';
 import { createFallbackToolContext } from '../shared/ToolExecutionPipeline';
 
-/** 默认最大执行轮次 */
-const DEFAULT_MAX_TURNS = 25;
-
-/** 默认模型 */
-const DEFAULT_MODEL = 'gpt-4o';
-
-const log = createRuntimeLogger('agent-runtime');
+const log = createRuntimeLogger('openai-runtime');
 
 /**
  * OpenAI Agent 运行时
@@ -77,10 +74,11 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       runtimeOptions.appendInstructions
     );
     const sessionId = runtimeOptions.sessionId || `session-${Date.now()}`;
+    const model = this.buildModel(runtimeOptions);
     const agent = new Agent({
       name: runtimeOptions.name,
       instructions: finalInstructions,
-      model: runtimeOptions.model || DEFAULT_MODEL,
+      model,
       ...(allTools.length > 0 ? { tools: allTools } : {})
     });
     const session = new FileSession(sessionId, runtimeOptions.sessionDir);
@@ -93,7 +91,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     );
 
     const startTime = Date.now();
-    const maxTurns = runtimeOptions.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTurns = runtimeOptions.maxTurns;
 
     log.info(`Running stream: ${runtimeOptions.name}`);
 
@@ -173,6 +171,14 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   // HITL 审批由 tool-approval Extension 在 prepare_tool_call Hook 中处理
 
   // ========== 内部方法 ==========
+
+  private buildModel(options: AgentRuntimeOptions): Model {
+    const openaiProvider = createOpenAI({
+      apiKey: options.apiKey,
+      baseURL: options.baseURL
+    });
+    return aisdk(openaiProvider(options.model));
+  }
 
   /**
    * SDK 流事件 → StreamChunk AsyncGenerator

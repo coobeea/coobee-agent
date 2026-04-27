@@ -30,6 +30,7 @@ export class AgentRuntimeBuilder {
       model: '',
       apiKey: '',
       apiType: 'openai-compatible',
+      maxTurns: 25,
       baseURL: ''
     };
   }

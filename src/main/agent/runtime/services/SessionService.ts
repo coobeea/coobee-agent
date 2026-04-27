@@ -23,7 +23,7 @@ export class SessionService {
   private readonly agentId: string;
   private readonly agentName: string;
 
-  constructor(options: { sessionId: string; sessionDir?: string; agentId: string; agentName: string }) {
+  constructor(options: { sessionId: string; sessionDir: string; agentId: string; agentName: string }) {
     this.sessionId = options.sessionId;
     this.agentId = options.agentId;
     this.agentName = options.agentName;

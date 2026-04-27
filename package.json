@@ -26,6 +26,8 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.71",
+    "@ai-sdk/openai": "^3.0.53",
     "@anthropic-ai/claude-agent-sdk": "^0.2.119",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-markdown": "^6.5.0",
@@ -43,6 +45,7 @@
     "@mariozechner/pi-tui": "^0.70.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/agents": "^0.8.5",
+    "@openai/agents-extensions": "0.8.5",
     "@tiptap/core": "^3.19.0",
     "@tiptap/extension-placeholder": "^3.19.0",
     "@tiptap/starter-kit": "^3.19.0",
@@ -76,6 +79,7 @@
     "monaco-editor": "^0.55.1",
     "nanoid": "^5.1.6",
     "node-cron": "^4.2.1",
+    "openai": "^6.34.0",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
     "proper-lockfile": "^4.1.2",

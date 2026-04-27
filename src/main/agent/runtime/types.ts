@@ -220,10 +220,13 @@ export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export interface AgentRuntimeOptions {
   /** Agent 名称 */
   name: string;
+
   /** 运行时实例类型 */
   type: AgentRuntimeKind;
+
   /** Agent 基础系统指令 */
   instructions: string;
+
   /**
    * 追加指令片段
    *
@@ -248,7 +251,7 @@ export interface AgentRuntimeOptions {
    * - 'memory': 内存模式（默认，适合测试）
    * - 'file': 文件模式（持久化到 cwd/.pi/sessions/）
    */
-  sessionMode?: 'memory' | 'file';
+  sessionMode: 'memory' | 'file';
 
   /**
    * 会话存储根目录
@@ -261,7 +264,7 @@ export interface AgentRuntimeOptions {
    *   → OpenAI: {sessionDir}/{sessionId}/messages.jsonl
    *   → PiMono: {sessionDir}/{sessionId}/（SDK 自行管理内部结构）
    */
-  sessionDir?: string;
+  sessionDir: string;
 
   /** 最大执行轮次，防止无限工具调用循环（默认 25） */
   maxTurns?: number;
@@ -302,6 +305,9 @@ export interface AgentRuntimeOptions {
   /** 取消信号 */
   signal?: AbortSignal;
 
+  /** 提供商名称 */
+  provider: string;
+
   /** 模型名称；如果构建阶段有 provider/model override，最终结果会体现在这里 */
   model: string;
 
@@ -309,7 +315,7 @@ export interface AgentRuntimeOptions {
   apiKey: string;
 
   /** API 格式 */
-  apiType: 'openai-compatible' | 'anthropic' | 'google';
+  apiType: 'openai-compatible' | 'anthropic';
 
   /**
    * OpenAI 兼容 API 的 Base URL（由 Builder / 调用方解析后注入）
@@ -319,7 +325,7 @@ export interface AgentRuntimeOptions {
   baseURL: string;
 
   /** 思考级别（默认 'medium'） */
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel: ThinkingLevel;
 
   /**
    * 压缩配置
@@ -327,14 +333,14 @@ export interface AgentRuntimeOptions {
    * SDK 内置自动压缩，通过 SettingsManager 配置。
    * enabled=false 时禁用自动压缩。
    */
-  compaction?: { enabled?: boolean };
+  compaction: { enabled?: boolean };
 
   /**
    * 模型元数据（从 coobee.json5 模型配置透传）
    *
    * 用于动态构造 pi-SDK Model 对象。由 AgentRuntimeBuilder.build() 从 ProviderConfig 中提取并注入。
    */
-  modelMeta?: {
+  modelMeta: {
     reasoning?: boolean;
     contextWindow?: number;
     maxOutputTokens?: number;

@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.71
+        version: 3.0.71(zod@4.3.6)
+      '@ai-sdk/openai':
+        specifier: ^3.0.53
+        version: 3.0.53(zod@4.3.6)
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.2.119
         version: 0.2.119(zod@4.3.6)
@@ -59,6 +65,9 @@ importers:
       '@openai/agents':
         specifier: ^0.8.5
         version: 0.8.5(ws@8.20.0)(zod@4.3.6)
+      '@openai/agents-extensions':
+        specifier: 0.8.5
+        version: 0.8.5(@ai-sdk/provider@3.0.8)(@openai/agents@0.8.5(ws@8.20.0)(zod@4.3.6))(ws@8.20.0)(zod@4.3.6)
       '@tiptap/core':
         specifier: ^3.19.0
         version: 3.22.3(@tiptap/pm@3.22.3)
@@ -158,6 +167,9 @@ importers:
       node-cron:
         specifier: ^4.2.1
         version: 4.2.1
+      openai:
+        specifier: ^6.34.0
+        version: 6.34.0(ws@8.20.0)(zod@4.3.6)
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@5.9.3)(vue@3.5.32(typescript@5.9.3))
@@ -314,6 +326,28 @@ packages:
 
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
+
+  '@ai-sdk/anthropic@3.0.71':
+    resolution: {integrity: sha512-bUWOzrzR0gJKJO/PLGMR4uH2dqEgqGhrsCV+sSpk4KtOEnUQlfjZI/F7BFlqSvVpFbjdgYRRLysAeEZpJ6S1lg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai@3.0.53':
+    resolution: {integrity: sha512-Wld+Rbc05KaUn08uBt06eEuwcgalcIFtIl32Yp+GxuZXUQwOb6YeAuq+C6da4ch6BurFoqEaLemJVwjBb7x+PQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@4.0.23':
+    resolution: {integrity: sha512-z8GlDaCmRSDlqkMF2f4/RFgWxdarvIbyuk+m6WXT1LYgsnGiXRJGTD2Z1+SDl3LqtFuRtGX1aghYvQLoHL/9pg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@3.0.8':
+    resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
+    engines: {node: '>=18'}
 
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
@@ -1500,6 +1534,23 @@ packages:
       zod: ^4.0.0
     peerDependenciesMeta:
       zod:
+        optional: true
+
+  '@openai/agents-extensions@0.8.5':
+    resolution: {integrity: sha512-uNnjQ+W84ir3UPn9tAIhnVTtnrgbxFuQVC8tENGUrLJRc4C1iT8Pfj6jiwXhfrU+AcGviNGnCK75umNuDo363g==}
+    peerDependencies:
+      '@ai-sdk/provider': ^2.0.0 || ^3.0.0
+      '@openai/agents': '>=0.0.0'
+      '@openai/codex-sdk': '>=0.86.0'
+      ai: ^6.0.0
+      ws: ^8.18.1
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      '@ai-sdk/provider':
+        optional: true
+      '@openai/codex-sdk':
+        optional: true
+      ai:
         optional: true
 
   '@openai/agents-openai@0.8.5':
@@ -3882,6 +3933,9 @@ packages:
   json-schema-typed@8.0.2:
     resolution: {integrity: sha512-fQhoXdcvc3V28x7C7BMs4P5+kNlgUURe2jmUT1T//oBRMDrqy1QPelJimwZGo7Hg9VPV3EQV5Bnq4hbFy2vetA==}
 
+  json-schema@0.4.0:
+    resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
+
   json-stable-stringify-without-jsonify@1.0.1:
     resolution: {integrity: sha512-Bdboy+l7tA3OGW6FjyFHWkP5LuByj1Tk33Ljyq0axyzdk9//JSi2u3fP1QSmd1KNwq6VOKYGlAu87CisVir6Pw==}
 
@@ -5583,6 +5637,29 @@ snapshots:
 
   7zip-bin@5.2.0: {}
 
+  '@ai-sdk/anthropic@3.0.71(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/openai@3.0.53(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/provider-utils@4.0.23(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.6
+      zod: 4.3.6
+
+  '@ai-sdk/provider@3.0.8':
+    dependencies:
+      json-schema: 0.4.0
+
   '@antfu/install-pkg@1.1.0':
     dependencies:
       package-manager-detector: 1.6.0
@@ -7087,6 +7164,20 @@ snapshots:
       - '@cfworker/json-schema'
       - supports-color
       - ws
+
+  '@openai/agents-extensions@0.8.5(@ai-sdk/provider@3.0.8)(@openai/agents@0.8.5(ws@8.20.0)(zod@4.3.6))(ws@8.20.0)(zod@4.3.6)':
+    dependencies:
+      '@openai/agents': 0.8.5(ws@8.20.0)(zod@4.3.6)
+      '@openai/agents-core': 0.8.5(ws@8.20.0)(zod@4.3.6)
+      '@types/ws': 8.18.1
+      debug: 4.4.3
+      ws: 8.20.0
+      zod: 4.3.6
+    optionalDependencies:
+      '@ai-sdk/provider': 3.0.8
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
 
   '@openai/agents-openai@0.8.5(ws@8.20.0)(zod@4.3.6)':
     dependencies:
@@ -9796,6 +9887,8 @@ snapshots:
   json-schema-typed@7.0.3: {}
 
   json-schema-typed@8.0.2: {}
+
+  json-schema@0.4.0: {}
 
   json-stable-stringify-without-jsonify@1.0.1: {}
 

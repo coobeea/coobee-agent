@@ -9,7 +9,16 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Options, Query, SDKMessage, SDKResultMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  Options,
+  Query,
+  SDKMessage,
+  SDKResultMessage,
+  SDKUserMessage,
+  CanUseTool,
+  PermissionResult
+} from '@anthropic-ai/claude-agent-sdk';
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk';
 
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import {
@@ -20,12 +29,19 @@ import {
   type ThinkingLevel
 } from '../types';
 
-const DEFAULT_MAX_TURNS = 25;
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 
 const log = createRuntimeLogger('claude-runtime');
 
 type UnknownRecord = Record<string, unknown>;
+
+/** 运行时累积的 session 统计信息 */
+interface ClaudeSessionStats {
+  compactCount: number;
+  taskCount: number;
+  rateLimitHits: number;
+  lastCompactAt?: number;
+}
 
 interface MessageChannel {
   enqueue(message: SDKUserMessage): void;
@@ -51,6 +67,8 @@ interface ClaudeStreamState {
   reasoningDone: boolean;
   toolBlocks: Map<number, ToolBlockState>;
   toolCalls: NonNullable<ExecutionResult['toolCalls']>;
+  /** session 级统计 */
+  stats: ClaudeSessionStats;
 }
 
 function createMessageChannel(signal: AbortSignal): MessageChannel {
@@ -267,15 +285,15 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     const thinking: Options['thinking'] =
       options.thinkingLevel === 'minimal' ? { type: 'disabled' } : { type: 'adaptive' };
 
-    return {
+    const sdkOptions: Options = {
       model: options.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
-      maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
+      maxTurns: options.maxTurns,
       cwd,
       abortController: controller,
       env: this.buildClaudeEnv(options),
       includePartialMessages: true,
       promptSuggestions: false,
-      permissionMode: 'acceptEdits',
+      permissionMode: this.resolvePermissionMode(options),
       allowDangerouslySkipPermissions: false,
       settingSources: ['user', 'project'],
       tools: { type: 'preset', preset: 'claude_code' },
@@ -286,8 +304,14 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
       },
       thinking,
       ...(effort ? { effort } : {}),
-      ...(sdkSessionId ? { sessionId: sdkSessionId } : {})
+      ...(sdkSessionId ? { sessionId: sdkSessionId } : {}),
+      canUseTool: this.buildCanUseTool(options),
+      stderr: (data: string) => {
+        log.debug(`[claude-stderr] ${data.trim()}`);
+      }
     };
+
+    return sdkOptions;
   }
 
   private buildClaudeEnv(options: AgentRuntimeOptions): Record<string, string | undefined> {
@@ -317,6 +341,57 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return env;
   }
 
+  /**
+   * 根据运行时选项解析合适的 permissionMode
+   *
+   * - agent 模式默认 acceptEdits（允许编辑文件，但对危险操作仍需确认）
+   * - chat 模式下可考虑更严格的 'default'
+   */
+  private resolvePermissionMode(_options: AgentRuntimeOptions): PermissionMode {
+    return 'acceptEdits';
+  }
+
+  /**
+   * 构建 canUseTool 回调 — 接入沙箱工具策略
+   *
+   * 在 Claude SDK 每次执行工具前调用，检查：
+   *   1. 沙箱 toolPolicy 是否允许
+   *   2. 内置工具默认放行
+   *
+   * 未配置策略或策略检查失败时，默认 allow（由 Claude SDK 自身的权限提示兜底）。
+   */
+  private buildCanUseTool(options: AgentRuntimeOptions): CanUseTool {
+    const toolPolicy = options.sandboxContext?.toolPolicy;
+
+    return async (toolName, _input, _callOptions) => {
+      // 无策略配置：全部放行（SDK 会自行按 permissionMode 处理）
+      if (!toolPolicy || !toolPolicy.allow || toolPolicy.allow.length === 0) {
+        return { behavior: 'allow' } as PermissionResult;
+      }
+
+      // 检查拒绝列表
+      if (toolPolicy.deny && toolPolicy.deny.some((p) => matchToolPattern(toolName, p))) {
+        log.warn(`[canUseTool] Denied by policy: ${toolName}`);
+        return {
+          behavior: 'deny',
+          message: `Tool "${toolName}" is blocked by sandbox policy`
+        } as PermissionResult;
+      }
+
+      // 检查允许列表（非空时按白名单模式）
+      const isAllowed = toolPolicy.allow.some((p) => matchToolPattern(toolName, p));
+      if (!isAllowed) {
+        log.warn(`[canUseTool] Not in allowlist: ${toolName}`);
+        return {
+          behavior: 'deny',
+          message: `Tool "${toolName}" is not in the allowed list`
+        } as PermissionResult;
+      }
+
+      return { behavior: 'allow' } as PermissionResult;
+    };
+  }
+
   private mapSdkMessage(message: SDKMessage, state: ClaudeStreamState): StreamChunk[] {
     this.captureSdkSessionId(message, state);
 
@@ -328,25 +403,186 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
       return this.mapAssistantMessage(message, state);
     }
 
-    if (message.type === 'system' && message.subtype === 'init') {
-      const record = asRecord(message) || {};
-      return [
-        {
-          type: 'agent:updated',
-          content: '',
-          data: {
-            sdk: 'claude-agent-sdk',
-            model: stringValue(record, 'model'),
-            tools: record.tools
-          }
-        }
-      ];
+    if (message.type === 'system') {
+      return this.mapSystemMessage(message, state);
     }
 
     if (message.type === 'auth_status' && message.error) {
       return [{ type: 'run:error', content: message.error, data: { message: message.error } }];
     }
 
+    if (message.type === 'rate_limit_event') {
+      return this.mapRateLimit(message, state);
+    }
+
+    if (message.type === 'tool_progress') {
+      return this.mapToolProgress(message);
+    }
+
+    if (message.type === 'prompt_suggestion') {
+      return this.mapPromptSuggestion(message);
+    }
+
+    return [];
+  }
+
+  /**
+   * 分发 system 消息 — 按 subtype 路由到具体处理函数
+   */
+  private mapSystemMessage(message: Extract<SDKMessage, { type: 'system' }>, state: ClaudeStreamState): StreamChunk[] {
+    const subtype = (message as UnknownRecord).subtype as string | undefined;
+
+    if (subtype === 'init') {
+      return this.mapSystemInit(message);
+    }
+
+    if (subtype === 'compact_boundary') {
+      return this.mapCompactBoundary(message, state);
+    }
+
+    if (subtype === 'task_started') {
+      return this.mapTaskStarted(message, state);
+    }
+
+    if (subtype === 'task_progress') {
+      return this.mapTaskProgress(message);
+    }
+
+    if (subtype === 'task_notification') {
+      return this.mapTaskNotification(message, state);
+    }
+
+    if (subtype === 'tool_progress') {
+      return this.mapToolProgress(message);
+    }
+
+    // hook 相关事件（如果启用了 includeHookEvents）
+    if (subtype === 'hook_started' || subtype === 'hook_response') {
+      return this.mapHookMessage(message);
+    }
+
+    return [];
+  }
+
+  private mapSystemInit(message: SDKMessage): StreamChunk[] {
+    const record = asRecord(message) || {};
+    return [
+      {
+        type: 'agent:updated',
+        content: '',
+        data: {
+          sdk: 'claude-agent-sdk',
+          model: stringValue(record, 'model'),
+          tools: record.tools
+        }
+      }
+    ];
+  }
+
+  /** 压缩边界消息 → compression:done（携带摘要信息） */
+  private mapCompactBoundary(message: SDKMessage, state: ClaudeStreamState): StreamChunk[] {
+    state.stats.compactCount++;
+    state.stats.lastCompactAt = Date.now();
+    const record = asRecord(message) || {};
+    const summary = stringValue(record, 'summary') || '';
+
+    log.info(`Compaction #${state.stats.compactCount}: summary=${summary.slice(0, 120)}`);
+
+    return [
+      {
+        type: 'compression:done',
+        content: summary,
+        data: {
+          compactCount: state.stats.compactCount,
+          summary
+        }
+      }
+    ];
+  }
+
+  /** 后台任务启动通知 */
+  private mapTaskStarted(message: SDKMessage, state: ClaudeStreamState): StreamChunk[] {
+    state.stats.taskCount++;
+    const record = asRecord(message) || {};
+    const taskId = stringValue(record, 'task_id') || '';
+    const description = stringValue(record, 'description') || '';
+
+    return [
+      {
+        type: 'delegate:start',
+        content: description,
+        data: { taskId, description }
+      }
+    ];
+  }
+
+  /** 后台任务进度 */
+  private mapTaskProgress(message: SDKMessage): StreamChunk[] {
+    const record = asRecord(message) || {};
+    const summary = stringValue(record, 'summary') || '';
+    if (!summary) return [];
+    return [{ type: 'tool:delta', content: summary, data: { delta: summary } }];
+  }
+
+  /** 后台任务完成/停止通知 */
+  private mapTaskNotification(message: SDKMessage, _state: ClaudeStreamState): StreamChunk[] {
+    const record = asRecord(message) || {};
+    const status = stringValue(record, 'status') || '';
+
+    return [
+      {
+        type: 'delegate:done',
+        content: status === 'completed' ? 'Task completed' : `Task ${status}`,
+        data: { status }
+      }
+    ];
+  }
+
+  /** 工具执行进度 */
+  private mapToolProgress(message: SDKMessage): StreamChunk[] {
+    const record = asRecord(message) || {};
+    const toolName = stringValue(record, 'tool_name') || '';
+    const progress = stringValue(record, 'progress') || '';
+    if (!progress) return [];
+
+    return [
+      {
+        type: 'tool:delta',
+        content: progress,
+        data: { toolName, delta: progress }
+      }
+    ];
+  }
+
+  /** Hook 事件（调试用） */
+  private mapHookMessage(message: SDKMessage): StreamChunk[] {
+    const record = asRecord(message) || {};
+    const hookEvent = stringValue(record, 'hook_event') || '';
+    const subtype = stringValue(record, 'subtype') || '';
+    if (!hookEvent) return [];
+    log.debug(`[hook] ${subtype}: ${hookEvent}`);
+    return [];
+  }
+
+  /** 速率限制事件 */
+  private mapRateLimit(
+    message: Extract<SDKMessage, { type: 'rate_limit_event' }>,
+    state: ClaudeStreamState
+  ): StreamChunk[] {
+    state.stats.rateLimitHits++;
+    const record = asRecord(message) || {};
+    const messageText = stringValue(record, 'message') || 'API rate limit hit';
+    log.warn(`Rate limit #${state.stats.rateLimitHits}: ${messageText}`);
+    return [{ type: 'run:error', content: messageText, data: { message: messageText } }];
+  }
+
+  /** 提示建议消息（暂存储用于后续功能） */
+  private mapPromptSuggestion(message: SDKMessage): StreamChunk[] {
+    const record = asRecord(message) || {};
+    const suggestion = stringValue(record, 'suggestion') || '';
+    if (suggestion) {
+      log.debug(`[prompt-suggestion] ${suggestion.slice(0, 100)}`);
+    }
     return [];
   }
 
@@ -447,7 +683,10 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return chunks;
   }
 
-  private mapAssistantMessage(message: Extract<SDKMessage, { type: 'assistant' }>, state: ClaudeStreamState): StreamChunk[] {
+  private mapAssistantMessage(
+    message: Extract<SDKMessage, { type: 'assistant' }>,
+    state: ClaudeStreamState
+  ): StreamChunk[] {
     const chunks: StreamChunk[] = [];
     if (message.error) {
       chunks.push({ type: 'run:error', content: message.error, data: { message: message.error } });
@@ -542,26 +781,60 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     const output = resultMessage?.subtype === 'success' ? resultMessage.result || state.fullOutput : state.fullOutput;
     const error = resultMessage?.subtype === 'success' ? undefined : this.getResultError(resultMessage);
 
+    // 从 SDKResultMessage 中提取 cost / usage / turns
+    const costUsd = resultMessage?.total_cost_usd;
+    const usage = resultMessage?.usage;
+    const modelUsage = resultMessage?.modelUsage;
+    const numTurns = resultMessage?.num_turns;
+    const subtype = resultMessage?.subtype;
+    const stopReason = resultMessage?.stop_reason;
+    const terminalReason = resultMessage?.terminal_reason;
+    const durationMs = Date.now() - startTime;
+
+    // 汇总 usage（优先 modelUsage，再降级 usage）
+    let totalTokens: number | undefined;
+    if (modelUsage) {
+      totalTokens = Number(modelUsage.inputTokens ?? 0) + Number(modelUsage.outputTokens ?? 0);
+    } else if (usage) {
+      totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+    }
+
     return {
       output,
       ...(error ? { error } : {}),
       toolCalls: state.toolCalls,
-      duration: Date.now() - startTime,
+      duration: durationMs,
       metadata: {
         sessionId,
         sdkSessionId: state.sdkSessionId,
         sdk: 'claude-agent-sdk',
-        ...(resultMessage
+        subtype,
+        stopReason,
+        terminalReason,
+        numTurns,
+        costUsd,
+        totalTokens,
+        usage: usage
           ? {
-              subtype: resultMessage.subtype,
-              stopReason: resultMessage.stop_reason,
-              terminalReason: resultMessage.terminal_reason,
-              numTurns: resultMessage.num_turns,
-              totalCostUsd: resultMessage.total_cost_usd,
-              usage: resultMessage.usage,
-              modelUsage: resultMessage.modelUsage
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              cacheReadInputTokens: usage.cache_read_input_tokens,
+              cacheCreationInputTokens: usage.cache_creation_input_tokens
             }
-          : {})
+          : undefined,
+        modelUsage: modelUsage
+          ? {
+              inputTokens: modelUsage.inputTokens,
+              outputTokens: modelUsage.outputTokens,
+              cacheReadInputTokens: modelUsage.cacheReadInputTokens,
+              cacheCreationInputTokens: modelUsage.cacheCreationInputTokens,
+              costUSD: modelUsage.costUSD
+            }
+          : undefined,
+        // session 统计
+        compactCount: state.stats.compactCount,
+        taskCount: state.stats.taskCount,
+        rateLimitHits: state.stats.rateLimitHits
       },
       rawApiRequest
     };
@@ -582,7 +855,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
         { role: 'user', content: input }
       ],
       stream: true,
-      max_turns: options.maxTurns ?? DEFAULT_MAX_TURNS,
+      max_turns: options.maxTurns,
       ...(sdkSessionId ? { sdkSessionId } : {}),
       permissionMode: 'acceptEdits'
     };
@@ -599,7 +872,8 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
       reasoningStarted: false,
       reasoningDone: false,
       toolBlocks: new Map(),
-      toolCalls: []
+      toolCalls: [],
+      stats: { compactCount: 0, taskCount: 0, rateLimitHits: 0 }
     };
   }
 
@@ -692,4 +966,13 @@ function parseToolArguments(tool: ToolBlockState): Record<string, unknown> {
   } catch {
     return tool.initialInput || {};
   }
+}
+
+/** 匹配工具名是否命中策略模式（支持通配符 *） */
+function matchToolPattern(toolName: string, pattern: string): boolean {
+  if (pattern === '*' || pattern === toolName) return true;
+  if (pattern.endsWith('*')) {
+    return toolName.startsWith(pattern.slice(0, -1));
+  }
+  return false;
 }
