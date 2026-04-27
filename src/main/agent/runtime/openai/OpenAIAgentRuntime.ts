@@ -187,9 +187,11 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     const settings: ModelSettings = {};
 
     // thinkingLevel → reasoning.effort
+    // 只在模型支持推理且 thinkingLevel 不为 off 时，才设置 reasoning 字段。
+    // off 时不设 reasoning，SDK 不会向 API 发送推理相关参数，完全禁用推理。
     if (options.modelMeta?.reasoning) {
       settings.reasoning = {
-        effort: !options.thinkingLevel || options.thinkingLevel === 'off' ? 'none' : options.thinkingLevel
+        effort: options.thinkingLevel && options.thinkingLevel !== 'off' ? options.thinkingLevel : 'none'
       };
     }
 
@@ -197,6 +199,12 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     if (options.modelMeta?.maxOutputTokens) {
       settings.maxTokens = options.modelMeta.maxOutputTokens;
     }
+
+    // providerData → enable_thinking
+    settings.providerData = {
+      enable_thinking: options.thinkingLevel !== 'off',
+      reasoning_effort: options.thinkingLevel && options.thinkingLevel !== 'off' ? options.thinkingLevel : 'none'
+    };
 
     return settings;
   }
