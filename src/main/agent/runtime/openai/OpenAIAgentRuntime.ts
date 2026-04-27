@@ -83,7 +83,14 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     });
     const session = new CompressedFileSession(sessionId, runtimeOptions.sessionDir, {
       model,
-      compression: { enabled: runtimeOptions.compaction.enabled !== false }
+      compression: {
+        enabled: runtimeOptions.compaction?.enabled !== false,
+        contextWindowSize: runtimeOptions.compaction?.contextWindowSize,
+        thresholdRatio: runtimeOptions.compaction?.thresholdRatio,
+        keepRatio: runtimeOptions.compaction?.keepRatio,
+        minMessageCount: runtimeOptions.compaction?.minMessageCount,
+        debug: runtimeOptions.compaction?.debug
+      }
     });
 
     const startTime = Date.now();

@@ -311,7 +311,7 @@ export class FileSession implements Session {
 
     const assistantItem = {
       role: 'assistant',
-      content: '好的，我已仔细阅读并记住了以上对话总结中的所有信息。请继续。'
+      content: [{ type: 'output_text', text: '好的，我已仔细阅读并记住了以上对话总结中的所有信息。请继续。' }]
     } as unknown as AgentInputItem;
 
     return [userItem, assistantItem];

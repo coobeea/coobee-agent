@@ -202,6 +202,29 @@ export type AgentRuntimeKind = 'pi-mono' | 'openai' | 'claude';
  */
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
+// ========== 压缩配置 ==========
+
+/**
+ * Session 压缩配置（SDK 无关）
+ *
+ * 当对话历史的 token 数超过 contextWindowSize * thresholdRatio 时，
+ * 触发自动压缩：将旧消息总结后保留最近消息。
+ */
+export interface CompactionConfig {
+  /** 是否启用压缩（默认 false） */
+  enabled?: boolean;
+  /** 上下文窗口大小（token 数，默认 128000） */
+  contextWindowSize?: number;
+  /** 触发压缩的阈值比例（默认 0.7，即达到上下文窗口的 70% 时触发） */
+  thresholdRatio?: number;
+  /** 保留最近消息的比例（默认 0.3） */
+  keepRatio?: number;
+  /** 触发压缩的最小消息数（默认 10） */
+  minMessageCount?: number;
+  /** 是否调试模式 */
+  debug?: boolean;
+}
+
 // ========== Agent 运行时通用选项 ==========
 
 /**
@@ -330,10 +353,10 @@ export interface AgentRuntimeOptions {
   /**
    * 压缩配置
    *
-   * SDK 内置自动压缩，通过 SettingsManager 配置。
+   * 当对话历史超过 contextWindowSize * thresholdRatio 时触发自动压缩。
    * enabled=false 时禁用自动压缩。
    */
-  compaction: { enabled?: boolean };
+  compaction: CompactionConfig;
 
   /**
    * 模型元数据（从 coobee.json5 模型配置透传）
