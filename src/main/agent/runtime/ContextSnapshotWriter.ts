@@ -16,10 +16,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import { createLogger } from '@main/common/logger';
 import type { AgentRuntimeOptions, ExecutionResult } from './types';
 
-const log = createLogger('runtime:context-snapshot');
+import { createRuntimeLogger } from './RuntimeLogger';
+const log = createRuntimeLogger('runtime:context-snapshot');
 
 // ==================== 类型定义 ====================
 

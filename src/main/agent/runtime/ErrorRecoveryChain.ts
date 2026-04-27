@@ -12,9 +12,8 @@
  * 参考：OpenClaw 的渐进式恢复机制
  */
 
-import { createLogger } from '@main/common/logger';
-
-const log = createLogger('error-recovery');
+import { createRuntimeLogger } from './RuntimeLogger';
+const log = createRuntimeLogger('error-recovery');
 
 // ==================== Types ====================
 

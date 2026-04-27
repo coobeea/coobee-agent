@@ -22,36 +22,8 @@ import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types'
 import { saveContextSnapshot } from './ContextSnapshotWriter';
 import { defaultRecoveryChain } from './ErrorRecoveryChain';
 
-// ==================== Logger 工具 ====================
-
-/** Runtime 内部日志接口 */
-export interface RuntimeLogger {
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string, ...args: unknown[]): void;
-  debug(message: string, ...args: unknown[]): void;
-}
-
-/**
- * 创建 Runtime 日志实例
- *
- * 优先使用项目 createLogger，fallback 到 console（测试环境）。
- */
-export function createRuntimeLogger(moduleName: string): RuntimeLogger {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createLogger } = require('@main/common/logger');
-    return createLogger(moduleName) as RuntimeLogger;
-  } catch {
-    const prefix = `[${moduleName}]`;
-    return {
-      info: (msg: string, ...args: unknown[]) => console.log(`${prefix} ${msg}`, ...args),
-      warn: (msg: string, ...args: unknown[]) => console.warn(`${prefix} ${msg}`, ...args),
-      error: (msg: string, ...args: unknown[]) => console.error(`${prefix} ${msg}`, ...args),
-      debug: (msg: string, ...args: unknown[]) => console.debug(`${prefix} ${msg}`, ...args)
-    };
-  }
-}
+// Re-export for backward compatibility
+export { type RuntimeLogger, createRuntimeLogger } from './RuntimeLogger';
 
 // ==================== ID 生成 ====================
 
