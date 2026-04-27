@@ -6,6 +6,7 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 import { describe, it, expect, vi } from 'vitest';
 
 // ===== Electron 环境 stub（必须，PiMonoAgentRuntime 依赖 electron） =====
@@ -82,6 +83,53 @@ describe('Ollama 最简测试', () => {
     console.log('耗时:', result.duration, 'ms');
 
     // 最基本验证：有输出就行
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(result.duration).toBeGreaterThan(0);
+  });
+
+  it('步骤2：流式输出（逐 chunk 接收）', { timeout: 60_000 }, async () => {
+    const runtime = new PiMonoAgentRuntime({
+      type: 'pi-mono',
+      name: 'OllamaStreamTest',
+      instructions: '你是一个简洁的助手。',
+      provider: 'ollama',
+      apiType: 'openai-compatible',
+      apiKey: 'ollama',
+      baseURL: OLLAMA_CONFIG.baseURL,
+      model: OLLAMA_CONFIG.model,
+      sessionDir: '/tmp/ollama-test',
+      sessionMode: 'memory',
+      thinkingLevel: 'minimal',
+      compaction: { enabled: false },
+      modelMeta: { reasoning: true }
+    });
+
+    // 用 stream() 逐个收 chunk，模拟 SSE 场景
+    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-stream-${Date.now()}.jsonl`);
+    fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
+    fs.writeFileSync(streamLogFile, '', 'utf-8');
+
+    const chunks: string[] = [];
+    let deltaCount = 0;
+    const gen = runtime.stream('请列举 3 个水果的名字，用顿号分隔');
+    let r = await gen.next();
+    while (!r.done) {
+      const chunk = r.value;
+      deltaCount++;
+      chunks.push(chunk.content);
+      // 将整个 chunk 对象 JSON 序列化写入文件，方便研究原始结构
+      fs.appendFileSync(streamLogFile, JSON.stringify(chunk, null, 2) + '\n\n', 'utf-8');
+      r = await gen.next();
+    }
+    const result = r.value;
+
+    console.log('流输出文件:', streamLogFile);
+    console.log('总 delta 数:', deltaCount);
+    console.log('拼接内容:', chunks.join(''));
+    console.log('最终输出:', result.output);
+
+    // 验证流式输出有内容且事件闭环完整
+    expect(deltaCount).toBeGreaterThan(0);
     expect(result.output.length).toBeGreaterThan(0);
     expect(result.duration).toBeGreaterThan(0);
   });

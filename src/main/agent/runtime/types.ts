@@ -200,7 +200,7 @@ export type AgentRuntimeKind = 'pi-mono' | 'openai' | 'claude';
  *   - high: 深度思考
  *   - xhigh: 极深度思考
  */
-export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 // ========== Agent 运行时通用选项 ==========
 
@@ -341,10 +341,15 @@ export interface AgentRuntimeOptions {
    * 用于动态构造 pi-SDK Model 对象。由 AgentRuntimeBuilder.build() 从 ProviderConfig 中提取并注入。
    */
   modelMeta: {
+    /** 模型是否支持推理模式（控制 SDK 是否解析 reasoning_content） */
     reasoning?: boolean;
+    /** 上下文窗口大小（token 数） */
     contextWindow?: number;
+    /** 最大输出 token 数 */
     maxOutputTokens?: number;
+    /** 最大推理思考 token 数 */
     maxThinkingTokens?: number;
+    /** 模型是否支持工具调用（Function Calling） */
     functionCalling?: boolean;
   };
 
