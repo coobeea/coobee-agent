@@ -773,3 +773,101 @@ describe.skipIf(!RUN)('PiMonoAgentRuntime 集成测试（OpenAI 兼容格式）'
     testLog(`${LOG_PREFIX}  Session ID: ${sessionId}`);
   });
 });
+
+// ========== Ollama 集成测试 ==========
+
+/**
+ * 解析 Ollama API 配置
+ *
+ * Ollama 默认运行在 http://localhost:11434/v1，兼容 OpenAI Chat Completions 格式。
+ * 通过环境变量可自定义 baseURL 和 model。
+ */
+function resolveOllamaConfig(): {
+  apiKey: string;
+  baseURL: string;
+  model: string;
+} {
+  const baseURL = process.env.VITE_OLLAMA_BASE_URL || 'http://localhost:11434/v1';
+  const model = process.env.VITE_OLLAMA_MODEL || 'gemma4:e4b';
+  // Ollama 本地服务不需要真实的 API Key，传任意非空字符串即可
+  return {
+    apiKey: 'ollama',
+    baseURL,
+    model
+  };
+}
+
+const ollamaConfig = resolveOllamaConfig();
+const OLLAMA_RUN = !!ollamaConfig;
+
+/** 创建 Ollama 专用 PiMonoAgentRuntime 实例 */
+function createOllamaRuntime(
+  overrides: Partial<AgentRuntimeOptions> & { name: string; instructions: string }
+): PiMonoAgentRuntime {
+  return new PiMonoAgentRuntime({
+    type: 'pi-mono',
+    provider: 'ollama',
+    apiType: 'openai-compatible',
+    sessionDir: '/tmp/pi-ollama-test-sessions',
+    modelMeta: { reasoning: false }, // 多数 Ollama 模型不支持 reasoning
+    apiKey: ollamaConfig.apiKey,
+    baseURL: ollamaConfig.baseURL,
+    model: ollamaConfig.model,
+    thinkingLevel: 'low',
+    sessionMode: 'memory',
+    compaction: { enabled: false },
+    ...overrides
+  });
+}
+
+describe.skipIf(!OLLAMA_RUN)('PiMonoAgentRuntime Ollama 集成测试', () => {
+  let runtime: PiMonoAgentRuntime;
+  let sessionId: string;
+
+  beforeAll(() => {
+    testLog(`${LOG_PREFIX} Ollama API: baseURL=${ollamaConfig.baseURL}, model=${ollamaConfig.model}`);
+  });
+
+  beforeEach(() => {
+    sessionId = `ollama-test-${Date.now()}-${++counter}`;
+  });
+
+  afterEach(() => {
+    runtime = undefined as unknown as PiMonoAgentRuntime;
+  });
+
+  // ===== 测试 1：基础文本生成 =====
+
+  it('基础文本生成：简单问答', { timeout: 60_000 }, async () => {
+    testLog(`\n${LOG_PREFIX} ========== Ollama 基础文本生成 ==========`);
+
+    runtime = createOllamaRuntime({
+      name: 'OllamaAgent',
+      instructions: '你是一个简洁的助手。用一句话回答。',
+      sessionId
+    });
+
+    const { chunks, timedChunks, collect } = createCollector();
+    const gen = runtime.stream('请用一句话介绍你自己');
+    let r = await gen.next();
+    while (!r.done) {
+      collect(r.value);
+      r = await gen.next();
+    }
+    const result = r.value;
+
+    logTestResult('Ollama - 基础文本生成', {
+      input: '请用一句话介绍你自己',
+      output: result.output,
+      duration: result.duration,
+      chunks,
+      timedChunks
+    });
+
+    // 基本验证
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(result.duration).toBeGreaterThan(0);
+    expect(ofType(chunks, 'run:start').length).toBe(1);
+    expect(ofType(chunks, 'run:done').length).toBe(1);
+  });
+});
