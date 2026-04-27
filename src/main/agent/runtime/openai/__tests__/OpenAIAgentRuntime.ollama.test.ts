@@ -287,4 +287,79 @@ describe('Ollama 最简测试', () => {
       console.log('ℹ️  模型未输出推理过程（可能不支持 reasoning 标签）');
     }
   });
+
+  it('步骤4：关闭思维链（reasoning: true + thinkingLevel=off）', { timeout: 60_000 }, async () => {
+    const sessionId = `ollama-no-reasoning-test-${Date.now()}`;
+    const runtime = new OpenAIAgentRuntime({
+      type: 'openai',
+      name: 'OllamaNoReasoningTest',
+      instructions: '你是一个善于深入思考的助手，遇到复杂问题会先进行推理分析。',
+      provider: 'ollama',
+      apiType: 'openai-compatible',
+      apiKey: 'ollama',
+      baseURL: OLLAMA_CONFIG.baseURL,
+      model: OLLAMA_CONFIG.model,
+      sessionId,
+      sessionDir: `/tmp/openai-ollama-no-reasoning-${Date.now()}`,
+      sessionMode: 'memory',
+      thinkingLevel: 'off',
+      modelMeta: { reasoning: true },
+      compaction: { enabled: false }
+    });
+
+    // 用同样需要思考的复杂问题来测试关闭效果
+    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step4-no-reasoning-${Date.now()}.jsonl`);
+    fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
+    fs.writeFileSync(streamLogFile, '', 'utf-8');
+
+    const gen = runtime.stream('请分析一下为什么大多数编程教程都从 Hello World 开始？这个传统有什么深层原因？');
+
+    const chunks: string[] = [];
+    const thinkContent: string[] = [];
+    let deltaCount = 0;
+    let thinkDeltaCount = 0;
+
+    let r = await gen.next();
+    while (!r.done) {
+      const chunk = r.value;
+      deltaCount++;
+
+      if (chunk.content) {
+        chunks.push(chunk.content);
+        if (chunk.type === 'reasoning:delta') {
+          thinkDeltaCount++;
+          thinkContent.push(chunk.content);
+        }
+      }
+
+      fs.appendFileSync(streamLogFile, JSON.stringify(chunk, null, 2) + '\n\n', 'utf-8');
+
+      r = await gen.next();
+    }
+    const result = r.value;
+
+    const fullThinkContent = thinkContent.join('');
+
+    console.log('步骤4输出文件:', streamLogFile);
+    console.log('=== 关闭思维链测试 ===');
+    console.log('总 delta 数:', deltaCount);
+    console.log('推理 delta 数:', thinkDeltaCount);
+    console.log('推理内容长度:', fullThinkContent.length);
+    if (fullThinkContent.length > 0) {
+      console.log('推理内容预览:', fullThinkContent.slice(0, 200));
+    }
+    console.log('最终输出:', result.output);
+    console.log('最终输出长度:', result.output.length);
+    console.log('耗时:', result.duration, 'ms');
+
+    expect(deltaCount).toBeGreaterThan(0);
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(result.duration).toBeGreaterThan(0);
+
+    if (thinkDeltaCount === 0) {
+      console.log('✅ thinkingLevel=off 成功关闭推理过程');
+    } else {
+      console.log('⚠️  模型仍然输出了推理过程（thinkingLevel=off 未完全生效）');
+    }
+  });
 });
