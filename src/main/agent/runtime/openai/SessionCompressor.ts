@@ -33,7 +33,10 @@ const log = createLogger('SessionCompressor');
 const SUMMARY_INSTRUCTIONS = `总结以下对话的关键信息，包括：用户信息、项目背景、技术决策、对话要点和待办事项。输出简洁的 Markdown 列表，不要输出思考过程。如果有历史总结，请合并更新。`;
 
 export class SessionCompressor {
-  private readonly options: Omit<Required<SessionCompressionOptions>, 'summaryModel'> & { summaryModel?: Model };
+  private readonly options: Omit<Required<SessionCompressionOptions>, 'summaryModel' | 'onEvent'> & {
+    summaryModel?: Model;
+    onEvent?: (type: 'compression:start' | 'compression:done', data: Record<string, unknown>) => void;
+  };
 
   constructor(options?: SessionCompressionOptions) {
     this.options = {
@@ -88,6 +91,13 @@ export class SessionCompressor {
     if (totalTokens < threshold) {
       return { compressed: false };
     }
+
+    // 发送 compression:start 事件
+    this.options.onEvent?.('compression:start', {
+      reason: `token ${totalTokens} >= threshold ${threshold}`,
+      totalTokens,
+      threshold
+    });
 
     // 执行压缩
     return this.compress(session, unsummarized, lastSummary, model, totalTokens, threshold);
@@ -197,6 +207,16 @@ export class SessionCompressor {
         compressionRatio,
         duration
       };
+
+      // 发送 compression:done 事件
+      this.options.onEvent?.('compression:done', {
+        summarizedSeqs,
+        endSeq,
+        originalTokens: totalTokens,
+        summaryTokens,
+        compressionRatio,
+        duration
+      });
 
       if (this.options.debug) {
         log.info(

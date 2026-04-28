@@ -89,7 +89,16 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         thresholdRatio: runtimeOptions.compaction?.thresholdRatio,
         keepRatio: runtimeOptions.compaction?.keepRatio,
         minMessageCount: runtimeOptions.compaction?.minMessageCount,
-        debug: runtimeOptions.compaction?.debug
+        debug: runtimeOptions.compaction?.debug,
+        onEvent: (type, data) => {
+          pendingRuntimeChunks.push({
+            type: type as StreamChunk['type'],
+            content: type === 'compression:start'
+              ? `Compression started: ${data.reason || ''}`
+              : `Compressed ${(data.summarizedSeqs as number[])?.length || 0} messages`,
+            data: data as StreamChunk['data']
+          });
+        }
       }
     });
 

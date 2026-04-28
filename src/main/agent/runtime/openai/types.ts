@@ -90,6 +90,13 @@ export interface SessionCompressionOptions {
   summaryModel?: Model;
   /** 是否调试模式 */
   debug?: boolean;
+  /**
+   * 压缩事件回调
+   *
+   * 在压缩开始 (compression:start) 和完成 (compression:done) 时调用。
+   * 上层（如 OpenAIAgentRuntime）通过此回调将压缩事件注入流式输出。
+   */
+  onEvent?: (type: 'compression:start' | 'compression:done', data: Record<string, unknown>) => void;
 }
 
 /**
