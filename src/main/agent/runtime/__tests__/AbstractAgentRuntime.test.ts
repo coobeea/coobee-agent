@@ -20,7 +20,7 @@ vi.mock('@main/common/logger', () => ({
 }));
 
 import { AbstractAgentRuntime, createRuntimeLogger, stripThinkTags, generateRuntimeId } from '../AbstractAgentRuntime';
-import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from '../types';
+import type { AgentRuntimeOptions, ExecutionConfig, AgentExecutionResult, AgentStreamChunk, SessionInfo } from '../types';
 
 // ========== 测试用具体子类 ==========
 
@@ -32,11 +32,11 @@ class MockRuntime extends AbstractAgentRuntime {
   readonly interrupted = false;
   readonly supportsHITL = false;
 
-  private _chunks: StreamChunk[];
+  private _chunks: AgentStreamChunk[];
 
   constructor(
-    chunks: StreamChunk[],
-    private result: ExecutionResult
+    chunks: AgentStreamChunk[],
+    private result: AgentExecutionResult
   ) {
     super();
     this._chunks = chunks;
@@ -52,7 +52,7 @@ class MockRuntime extends AbstractAgentRuntime {
   protected async *doStream(
     _input: string,
     _config?: ExecutionConfig
-  ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  ): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     for (const chunk of this._chunks) {
       yield chunk;
     }
@@ -76,12 +76,12 @@ class MockRuntime extends AbstractAgentRuntime {
 // ========== 测试 ==========
 
 describe('AbstractAgentRuntime', () => {
-  const mockResult: ExecutionResult = {
+  const mockResult: AgentExecutionResult = {
     output: 'hello world',
     duration: 100
   };
 
-  const mockChunks: StreamChunk[] = [
+  const mockChunks: AgentStreamChunk[] = [
     { type: 'run:start', content: '' },
     { type: 'text:delta', content: 'hello', data: { delta: 'hello' } },
     { type: 'text:delta', content: ' world', data: { delta: ' world' } },
@@ -101,7 +101,7 @@ describe('AbstractAgentRuntime', () => {
   describe('runStream() 默认实现', () => {
     it('通过回调转发所有 chunk 并返回结果', async () => {
       const runtime = new MockRuntime(mockChunks, mockResult);
-      const collected: StreamChunk[] = [];
+      const collected: AgentStreamChunk[] = [];
 
       const result = await runtime.runStream('test', {}, (chunk) => collected.push(chunk));
 

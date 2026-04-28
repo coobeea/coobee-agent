@@ -65,7 +65,7 @@ function sendRpc(method: string, params: Record<string, unknown>): Promise<Recor
  * Gateway 事件格式:
  *   {"type":"event","event":"stream.message","payload":{"sessionId":"...","message":StreamMessage}}
  *
- * StreamMessage.type 直接透传 StreamChunkType:
+ * StreamMessage.type 直接透传 AgentStreamChunkType:
  *   text:delta / reasoning:delta / tool:start / tool:done / run:done / run:error / ...
  * 文本在 StreamMessage.content
  */

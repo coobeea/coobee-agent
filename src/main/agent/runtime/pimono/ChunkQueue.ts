@@ -5,7 +5,7 @@
  * 用于 PiMono SDK 等仅提供回调 API（subscribe(callback)）的场景。
  *
  * 用法：
- *   const queue = new ChunkQueue<StreamChunk>()
+ *   const queue = new ChunkQueue<AgentStreamChunk>()
  *   // 推送端
  *   sdk.subscribe(event => queue.push(event))
  *   sdk.run().finally(() => queue.end())

@@ -22,8 +22,8 @@ import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRunti
 import {
   buildInstructions,
   type AgentRuntimeOptions,
-  type ExecutionResult,
-  type StreamChunk,
+  type AgentExecutionResult,
+  type AgentStreamChunk,
   type ToolDefinition
 } from '../types';
 import { createFallbackToolContext } from '../shared/ToolExecutionPipeline';
@@ -58,9 +58,9 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    *
    * SDK 的 StreamedRunResult 本身是 AsyncIterable，直接 for await + yield。
    */
-  protected async *doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  protected async *doStream(input: string): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     const runtimeOptions = this.options;
-    const pendingRuntimeChunks: StreamChunk[] = [];
+    const pendingRuntimeChunks: AgentStreamChunk[] = [];
     const allTools: Tool[] = this.convertTools(
       runtimeOptions.tools || [],
       runtimeOptions,
@@ -92,11 +92,11 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         debug: runtimeOptions.compaction?.debug,
         onEvent: (type, data) => {
           pendingRuntimeChunks.push({
-            type: type as StreamChunk['type'],
+            type: type as AgentStreamChunk['type'],
             content: type === 'compression:start'
               ? `Compression started: ${data.reason || ''}`
               : `Compressed ${(data.summarizedSeqs as number[])?.length || 0} messages`,
-            data: data as StreamChunk['data']
+            data: data as AgentStreamChunk['data']
           });
         }
       }
@@ -226,7 +226,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   }
 
   /**
-   * SDK 流事件 → StreamChunk AsyncGenerator
+   * SDK 流事件 → AgentStreamChunk AsyncGenerator
    *
    * 嵌套关系：
    *   run ⊃ turn ⊃ llm ⊃ { reasoning, text, tool } + hitl + handoff
@@ -244,8 +244,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     streamResult: StreamedRunResult<unknown, any>,
     onTextDelta: (text: string) => void,
     onApiError: (errorMessage: string) => void,
-    drainPendingRuntimeChunks: () => StreamChunk[]
-  ): AsyncGenerator<StreamChunk, void, unknown> {
+    drainPendingRuntimeChunks: () => AgentStreamChunk[]
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     const state = {
       turnIndex: 0,
       turnOpen: false,
@@ -257,8 +257,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     };
 
     // 同步缓冲：ThinkTagParser 回调产生的 chunk 先存这里，每轮 yield
-    const buffer: StreamChunk[] = [];
-    const emit = (chunk: StreamChunk): void => {
+    const buffer: AgentStreamChunk[] = [];
+    const emit = (chunk: AgentStreamChunk): void => {
       buffer.push(chunk);
     };
 
@@ -358,7 +358,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       fullReasoningText: string;
     },
     thinkParser: ThinkTagParser,
-    emit: (chunk: StreamChunk) => void,
+    emit: (chunk: AgentStreamChunk) => void,
     onApiError: (errorMessage: string) => void
   ): void {
     const rawEvent = event.data;
@@ -522,7 +522,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
    */
   private handleRunItemStreamEvent(
     event: { type: 'run_item_stream_event'; item?: unknown; name?: string },
-    emit: (chunk: StreamChunk) => void,
+    emit: (chunk: AgentStreamChunk) => void,
     state: { reasoningDoneEmitted: boolean; reasoningStartEmitted: boolean; reasoningViaModelEvents: boolean }
   ): void {
     const item = event.item;
@@ -600,7 +600,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       type: 'agent_updated_stream_event';
       agent?: { name?: string };
     },
-    emit: (chunk: StreamChunk) => void
+    emit: (chunk: AgentStreamChunk) => void
   ): void {
     const agentName = event.agent?.name || 'unknown';
     emit({
@@ -618,7 +618,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   private extractToolCalls(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     newItems: any[]
-  ): ExecutionResult['toolCalls'] {
+  ): AgentExecutionResult['toolCalls'] {
     if (!newItems) return [];
 
     return (
@@ -662,7 +662,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   private convertTools(
     defs: ToolDefinition[],
     options: AgentRuntimeOptions,
-    pendingRuntimeChunks: StreamChunk[],
+    pendingRuntimeChunks: AgentStreamChunk[],
     signal?: AbortSignal
   ): Tool[] {
     if (!defs.length) return [];
@@ -704,7 +704,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     );
   }
 
-  private drainPendingRuntimeChunks(pendingRuntimeChunks: StreamChunk[]): StreamChunk[] {
+  private drainPendingRuntimeChunks(pendingRuntimeChunks: AgentStreamChunk[]): AgentStreamChunk[] {
     if (pendingRuntimeChunks.length === 0) return [];
     const chunks = [...pendingRuntimeChunks];
     pendingRuntimeChunks.length = 0;

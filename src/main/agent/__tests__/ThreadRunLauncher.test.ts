@@ -4,7 +4,7 @@ import type { AgentDefinition } from '../agents/types';
 import type { AgentContext, AgentContextResolver } from '../context/AgentContextResolver';
 import { ThreadRunLauncher } from '../ThreadRunLauncher';
 import type { ThreadDefinition } from '../threads/types';
-import type { ExecutionResult, StreamChunk } from '../runtime/types';
+import type { AgentExecutionResult, AgentStreamChunk } from '../runtime/types';
 import type { RuntimeBuilder } from '../runtime/RuntimeBuilderFactory';
 
 vi.mock('@main/common/logger', () => ({
@@ -183,8 +183,8 @@ describe('ThreadRunLauncher', () => {
     mockThreads.set(thread.id, thread);
     mockContextResolver.resolve.mockResolvedValue(context);
 
-    const chunks: StreamChunk[] = [{ type: 'run:start', content: '' }];
-    const finalResult: ExecutionResult = { output: 'done' };
+    const chunks: AgentStreamChunk[] = [{ type: 'run:start', content: '' }];
+    const finalResult: AgentExecutionResult = { output: 'done' };
 
     mockExecutor.stream.mockImplementation(async function* () {
       for (const chunk of chunks) {
@@ -198,7 +198,7 @@ describe('ThreadRunLauncher', () => {
       message: 'stream message'
     });
 
-    const outputs: StreamChunk[] = [];
+    const outputs: AgentStreamChunk[] = [];
     let next = await gen.next();
     while (!next.done) {
       outputs.push(next.value);

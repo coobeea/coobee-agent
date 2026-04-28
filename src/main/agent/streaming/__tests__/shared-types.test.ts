@@ -83,7 +83,7 @@ describe('shared/stream-protocol 类型一致性', () => {
   });
 
   describe('StreamMessageType 是 string', () => {
-    it('接受任意 StreamChunkType 值', () => {
+    it('接受任意 AgentStreamChunkType 值', () => {
       const msg: SharedStreamMessage = {
         id: '1',
         sessionId: 's1',

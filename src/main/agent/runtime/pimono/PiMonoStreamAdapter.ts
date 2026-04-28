@@ -1,10 +1,10 @@
 /**
  * PiMono 流式事件适配器
  *
- * 将 pi-coding-agent SDK 的 AgentSessionEvent 映射为统一的 StreamChunk。
+ * 将 pi-coding-agent SDK 的 AgentSessionEvent 映射为统一的 AgentStreamChunk。
  *
  * 职责：
- *   - 事件订阅：session.subscribe() 回调 → StreamChunk
+ *   - 事件订阅：session.subscribe() 回调 → AgentStreamChunk
  *   - <think> 标签解析：自动拆分 <think>...</think> 为 reasoning:* 事件
  *   - Turn 边界管理：turn_start/turn_end → turn:start/turn:done
  *   - 工具事件桥接：tool_execution_start/update/end → tool:start/delta/done
@@ -16,7 +16,7 @@
  */
 
 import type { AgentSession, AgentSessionEvent } from '@mariozechner/pi-coding-agent';
-import type { StreamChunk, ExecutionResult } from '../types';
+import type { AgentStreamChunk, AgentExecutionResult } from '../types';
 
 // ========== Types ==========
 
@@ -29,12 +29,12 @@ interface RuntimeLogger {
 
 /** 事件订阅回调集合 */
 export interface StreamAdapterCallbacks {
-  /** 推送 StreamChunk */
-  onChunk: (chunk: StreamChunk) => void;
+  /** 推送 AgentStreamChunk */
+  onChunk: (chunk: AgentStreamChunk) => void;
   /** 文本增量回调（累积完整输出） */
   onTextDelta: (text: string) => void;
   /** 工具调用记录列表 */
-  toolCalls: ExecutionResult['toolCalls'];
+  toolCalls: AgentExecutionResult['toolCalls'];
   /** API 错误回调 */
   onApiError?: (errorMessage: string) => void;
 }

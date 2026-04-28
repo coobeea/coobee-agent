@@ -11,9 +11,9 @@
  *   2. 运行时快照：`AgentRuntimeOptions`
  *      - 描述“一个 runtime 实例最终拿到的只读配置”
  *      - 用于调试、日志、快照记录
- *   3. 执行交互：`ExecutionConfig` / `ExecutionResult`
+ *   3. 执行交互：`ExecutionConfig` / `AgentExecutionResult`
  *      - 描述“本次调用如何执行、最终返回什么”
- *   4. 流式协议：`StreamChunk` / `StreamChunkType`
+ *   4. 流式协议：`AgentStreamChunk` / `AgentStreamChunkType`
  *      - 描述“执行过程中如何持续向外发事件”
  *
  * 设计原则：
@@ -494,11 +494,11 @@ export interface ToolApprovalInfo {
  * 执行结果
  *
  * 这是一次完整执行完成后返回给上层的稳定结果对象。
- * 它和 `StreamChunk` 的关系是：
- *   - `StreamChunk` 负责过程事件
- *   - `ExecutionResult` 负责最终归档结果
+ * 它和 `AgentStreamChunk` 的关系是：
+ *   - `AgentStreamChunk` 负责过程事件
+ *   - `AgentExecutionResult` 负责最终归档结果
  */
-export interface ExecutionResult {
+export interface AgentExecutionResult {
   /** 最终输出文本 */
   output: string;
   /** API 错误信息（SDK 内部错误，非 throw 类型） */
@@ -536,19 +536,19 @@ export interface ExecutionResult {
  *
  * 这是 runtime 层对外唯一的流式事件载体。
  * 不管底层是 OpenAI、PiMono，还是以后新增 runtime，只要要进入统一执行链，
- * 最终都应该翻译成 `StreamChunk`。
+ * 最终都应该翻译成 `AgentStreamChunk`。
  *
  * 消费方通常只依赖两件事：
  *   - `type`：事件类别
  *   - `data`：该类别对应的结构化数据
  */
-export interface StreamChunk {
+export interface AgentStreamChunk {
   /** 事件类型（prefix:event 格式） */
-  type: StreamChunkType;
+  type: AgentStreamChunkType;
   /** 主要内容（文本增量、工具名、错误信息等） */
   content: string;
   /** 额外数据（类型随 type 变化） */
-  data?: StreamChunkData;
+  data?: AgentStreamChunkData;
   /** 发出此事件的 Agent 名称（多 Agent 场景有值） */
   agentName?: string;
 }
@@ -577,7 +577,7 @@ export interface StreamChunk {
  *   - 也不是每种事件都严格满足 start/delta/done 三段式
  *   - 但统一命名能让消费侧保持稳定
  */
-export type StreamChunkType =
+export type AgentStreamChunkType =
   // ① run: 执行生命周期（最外层）
   | 'run:start' // 整个执行开始
   | 'run:done' // 整个执行完成
@@ -622,13 +622,13 @@ export type StreamChunkType =
   | 'quality:done'; // 质量循环完成
 
 /**
- * StreamChunk 额外数据
+ * AgentStreamChunk 额外数据
  *
  * `data` 的具体结构由 `type` 决定。
  * 这里保持宽联合而不是强绑定映射，是为了让不同 runtime 在逐步收敛协议时
  * 仍然能安全演进。
  */
-export type StreamChunkData =
+export type AgentStreamChunkData =
   | RunErrorData
   | TurnData
   | LlmDoneData

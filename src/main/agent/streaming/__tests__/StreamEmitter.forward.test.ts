@@ -1,7 +1,7 @@
 /**
  * StreamEmitter.forward() 测试
  *
- * 测试直接透传 — StreamChunk.type 原样广播为 StreamMessage.type：
+ * 测试直接透传 — AgentStreamChunk.type 原样广播为 StreamMessage.type：
  * - text:delta → text:delta（直接透传）
  * - tool:start → tool:start（直接透传）
  * - run:start / run:done / run:error → 额外触发 START/END/ERROR 生命周期事件
@@ -29,7 +29,7 @@ vi.mock('@main/utils', () => ({
 
 import { StreamEmitter } from '../StreamEmitter';
 import { StreamEventType } from '../types';
-import type { StreamChunk } from '../../runtime/types';
+import type { AgentStreamChunk } from '../../runtime/types';
 
 describe('StreamEmitter.forward()', () => {
   let emitter: StreamEmitter;
@@ -58,7 +58,7 @@ describe('StreamEmitter.forward()', () => {
       ['text:start', ''],
       ['text:done', '']
     ])('%s → type 原样透传', (type, content) => {
-      emitter.forward({ type, content } as StreamChunk);
+      emitter.forward({ type, content } as AgentStreamChunk);
 
       expect(mockEventBus.emit).toHaveBeenCalledWith(
         StreamEventType.MESSAGE,

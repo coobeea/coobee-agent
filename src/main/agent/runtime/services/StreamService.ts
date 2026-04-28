@@ -3,12 +3,12 @@
  *
  * 职责：
  * - 管理 StreamEmitter 实例
- * - 处理 SDK 流事件到统一 StreamChunk 的转换
+ * - 处理 SDK 流事件到统一 AgentStreamChunk 的转换
  * - 提供流式输出订阅接口
  */
 
 import { createStreamEmitter, type IStreamEmitter } from '../../streaming/StreamEmitter';
-import type { StreamChunk } from '../types';
+import type { AgentStreamChunk } from '../types';
 
 /**
  * 流式输出服务
@@ -26,7 +26,7 @@ export class StreamService {
    * 注：由于 SDK 流事件处理逻辑复杂（ThinkTagParser、事件类型转换等），
    * 暂时保留在 Runtime 中，此方法作为未来迁移的占位符。
    */
-  async *generateStreamEvents(_streamResult: unknown, _onText?: (text: string) => void): AsyncGenerator<StreamChunk> {
+  async *generateStreamEvents(_streamResult: unknown, _onText?: (text: string) => void): AsyncGenerator<AgentStreamChunk> {
     // 占位实现，实际逻辑保留在 OpenAIAgentRuntime.generateStreamEvents
     yield { type: 'run:start', content: '' };
   }

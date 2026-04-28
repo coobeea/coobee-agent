@@ -5,7 +5,7 @@
  * - 管理 SessionCompressor 实例
  * - 检查是否需要压缩
  * - 执行压缩并返回结果
- * - 生成压缩相关的 StreamChunk
+ * - 生成压缩相关的 AgentStreamChunk
  */
 
 import { createLogger } from '@main/common/logger';
@@ -14,7 +14,7 @@ import { SessionCompressor } from '../openai/SessionCompressor';
 const log = createLogger('CompressionService');
 import type { FileSession } from '../openai/FileSession';
 import type { CompressionResult } from '../openai/types';
-import type { StreamChunk } from '../types';
+import type { AgentStreamChunk } from '../types';
 
 /** 压缩配置 */
 export interface CompressionConfig {
@@ -64,15 +64,15 @@ export class CompressionService {
   }
 
   /**
-   * 执行压缩并返回 StreamChunk
+   * 执行压缩并返回 AgentStreamChunk
    */
   async compressWithChunks(
     session: FileSession,
     model: string
-  ): Promise<StreamChunk[]> {
+  ): Promise<AgentStreamChunk[]> {
     if (!this.compressor) return [];
 
-    const chunks: StreamChunk[] = [];
+    const chunks: AgentStreamChunk[] = [];
 
     try {
       const status = await this.getCompressionStatus(session);

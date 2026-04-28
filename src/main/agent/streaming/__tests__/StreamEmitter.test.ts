@@ -1,7 +1,7 @@
 /**
  * StreamEmitter 单元测试
  *
- * 测试直接透传行为（不做 StreamChunkType → StreamMessageType 映射）
+ * 测试直接透传行为（不做 AgentStreamChunkType → StreamMessageType 映射）
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

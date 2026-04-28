@@ -6,7 +6,7 @@
  * 模块结构：
  *   PiMonoAgentRuntime.ts   — 核心生命周期（initialize/stream/destroy）
  *   PiMonoToolConverter.ts  — 工具转换（ToolDefinition → PiToolDefinition）
- *   PiMonoStreamAdapter.ts  — 流式事件适配（AgentSessionEvent → StreamChunk）
+ *   PiMonoStreamAdapter.ts  — 流式事件适配（AgentSessionEvent → AgentStreamChunk）
  *   ChunkQueue.ts           — 推送→拉取桥接器
  *   types.ts                — 类型定义
  */

@@ -24,7 +24,7 @@
  *
  * 模块拆分：
  * - PiMonoToolConverter.ts  — 工具转换（ToolDefinition → PiToolDefinition）
- * - PiMonoStreamAdapter.ts  — 流式事件适配（AgentSessionEvent → StreamChunk）
+ * - PiMonoStreamAdapter.ts  — 流式事件适配（AgentSessionEvent → AgentStreamChunk）
  * - ChunkQueue.ts           — 推送→拉取桥接器
  * - types.ts                — 类型定义
  */
@@ -47,7 +47,7 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import path from 'node:path';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
-import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from '../types';
+import type { AgentRuntimeOptions, AgentExecutionResult, AgentStreamChunk } from '../types';
 import { ChunkQueue } from './ChunkQueue';
 import { setupEventSubscription } from './PiMonoStreamAdapter';
 import { convertTools } from './PiMonoToolConverter';
@@ -138,7 +138,7 @@ function createOpenAICompatModel(
  * 职责：
  * 1. 构造 OpenAI 兼容的 Model 对象（openai-completions API）
  * 2. 通过 createAgentSession() 创建 SDK AgentSession
- * 3. 通过 session.subscribe() 订阅事件，映射为 StreamChunk
+ * 3. 通过 session.subscribe() 订阅事件，映射为 AgentStreamChunk
  * 4. 通过 StreamEmitter 广播事件到 EventBus
  * 5. 管理会话生命周期
  */
@@ -213,10 +213,10 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
    * 事件时序：
    *   run:start → turn:start → llm:start → { reasoning:*, text:*, tool:* } → llm:done → turn:done → run:done
    */
-  protected async *doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  protected async *doStream(input: string): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     const options = this.options;
     const startTime = Date.now();
-    const queue = new ChunkQueue<StreamChunk>();
+    const queue = new ChunkQueue<AgentStreamChunk>();
     const executionSignal = options.signal;
     log.info(`[PiMonoRuntime] Running stream: ${options.name}`);
 
@@ -232,7 +232,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       // 2. 设置事件订阅 → push 到 queue
       let fullOutput = '';
       let apiError: string | null = null;
-      const toolCalls: ExecutionResult['toolCalls'] = [];
+      const toolCalls: AgentExecutionResult['toolCalls'] = [];
 
       const unsubscribe = setupEventSubscription(
         piSession,
@@ -475,7 +475,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     userInput: string,
     options: AgentRuntimeOptions,
     piSession: AgentSession
-  ): ExecutionResult['rawApiRequest'] {
+  ): AgentExecutionResult['rawApiRequest'] {
     const messages: Array<{ role: string; content: string }> = [];
 
     // 1. System Message（instructions + appendInstructions）

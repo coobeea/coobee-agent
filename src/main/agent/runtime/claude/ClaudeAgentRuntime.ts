@@ -2,7 +2,7 @@
  * Claude Agent 运行时
  *
  * 基于 @anthropic-ai/claude-agent-sdk 接入 Claude Code 能力，并统一翻译为
- * Runtime 层的 StreamChunk / ExecutionResult 协议。
+ * Runtime 层的 AgentStreamChunk / AgentExecutionResult 协议。
  */
 
 import { createHash } from 'node:crypto';
@@ -24,8 +24,8 @@ import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRunti
 import {
   buildInstructions,
   type AgentRuntimeOptions,
-  type ExecutionResult,
-  type StreamChunk,
+  type AgentExecutionResult,
+  type AgentStreamChunk,
   type ThinkingLevel
 } from '../types';
 
@@ -66,7 +66,7 @@ interface ClaudeStreamState {
   reasoningStarted: boolean;
   reasoningDone: boolean;
   toolBlocks: Map<number, ToolBlockState>;
-  toolCalls: NonNullable<ExecutionResult['toolCalls']>;
+  toolCalls: NonNullable<AgentExecutionResult['toolCalls']>;
   /** session 级统计 */
   stats: ClaudeSessionStats;
 }
@@ -136,7 +136,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     super(options);
   }
 
-  protected async *doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  protected async *doStream(input: string): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     const options = this.options;
     const startTime = Date.now();
     const finalInstructions = buildInstructions(options.instructions, options.skills, options.appendInstructions);
@@ -392,7 +392,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     };
   }
 
-  private mapSdkMessage(message: SDKMessage, state: ClaudeStreamState): StreamChunk[] {
+  private mapSdkMessage(message: SDKMessage, state: ClaudeStreamState): AgentStreamChunk[] {
     this.captureSdkSessionId(message, state);
 
     if (message.type === 'stream_event') {
@@ -429,7 +429,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   /**
    * 分发 system 消息 — 按 subtype 路由到具体处理函数
    */
-  private mapSystemMessage(message: Extract<SDKMessage, { type: 'system' }>, state: ClaudeStreamState): StreamChunk[] {
+  private mapSystemMessage(message: Extract<SDKMessage, { type: 'system' }>, state: ClaudeStreamState): AgentStreamChunk[] {
     const subtype = (message as UnknownRecord).subtype as string | undefined;
 
     if (subtype === 'init') {
@@ -464,7 +464,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return [];
   }
 
-  private mapSystemInit(message: SDKMessage): StreamChunk[] {
+  private mapSystemInit(message: SDKMessage): AgentStreamChunk[] {
     const record = asRecord(message) || {};
     return [
       {
@@ -480,7 +480,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** 压缩边界消息 → compression:done（携带摘要信息） */
-  private mapCompactBoundary(message: SDKMessage, state: ClaudeStreamState): StreamChunk[] {
+  private mapCompactBoundary(message: SDKMessage, state: ClaudeStreamState): AgentStreamChunk[] {
     state.stats.compactCount++;
     state.stats.lastCompactAt = Date.now();
     const record = asRecord(message) || {};
@@ -501,7 +501,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** 后台任务启动通知 */
-  private mapTaskStarted(message: SDKMessage, state: ClaudeStreamState): StreamChunk[] {
+  private mapTaskStarted(message: SDKMessage, state: ClaudeStreamState): AgentStreamChunk[] {
     state.stats.taskCount++;
     const record = asRecord(message) || {};
     const taskId = stringValue(record, 'task_id') || '';
@@ -517,7 +517,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** 后台任务进度 */
-  private mapTaskProgress(message: SDKMessage): StreamChunk[] {
+  private mapTaskProgress(message: SDKMessage): AgentStreamChunk[] {
     const record = asRecord(message) || {};
     const summary = stringValue(record, 'summary') || '';
     if (!summary) return [];
@@ -525,7 +525,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** 后台任务完成/停止通知 */
-  private mapTaskNotification(message: SDKMessage, _state: ClaudeStreamState): StreamChunk[] {
+  private mapTaskNotification(message: SDKMessage, _state: ClaudeStreamState): AgentStreamChunk[] {
     const record = asRecord(message) || {};
     const status = stringValue(record, 'status') || '';
 
@@ -539,7 +539,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** 工具执行进度 */
-  private mapToolProgress(message: SDKMessage): StreamChunk[] {
+  private mapToolProgress(message: SDKMessage): AgentStreamChunk[] {
     const record = asRecord(message) || {};
     const toolName = stringValue(record, 'tool_name') || '';
     const progress = stringValue(record, 'progress') || '';
@@ -555,7 +555,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** Hook 事件（调试用） */
-  private mapHookMessage(message: SDKMessage): StreamChunk[] {
+  private mapHookMessage(message: SDKMessage): AgentStreamChunk[] {
     const record = asRecord(message) || {};
     const hookEvent = stringValue(record, 'hook_event') || '';
     const subtype = stringValue(record, 'subtype') || '';
@@ -568,7 +568,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   private mapRateLimit(
     message: Extract<SDKMessage, { type: 'rate_limit_event' }>,
     state: ClaudeStreamState
-  ): StreamChunk[] {
+  ): AgentStreamChunk[] {
     state.stats.rateLimitHits++;
     const record = asRecord(message) || {};
     const messageText = stringValue(record, 'message') || 'API rate limit hit';
@@ -577,7 +577,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   }
 
   /** 提示建议消息（暂存储用于后续功能） */
-  private mapPromptSuggestion(message: SDKMessage): StreamChunk[] {
+  private mapPromptSuggestion(message: SDKMessage): AgentStreamChunk[] {
     const record = asRecord(message) || {};
     const suggestion = stringValue(record, 'suggestion') || '';
     if (suggestion) {
@@ -586,11 +586,11 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return [];
   }
 
-  private mapStreamEvent(event: unknown, state: ClaudeStreamState): StreamChunk[] {
+  private mapStreamEvent(event: unknown, state: ClaudeStreamState): AgentStreamChunk[] {
     const record = asRecord(event);
     if (!record) return [];
 
-    const chunks: StreamChunk[] = [];
+    const chunks: AgentStreamChunk[] = [];
     const eventType = stringValue(record, 'type');
     const index = numberValue(record, 'index');
 
@@ -686,8 +686,8 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   private mapAssistantMessage(
     message: Extract<SDKMessage, { type: 'assistant' }>,
     state: ClaudeStreamState
-  ): StreamChunk[] {
-    const chunks: StreamChunk[] = [];
+  ): AgentStreamChunk[] {
+    const chunks: AgentStreamChunk[] = [];
     if (message.error) {
       chunks.push({ type: 'run:error', content: message.error, data: { message: message.error } });
       return chunks;
@@ -733,8 +733,8 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return chunks;
   }
 
-  private buildCompletionChunks(resultMessage: SDKResultMessage | null, state: ClaudeStreamState): StreamChunk[] {
-    const chunks: StreamChunk[] = [];
+  private buildCompletionChunks(resultMessage: SDKResultMessage | null, state: ClaudeStreamState): AgentStreamChunk[] {
+    const chunks: AgentStreamChunk[] = [];
 
     if (state.reasoningStarted && !state.reasoningDone) {
       state.reasoningDone = true;
@@ -776,8 +776,8 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     state: ClaudeStreamState,
     startTime: number,
     sessionId: string,
-    rawApiRequest: ExecutionResult['rawApiRequest']
-  ): ExecutionResult {
+    rawApiRequest: AgentExecutionResult['rawApiRequest']
+  ): AgentExecutionResult {
     const output = resultMessage?.subtype === 'success' ? resultMessage.result || state.fullOutput : state.fullOutput;
     const error = resultMessage?.subtype === 'success' ? undefined : this.getResultError(resultMessage);
 
@@ -845,7 +845,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     options: AgentRuntimeOptions,
     finalInstructions: string,
     sdkSessionId?: string
-  ): ExecutionResult['rawApiRequest'] {
+  ): AgentExecutionResult['rawApiRequest'] {
     return {
       source: 'runtime-synthesized-preview',
       sdk: 'claude-agent-sdk',
@@ -877,13 +877,13 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     };
   }
 
-  private pushTextStart(chunks: StreamChunk[], state: ClaudeStreamState): void {
+  private pushTextStart(chunks: AgentStreamChunk[], state: ClaudeStreamState): void {
     if (state.textStarted) return;
     state.textStarted = true;
     chunks.push({ type: 'text:start', content: '' });
   }
 
-  private pushReasoningStart(chunks: StreamChunk[], state: ClaudeStreamState): void {
+  private pushReasoningStart(chunks: AgentStreamChunk[], state: ClaudeStreamState): void {
     if (state.reasoningStarted) return;
     state.reasoningStarted = true;
     chunks.push({ type: 'reasoning:start', content: '' });

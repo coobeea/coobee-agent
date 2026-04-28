@@ -32,7 +32,7 @@ vi.mock('../../sandbox', () => ({
 }));
 
 import { AbstractAgentRuntime, generateRuntimeId } from '../AbstractAgentRuntime';
-import type { AgentRuntimeOptions, ExecutionConfig, ExecutionResult, StreamChunk, SessionInfo } from '../types';
+import type { AgentRuntimeOptions, ExecutionConfig, AgentExecutionResult, AgentStreamChunk, SessionInfo } from '../types';
 import { ToolCategory } from '../../tools/types';
 
 // ==================== S-2: ErrorRecovery runtime injection ====================
@@ -78,7 +78,7 @@ describe('S-2: ErrorRecoveryChain runtime injection', () => {
     protected async *doStream(
       _input: string,
       _config?: ExecutionConfig
-    ): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+    ): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
       if (this.failOnce) {
         this.failOnce = false;
         throw new Error(this.errorMsg);
@@ -114,7 +114,7 @@ describe('S-2: ErrorRecoveryChain runtime injection', () => {
 
   it('context_length_exceeded 时触发 compress 并重试', async () => {
     const rt = new MockRuntimeWithCompressor({ failOnce: true });
-    const chunks: StreamChunk[] = [];
+    const chunks: AgentStreamChunk[] = [];
 
     const gen = rt.stream('test input');
     let r = await gen.next();
@@ -150,7 +150,7 @@ describe('S-2: ErrorRecoveryChain runtime injection', () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       async destroy(): Promise<void> {}
       // eslint-disable-next-line require-yield
-      protected async *doStream(): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+      protected async *doStream(): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
         return { output: 'ok' };
       }
       async getSession(): Promise<SessionInfo> {

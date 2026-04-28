@@ -20,7 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { AgentRuntime } from './AgentRuntime';
-import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types';
+import type { AgentRuntimeOptions, AgentExecutionResult, AgentStreamChunk } from './types';
 
 import { createRuntimeLogger } from './RuntimeLogger';
 const log = createRuntimeLogger('runtime:context-snapshot');
@@ -59,7 +59,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    * 不直接暴露给调用方，由 `stream()` 模板方法包装。
    * 子类在这里专注于"如何和具体 SDK 对接并产出标准 chunk"。
    */
-  protected abstract doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
+  protected abstract doStream(input: string): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown>;
 
   // ========== 网络错误重试配置 ==========
 
@@ -95,7 +95,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    *   - 网络/瞬时错误自动指数退避重试
    * 子类通常不需要覆盖此方法，实现 `doStream()` 即可。
    */
-  async *stream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  async *stream(input: string): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     const options = this.options;
     let attempt = 0;
 
@@ -145,7 +145,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
     options: AgentRuntimeOptions,
     runtimeType: string,
     input: string,
-    result: ExecutionResult
+    result: AgentExecutionResult
   ): Promise<void> {
     const contextDir = options.contextDir;
     if (!contextDir) return;
@@ -191,7 +191,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
   /**
    * 非流式执行 — 消费 `stream()` 收集结果
    */
-  async run(input: string): Promise<ExecutionResult> {
+  async run(input: string): Promise<AgentExecutionResult> {
     const gen = this.stream(input);
     let r = await gen.next();
     while (!r.done) {

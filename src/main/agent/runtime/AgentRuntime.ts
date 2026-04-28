@@ -9,7 +9,7 @@
  * 对外我们只保留“执行”这件事。
  */
 
-import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types';
+import type { AgentRuntimeOptions, AgentExecutionResult, AgentStreamChunk } from './types';
 
 /**
  * 统一运行时接口
@@ -27,21 +27,21 @@ export interface AgentRuntime {
   /**
    * 流式执行（主方法）
    *
-   * 以 AsyncGenerator 形式产出标准化的 `StreamChunk`。
+   * 以 AsyncGenerator 形式产出标准化的 `AgentStreamChunk`。
    * 调用方可以直接消费 chunk，也可以由更上层桥接到 EventBus / WebSocket / SSE。
    *
    * @param input 用户输入
-   * @yields StreamChunk 流式事件块
-   * @returns ExecutionResult 执行结果
+   * @yields AgentStreamChunk 流式事件块
+   * @returns AgentExecutionResult 执行结果
    */
-  stream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
+  stream(input: string): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown>;
 
   /**
    * 非流式执行（便捷方法）
    *
-   * 内部调用 `stream()` 并消费完整个事件流，最终只返回 `ExecutionResult`。
+   * 内部调用 `stream()` 并消费完整个事件流，最终只返回 `AgentExecutionResult`。
    *
    * @param input 用户输入
    */
-  run(input: string): Promise<ExecutionResult>;
+  run(input: string): Promise<AgentExecutionResult>;
 }
