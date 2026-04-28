@@ -244,7 +244,8 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           toolCalls,
           onApiError: (errorMessage) => {
             apiError = errorMessage;
-          }
+          },
+          contextWindow: options.modelMeta?.contextWindow
         },
         log
       );

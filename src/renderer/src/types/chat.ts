@@ -76,6 +76,8 @@ export interface ExecutionStats {
   outputTokens: number;
   /** 总 token 数 */
   totalTokens: number;
+  /** 当前模型上下文窗口大小，保留最后一次 LLM 调用的值 */
+  contextWindow?: number;
   /** 大模型调用次数 */
   llmCalls: number;
   /** 工具调用次数 */
@@ -94,6 +96,7 @@ export interface HistoryUsageV2 {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  contextWindow?: number;
 }
 
 export interface HistoryToolCallV2 {

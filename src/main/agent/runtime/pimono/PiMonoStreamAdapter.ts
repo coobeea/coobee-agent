@@ -37,6 +37,8 @@ export interface StreamAdapterCallbacks {
   toolCalls: AgentExecutionResult['toolCalls'];
   /** API 错误回调 */
   onApiError?: (errorMessage: string) => void;
+  /** 当前模型上下文窗口大小 */
+  contextWindow?: number;
 }
 
 // ========== Core API ==========
@@ -71,7 +73,7 @@ export function setupEventSubscription(
   callbacks: StreamAdapterCallbacks,
   log: RuntimeLogger
 ): () => void {
-  const { onChunk, onTextDelta, toolCalls, onApiError } = callbacks;
+  const { onChunk, onTextDelta, toolCalls, onApiError, contextWindow } = callbacks;
 
   let turnIndex = 0;
   let textStartEmitted = false;
@@ -311,7 +313,8 @@ export function setupEventSubscription(
                 ? {
                     inputTokens: usage.input || usage.inputTokens || 0,
                     outputTokens: usage.output || usage.outputTokens || 0,
-                    totalTokens: usage.totalTokens || (usage.input || 0) + (usage.output || 0)
+                    totalTokens: usage.totalTokens || (usage.input || 0) + (usage.output || 0),
+                    contextWindow
                   }
                 : undefined
             }

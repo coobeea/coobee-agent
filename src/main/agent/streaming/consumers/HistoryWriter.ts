@@ -332,7 +332,8 @@ export class HistoryWriter {
       const delta = {
         inputTokens: (usage.inputTokens as number) || 0,
         outputTokens: (usage.outputTokens as number) || 0,
-        totalTokens: (usage.totalTokens as number) || 0
+        totalTokens: (usage.totalTokens as number) || 0,
+        contextWindow: (usage.contextWindow as number | undefined) || undefined
       };
       addUsage(turn.usage, delta);
       addUsage(run.usage, delta);
@@ -502,6 +503,9 @@ function addUsage(target: UsageRecord, delta: UsageRecord): void {
   target.inputTokens += delta.inputTokens;
   target.outputTokens += delta.outputTokens;
   target.totalTokens += delta.totalTokens;
+  if (delta.contextWindow !== undefined) {
+    target.contextWindow = delta.contextWindow;
+  }
 }
 
 function toIso(timestamp?: number): string {

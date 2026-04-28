@@ -190,13 +190,16 @@ export const useChatStore = defineStore(
           if (!threadState.currentAssistantMsg || !threadState.currentAssistantMsg.stats) break;
 
           const usage = msg.data?.usage as
-            | { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+            | { inputTokens?: number; outputTokens?: number; totalTokens?: number; contextWindow?: number }
             | undefined;
           if (usage) {
             const stats = threadState.currentAssistantMsg.stats;
             stats.inputTokens += usage.inputTokens || 0;
             stats.outputTokens += usage.outputTokens || 0;
             stats.totalTokens += usage.totalTokens || 0;
+            if (usage.contextWindow) {
+              stats.contextWindow = usage.contextWindow;
+            }
             stats.llmCalls++;
           }
           break;

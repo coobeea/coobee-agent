@@ -227,7 +227,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
       }
 
       const result = this.buildResult(resultMessage, state, startTime, sessionId, rawApiRequest);
-      for (const chunk of this.buildCompletionChunks(resultMessage, state)) {
+      for (const chunk of this.buildCompletionChunks(resultMessage, state, options.modelMeta?.contextWindow)) {
         yield chunk;
       }
       return result;
@@ -429,7 +429,10 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
   /**
    * 分发 system 消息 — 按 subtype 路由到具体处理函数
    */
-  private mapSystemMessage(message: Extract<SDKMessage, { type: 'system' }>, state: ClaudeStreamState): AgentStreamChunk[] {
+  private mapSystemMessage(
+    message: Extract<SDKMessage, { type: 'system' }>,
+    state: ClaudeStreamState
+  ): AgentStreamChunk[] {
     const subtype = (message as UnknownRecord).subtype as string | undefined;
 
     if (subtype === 'init') {
@@ -733,7 +736,11 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return chunks;
   }
 
-  private buildCompletionChunks(resultMessage: SDKResultMessage | null, state: ClaudeStreamState): AgentStreamChunk[] {
+  private buildCompletionChunks(
+    resultMessage: SDKResultMessage | null,
+    state: ClaudeStreamState,
+    contextWindow?: number
+  ): AgentStreamChunk[] {
     const chunks: AgentStreamChunk[] = [];
 
     if (state.reasoningStarted && !state.reasoningDone) {
@@ -757,7 +764,7 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     chunks.push({
       type: 'llm:done',
       content: '',
-      data: resultMessage ? this.extractUsage(resultMessage) : undefined
+      data: resultMessage ? this.extractUsage(resultMessage, contextWindow) : undefined
     });
     chunks.push({ type: 'turn:done', content: '' });
 
@@ -903,10 +910,20 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     return resultMessage.errors?.join('\n') || resultMessage.subtype;
   }
 
-  private extractUsage(resultMessage: SDKResultMessage): Record<string, unknown> {
+  private extractUsage(resultMessage: SDKResultMessage, contextWindow?: number): Record<string, unknown> {
+    const modelUsage = resultMessage.modelUsage;
+    const usage = resultMessage.usage;
+    const inputTokens = Number(modelUsage?.inputTokens ?? usage?.input_tokens ?? 0);
+    const outputTokens = Number(modelUsage?.outputTokens ?? usage?.output_tokens ?? 0);
+
     return {
-      usage: resultMessage.usage,
-      modelUsage: resultMessage.modelUsage,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        contextWindow
+      },
+      modelUsage,
       totalCostUsd: resultMessage.total_cost_usd,
       durationMs: resultMessage.duration_ms,
       durationApiMs: resultMessage.duration_api_ms

@@ -155,36 +155,8 @@ function createExtensionServices(): ExtensionServices {
     },
     llm: {
       async runAgent(agentId, message) {
-        const { agentExecutor } = await import('../agent/AgentExecutor');
-        const { AgentStore } = await import('../agent/agents/AgentStore');
-        const { generateSnowflakeId } = await import('../utils/SnowflakeIdGenerator');
-
-        const store = await AgentStore.getInstance();
-        const agentDef = await store.get(agentId);
-        if (!agentDef) {
-          throw new Error(`Agent "${agentId}" not found`);
-        }
-
-        const sessionId = `ext-agent-${agentId}-${generateSnowflakeId()}`;
-
-        let output = '';
-        const gen = agentExecutor.stream({
-          sessionId,
-          message,
-          lightweight: true,
-          mode: 'chat',
-          runtimeType: 'pi-mono',
-          sessionMode: 'memory',
-          maxTurns: 1,
-          instructions: agentDef.instructions,
-          modelOverride: agentDef.model
-        });
-        for await (const chunk of gen) {
-          if (chunk.type === 'text:delta' && chunk.content) {
-            output += chunk.content;
-          }
-        }
-        return output;
+        const { ThreadlessExecutor } = await import('../agent/ThreadlessExecutor');
+        return ThreadlessExecutor.run(agentId, message);
       }
     },
     agent: {

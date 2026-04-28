@@ -285,6 +285,7 @@ async function loadThreadHistory(): Promise<void> {
           inputTokens: msgData.usage.inputTokens || 0,
           outputTokens: msgData.usage.outputTokens || 0,
           totalTokens: msgData.usage.totalTokens || 0,
+          contextWindow: msgData.usage.contextWindow,
           llmCalls: msgData.turns.filter((turn) => turn.usage.totalTokens > 0).length,
           toolCalls: toolCalls.length,
           startTime,

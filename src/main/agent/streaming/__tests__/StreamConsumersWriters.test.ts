@@ -62,7 +62,7 @@ describe('stream consumer writers', () => {
     eventBus.emit(
       StreamEventType.MESSAGE,
       makeEvent('thread-1', 'llm:done', '', {
-        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 }
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5, contextWindow: 128000 }
       })
     );
     eventBus.emit(StreamEventType.MESSAGE, makeEvent('thread-1', 'turn:done', '', { turnIndex: 1 }));
@@ -84,14 +84,14 @@ describe('stream consumer writers', () => {
       role: 'assistant',
       status: 'done',
       content: 'hello',
-      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 }
+      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5, contextWindow: 128000 }
     });
     expect(lines[1].turns).toHaveLength(1);
     expect(lines[1].turns[0]).toMatchObject({
       index: 1,
       status: 'done',
       content: 'hello',
-      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 }
+      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5, contextWindow: 128000 }
     });
   });
 

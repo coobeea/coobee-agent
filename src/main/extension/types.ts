@@ -161,7 +161,7 @@ export interface ExtensionServices {
      * 通过指定 Agent 执行一次对话
      *
      * 系统自动加载该 Agent 的 instructions/model 等配置，
-     * 走 AgentExecutor 正路（lightweight chat 模式）。
+     * 走 ThreadlessExecutor 正路（lightweight chat 模式）。
      * @param agentId Agent ID（如 'memory-analyzer'）
      * @param message 用户输入内容
      */

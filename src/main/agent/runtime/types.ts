@@ -673,6 +673,8 @@ export interface LlmDoneData {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
+    /** 当前模型上下文窗口大小，用于前端展示 inputTokens 占比 */
+    contextWindow?: number;
   };
 }
 

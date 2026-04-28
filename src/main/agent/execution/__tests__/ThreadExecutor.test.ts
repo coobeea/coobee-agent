@@ -1,7 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadExecutor } from '../../ThreadExecutor';
 import type { AgentExecuteRequest } from '../../AgentExecutor';
 import type { AgentExecutionResult, AgentStreamChunk } from '../../runtime/types';
+
+const mocks = vi.hoisted(() => ({
+  createRequest: vi.fn(),
+  stream: vi.fn(),
+  submit: vi.fn(),
+  abort: vi.fn(),
+  getStatus: vi.fn()
+}));
+
+vi.mock('../../execution/ThreadExecutionFactory', () => ({
+  ThreadExecutionFactory: { getInstance: () => ({ createRequest: mocks.createRequest }) }
+}));
+
+vi.mock('../../AgentExecutor', () => ({
+  agentExecutor: {
+    stream: mocks.stream,
+    submit: mocks.submit,
+    abort: mocks.abort,
+    getStatus: mocks.getStatus
+  }
+}));
 
 function makeRequest(overrides: Partial<AgentExecuteRequest> = {}): AgentExecuteRequest {
   return {
@@ -14,20 +35,21 @@ function makeRequest(overrides: Partial<AgentExecuteRequest> = {}): AgentExecute
 }
 
 describe('ThreadExecutor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('stream 只接收 threadId/message，并委托底层 AgentExecutor.stream', async () => {
     const request = makeRequest();
-    const mockFactory = { createRequest: vi.fn(async () => request) };
-    const mockStream = vi.fn(async function* (): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
+    mocks.createRequest.mockResolvedValue(request);
+    mocks.stream.mockImplementation(async function* (): AsyncGenerator<
+      AgentStreamChunk,
+      AgentExecutionResult,
+      unknown
+    > {
       yield { type: 'text:delta', content: 'hi' };
       return { output: 'hi' };
     });
-
-    vi.mock('../../execution/ThreadExecutionFactory', () => ({
-      ThreadExecutionFactory: { getInstance: () => mockFactory }
-    }));
-    vi.mock('../../AgentExecutor', () => ({
-      agentExecutor: { stream: mockStream, submit: vi.fn(), abort: vi.fn(), getStatus: vi.fn() }
-    }));
 
     const gen = ThreadExecutor.stream('thread-1', 'hello');
     const first = await gen.next();
@@ -35,11 +57,11 @@ describe('ThreadExecutor', () => {
 
     expect(first.value).toMatchObject({ type: 'text:delta', content: 'hi' });
     expect(done.value).toMatchObject({ output: 'hi' });
-    expect(mockFactory.createRequest).toHaveBeenCalledWith({
+    expect(mocks.createRequest).toHaveBeenCalledWith({
       threadId: 'thread-1',
       message: 'hello',
       runtimeType: 'pi-mono'
     });
-    expect(mockStream).toHaveBeenCalledWith(request);
+    expect(mocks.stream).toHaveBeenCalledWith(request);
   });
 });

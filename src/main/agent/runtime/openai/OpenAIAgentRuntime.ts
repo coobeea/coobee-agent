@@ -93,9 +93,10 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         onEvent: (type, data) => {
           pendingRuntimeChunks.push({
             type: type as AgentStreamChunk['type'],
-            content: type === 'compression:start'
-              ? `Compression started: ${data.reason || ''}`
-              : `Compressed ${(data.summarizedSeqs as number[])?.length || 0} messages`,
+            content:
+              type === 'compression:start'
+                ? `Compression started: ${data.reason || ''}`
+                : `Compressed ${(data.summarizedSeqs as number[])?.length || 0} messages`,
             data: data as AgentStreamChunk['data']
           });
         }
@@ -495,7 +496,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
             ? {
                 inputTokens: usage.inputTokens || 0,
                 outputTokens: usage.outputTokens || 0,
-                totalTokens: usage.totalTokens || 0
+                totalTokens: usage.totalTokens || 0,
+                contextWindow: this.options.modelMeta?.contextWindow
               }
             : undefined
         }

@@ -55,6 +55,8 @@ export interface UsageRecord {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** 当前模型上下文窗口大小，保留最后一次 LLM 调用的值 */
+  contextWindow?: number;
 }
 
 export interface ToolCallRecord {
