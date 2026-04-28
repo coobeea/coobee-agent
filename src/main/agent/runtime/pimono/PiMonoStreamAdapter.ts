@@ -306,6 +306,7 @@ export function setupEventSubscription(
             type: 'llm:done',
             content: '',
             data: {
+              responseId: (evt.message as Record<string, unknown>)?.id as string | undefined,
               usage: usage
                 ? {
                     inputTokens: usage.input || usage.inputTokens || 0,
@@ -325,17 +326,26 @@ export function setupEventSubscription(
         onChunk({
           type: 'tool:start',
           content: toolName,
-          data: { toolName, callId: evt.toolCallId }
+          data: { toolName, callId: evt.toolCallId, arguments: evt.args }
         });
         break;
       }
 
       case 'tool_execution_update': {
-        // OpenAI SDK 完全没有对应事件！pi-SDK 独有。
         onChunk({
           type: 'tool:delta',
-          content: JSON.stringify(evt.partialResult),
-          data: { delta: JSON.stringify(evt.partialResult), callId: evt.toolCallId }
+          content:
+            typeof evt.partialResult === 'object' && evt.partialResult?.content
+              ? String(evt.partialResult.content)
+              : JSON.stringify(evt.partialResult),
+          data: {
+            callId: evt.toolCallId,
+            details: {
+              toolName: evt.toolName,
+              args: evt.args,
+              partialResult: evt.partialResult
+            }
+          }
         });
         break;
       }
@@ -371,6 +381,7 @@ export function setupEventSubscription(
       }
 
       // ===== 压缩（SDK 内置！事件名为 compaction_start / compaction_end）=====
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       case 'compaction_start' as any:
         onChunk({
           type: 'compression:start',
@@ -379,6 +390,7 @@ export function setupEventSubscription(
         });
         break;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       case 'compaction_end' as any:
         onChunk({
           type: 'compression:done',
