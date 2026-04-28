@@ -71,6 +71,9 @@ async function executeToolCore(
   const paramsPreview = JSON.stringify(params).slice(0, 200);
   log.info(`[Tool] Start: tool=${def.name}, sessionId=${sessionId}, params=${paramsPreview}`);
 
+  // 退出前检查 abort 信号
+  const aborted = (): boolean => opts.signal?.aborted ?? false;
+
   // === Phase 1.5: prepare_tool_call Hook (Extension 扩展点) ===
   try {
     const { ExtensionManager } = await import('@main/extension');
@@ -116,6 +119,12 @@ async function executeToolCore(
     );
   }
 
+  // 检查 Hook 执行期间是否被取消
+  if (aborted()) {
+    log.info(`[Tool] Aborted after hook: tool=${def.name}, sessionId=${sessionId}`);
+    return { resultText: 'Error: Tool execution cancelled', blocked: false };
+  }
+
   // === Phase 2: sandbox toolPolicy 检查 ===
   try {
     const { isToolAllowed, formatToolBlockedMessage } = await import('../../sandbox');
@@ -152,8 +161,18 @@ async function executeToolCore(
     const gen = def.execute(typedParams, opts.signal, opts.sandboxContext);
     let iterResult = await gen.next();
 
-    // 消费 AsyncGenerator 的增量输出
+    // 消费 AsyncGenerator 的增量输出（每次迭代检查 abort 信号）
     while (!iterResult.done) {
+      if (aborted()) {
+        log.info(`[Tool] Aborted during execution: tool=${def.name}, sessionId=${sessionId}`);
+        try {
+          await gen.return(null as unknown as ToolResult);
+        } catch {
+          /* ignore */
+        }
+        return { resultText: 'Error: Tool execution cancelled', blocked: false };
+      }
+
       const update = iterResult.value;
       if (opts.onUpdate) {
         opts.onUpdate(update);
@@ -208,6 +227,12 @@ async function executeToolCore(
 
   let resultText =
     toolResult.llmContent || (toolResult.success ? 'Success' : `Error: ${toolResult.error?.message || 'unknown'}`);
+
+  // 检查工具执行完成后是否被取消（跳过后续 Hook）
+  if (aborted()) {
+    log.info(`[Tool] Aborted before post-hooks: tool=${def.name}, sessionId=${sessionId}`);
+    return { resultText, blocked: false, rawResult: toolResult };
+  }
 
   // === Phase 4: tool_call_completed + transform_tool_result Hooks ===
   try {
