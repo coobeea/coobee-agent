@@ -350,7 +350,7 @@ export interface AgentRuntimeOptions {
   apiKey: string;
 
   /** API 格式 */
-  apiType: 'openai-compatible' | 'anthropic';
+  apiType: 'openai-compatible' | 'anthropic' | 'google';
 
   /**
    * OpenAI 兼容 API 的 Base URL（由 Builder / 调用方解析后注入）

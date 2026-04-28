@@ -31,7 +31,13 @@ export class AgentRuntimeBuilder {
       apiKey: '',
       apiType: 'openai-compatible',
       maxTurns: 25,
-      baseURL: ''
+      baseURL: '',
+      sessionMode: 'memory',
+      sessionDir: '',
+      provider: '',
+      thinkingLevel: 'medium',
+      compaction: {},
+      modelMeta: {}
     };
   }
 
@@ -207,11 +213,14 @@ export class AgentRuntimeBuilder {
     if (this.options.baseURL) return this.options.baseURL;
     if (this._providerConfig?.baseUrl) return this._providerConfig.baseUrl;
     if (this.resolveApiType() === 'anthropic') {
-      return process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+      const url = process.env.ANTHROPIC_BASE_URL;
+      if (url) return url;
     }
-    return this.options.type === 'pi-mono'
-      ? process.env.VITE_LLM_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-      : process.env.VITE_LLM_BASE_URL || 'https://api.openai.com/v1';
+    const url = process.env.VITE_LLM_BASE_URL;
+    if (url) return url;
+    throw new Error(
+      'Base URL 未配置：请设置 baseURL、Provider baseUrl 或环境变量 ANTHROPIC_BASE_URL / VITE_LLM_BASE_URL'
+    );
   }
 
   private resolveApiType(): AgentRuntimeOptions['apiType'] {
@@ -242,9 +251,6 @@ export class AgentRuntimeBuilder {
       throw new Error(`Unsupported runtime type: ${this.options.type}`);
     }
 
-    if ('initialize' in runtime && typeof runtime.initialize === 'function') {
-      await runtime.initialize();
-    }
     return runtime;
   }
 }
