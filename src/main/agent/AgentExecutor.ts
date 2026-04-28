@@ -25,7 +25,6 @@ import { createLogger } from '@main/common/logger';
 
 const log = createLogger('ai');
 
-import { SessionStatusManager, type SessionStatus } from './runtime/SessionStatusManager';
 import type { AgentRuntime } from './runtime/AgentRuntime';
 import type { AgentMode, AgentRuntimeKind, ExecutionResult, StreamChunk } from './runtime/types';
 import type { ThreadRunStatus } from './threads/types';
@@ -65,8 +64,6 @@ export interface ExecuteRequest {
   maxTurns?: number;
 }
 
-/** 执行状态（从 SessionStatusManager re-export） */
-export type { SessionStatus } from './runtime/SessionStatusManager';
 
 interface RunInputPatch {
   instructions?: string;
@@ -87,7 +84,7 @@ type RuntimeNextResult =
 
 class AgentExecutor {
   /** 活跃会话状态管理 */
-  private sessionStatus = new SessionStatusManager();
+  private activeSessions = new Map<string, { startedAt: number }>();
 
   /** Provider 配置注入器 */
   private providerInjector = new ProviderInjector();
@@ -106,19 +103,19 @@ class AgentExecutor {
   submit(request: ExecuteRequest): { status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string } {
     const { sessionId } = request;
 
-    if (this.sessionStatus.isRunning(sessionId)) {
+    if (this.activeSessions.has(sessionId)) {
       log.warn(`[AgentExecutor] Session busy: ${sessionId}`);
       return { status: 'busy', sessionId };
     }
 
-    this.sessionStatus.register(sessionId);
+    this.activeSessions.set(sessionId, { startedAt: Date.now() });
 
     this.execute(request)
       .catch((error: unknown) => {
         log.error(`[AgentExecutor] Execution failed: sessionId=${sessionId}`, error);
       })
       .finally(() => {
-        this.sessionStatus.unregister(sessionId);
+        this.activeSessions.delete(sessionId);
       });
 
     return { status: 'accepted', sessionId };
@@ -132,28 +129,32 @@ class AgentExecutor {
   async submitAndWait(request: ExecuteRequest): Promise<ExecutionResult> {
     const { sessionId } = request;
 
-    if (this.sessionStatus.isRunning(sessionId)) {
+    if (this.activeSessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} is busy`);
     }
 
-    this.sessionStatus.register(sessionId);
+    this.activeSessions.set(sessionId, { startedAt: Date.now() });
     try {
       return await this.execute(request);
     } finally {
-      this.sessionStatus.unregister(sessionId);
+      this.activeSessions.delete(sessionId);
     }
   }
 
   // ========== 状态查询 ==========
 
   /** 查询 session 状态 */
-  getStatus(sessionId: string): SessionStatus {
-    return this.sessionStatus.getStatus(sessionId);
+  getStatus(sessionId: string): { busy: boolean; startedAt?: number } {
+    const info = this.activeSessions.get(sessionId)
+    return info ? { busy: true, startedAt: info.startedAt } : { busy: false };
   }
 
   /** 获取所有活跃 session */
   getActiveSessions(): Array<{ sessionId: string; startedAt: number }> {
-    return this.sessionStatus.getActiveList();
+    return Array.from(this.activeSessions.entries()).map(([sessionId, info]) => ({
+      sessionId,
+      startedAt: info.startedAt
+    }));
   }
 
   /**
@@ -186,16 +187,16 @@ class AgentExecutor {
   async *stream(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const { sessionId } = request;
 
-    if (this.sessionStatus.isRunning(sessionId)) {
+    if (this.activeSessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} is busy`);
     }
 
-    this.sessionStatus.register(sessionId);
+    this.activeSessions.set(sessionId, { startedAt: Date.now() });
     try {
       const result = yield* this.executePipeline(request);
       return result;
     } finally {
-      this.sessionStatus.unregister(sessionId);
+      this.activeSessions.delete(sessionId);
     }
   }
 

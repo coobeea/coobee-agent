@@ -10,16 +10,20 @@
  * 它负责的公共行为是：
  *   - 固化运行时身份：`id` / `type` / `name` / `options`
  *   - 提供 `stream()` 模板方法
- *   - 在模板方法里统一做快照写入与网络错误重试
+ *   - 在模板方法里统一做上下文快照写入与网络错误重试
  *   - 提供 `run()` 默认实现
  *   - 提供统一 logger
  *
  * 子类只需要关注各自 SDK 的真实执行过程。
  */
 
+import fs from 'fs';
+import path from 'path';
 import type { AgentRuntime } from './AgentRuntime';
 import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types';
-import { saveContextSnapshot } from './ContextSnapshotWriter';
+
+import { createRuntimeLogger } from './RuntimeLogger';
+const log = createRuntimeLogger('runtime:context-snapshot');
 
 // Re-export for backward compatibility
 export { type RuntimeLogger, createRuntimeLogger } from './RuntimeLogger';
@@ -92,7 +96,7 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    * 子类通常不需要覆盖此方法，实现 `doStream()` 即可。
    */
   async *stream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const runtimeOptions = this.options;
+    const options = this.options;
     let attempt = 0;
 
     while (true) {
@@ -106,14 +110,13 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
 
         const result = r.value;
 
-        // 自动写入上下文快照（异步，不阻塞返回）
-        saveContextSnapshot(runtimeOptions, runtimeOptions.type, input, result, result.rawApiRequest).catch(() => {});
+        // 异步写入上下文快照，不阻塞返回
+        AbstractAgentRuntime.writeSnapshot(options, options.type, input, result).catch(() => {});
 
         return result;
       } catch (error: unknown) {
         if (!(error instanceof Error)) throw error;
 
-        // 只有网络/瞬时错误才重试，其余直接抛出
         if (AbstractAgentRuntime.isTransientError(error) && attempt < AbstractAgentRuntime.MaxRetries) {
           const delay = AbstractAgentRuntime.BaseDelayMs * Math.pow(2, attempt);
           attempt++;
@@ -131,13 +134,62 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
     }
   }
 
+  // ========== 上下文快照写入 ==========
+
+  /**
+   * 将当前 LLM 调用的输入/输出写入 context.jsonl
+   *
+   * 写入失败不阻断执行，仅记录警告。
+   */
+  private static async writeSnapshot(
+    options: AgentRuntimeOptions,
+    runtimeType: string,
+    input: string,
+    result: ExecutionResult
+  ): Promise<void> {
+    const contextDir = options.contextDir;
+    if (!contextDir) return;
+
+    try {
+      if (!fs.existsSync(contextDir)) {
+        fs.mkdirSync(contextDir, { recursive: true });
+      }
+
+      const snapshot = {
+        timestamp: new Date().toISOString(),
+        sessionId: options.sessionId || 'unknown',
+        runtime: runtimeType,
+        config: {
+          name: options.name,
+          model: options.model || 'unknown',
+          instructions: options.instructions,
+          ...(options.appendInstructions?.length ? { appendInstructions: options.appendInstructions } : {}),
+          ...(options.skills?.length
+            ? { skills: options.skills.map((s) => ({ name: s.name, description: s.description })) }
+            : {}),
+          ...(options.tools?.length
+            ? { tools: options.tools.map((t) => ({ name: t.name, description: t.description })) }
+            : {})
+        },
+        userMessage: input,
+        output: result.output,
+        ...(result.error ? { error: result.error } : {}),
+        ...(result.toolCalls?.length ? { toolCalls: result.toolCalls } : {}),
+        ...(result.duration !== undefined ? { duration: result.duration } : {}),
+        ...(result.rawApiRequest ? { rawApiRequest: result.rawApiRequest } : {})
+      };
+
+      const filepath = path.join(contextDir, 'context.jsonl');
+      await fs.promises.appendFile(filepath, JSON.stringify(snapshot) + '\n', 'utf-8');
+    } catch (error) {
+      log.warn('[ContextSnapshot] Write failed:', error);
+    }
+  }
+
   // ========== 默认实现：run / lifecycle ==========
 
   /**
    * 非流式执行 — 消费 `stream()` 收集结果
-   *
-   * 通过 `stream()` 模板方法执行，自动继承快照与错误恢复能力。
-   * 子类一般不需要覆盖此方法。
    */
   async run(input: string): Promise<ExecutionResult> {
     const gen = this.stream(input);
