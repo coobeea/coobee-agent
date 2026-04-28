@@ -48,11 +48,11 @@ ChatMessages + MessageItem* + Block* (组件渲染)
 
 ```typescript
 interface StreamChatMessage {
-  id: string;                    // 消息 ID
-  role: 'user' | 'assistant';    // 角色
-  blocks: ContentBlock[];        // 内容块列表
-  status: MessageStatus;         // 消息状态
-  timestamp: number;             // 时间戳
+  id: string; // 消息 ID
+  role: 'user' | 'assistant'; // 角色
+  blocks: ContentBlock[]; // 内容块列表
+  status: MessageStatus; // 消息状态
+  timestamp: number; // 时间戳
 }
 ```
 
@@ -60,9 +60,9 @@ interface StreamChatMessage {
 
 ```typescript
 interface ContentBlock {
-  type: 'text' | 'thinking' | 'tool';  // 块类型
-  text?: string;                        // 文本内容
-  tool?: ToolCall;                      // 工具调用信息
+  type: 'text' | 'thinking' | 'tool'; // 块类型
+  text?: string; // 文本内容
+  tool?: ToolCall; // 工具调用信息
 }
 ```
 
@@ -70,11 +70,11 @@ interface ContentBlock {
 
 ```typescript
 interface ToolCall {
-  name?: string;                    // 工具名称
-  arguments?: string;               // 工具参数
-  result?: string;                  // 工具结果
-  status: ToolCallStatus;           // 状态
-  error?: string;                   // 错误信息
+  name?: string; // 工具名称
+  arguments?: string; // 工具参数
+  result?: string; // 工具结果
+  status: ToolCallStatus; // 状态
+  error?: string; // 错误信息
 }
 ```
 
@@ -99,7 +99,7 @@ const { request } = useGateway();
 const messages = computed(() => chatStore.getThreadMessages(props.threadId));
 const isStreaming = computed(() => {
   const thread = threadsStore.threads.find((t) => t.id === props.threadId);
-  return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
+  return thread?.runStatus === 'running';
 });
 
 // 发送消息
@@ -117,6 +117,7 @@ async function send(content: string): Promise<void> {
 ### 2. 完整示例
 
 参考 `ChatPanel.vue` 的实现，包含：
+
 - ✅ 从全局 store 读取消息（自动响应式）
 - ✅ 发送消息到 Gateway RPC
 - ✅ 加载历史消息
@@ -126,30 +127,36 @@ async function send(content: string): Promise<void> {
 ## 🎨 组件特性
 
 ### ChatMessages
+
 - 自动滚动到底部
 - 空状态提示
 - 流式加载指示器
 
 ### MessageItemUser
+
 - 用户头像
 - 文本内容渲染
 
 ### MessageItemAssistant
+
 - AI 头像
 - 多块内容渲染
 - 错误状态提示
 
 ### BlockText
+
 - 纯文本渲染
 - 支持换行（pre-wrap）
 - 可扩展 Markdown 渲染
 
 ### BlockThinking
+
 - 折叠/展开切换
 - 思考过程展示
 - 淡化样式
 
 ### BlockTool
+
 - 工具名称展示
 - 状态图标（执行中、完成、失败、等待审批）
 - 参数展示（代码块样式）
@@ -205,6 +212,7 @@ const html = computed(() => marked.parse(props.text));
 ## 🛡️ 状态管理
 
 ### useChatStore
+
 - **全局管理所有 thread 的消息**
 - 应用启动时自动监听流式消息（通过 gatewaySetup）
 - 自动聚合 StreamMessage → StreamChatMessage
@@ -212,9 +220,10 @@ const html = computed(() => marked.parse(props.text));
 - 自动限制每个 thread 最多 50 条消息
 
 ### useThreadsStore
+
 - **管理 thread 列表和状态**
 - `thread.runStatus` 是执行状态的唯一真相源
-- 前端通过读取 `thread.runStatus` 判断是否正在执行（'running'、'tool-pending'）
+- 前端通过读取 `thread.runStatus` 判断是否正在执行（'running'）
 - 后端直接从文件读取，无内存缓存
 
 ## ⚡ 性能优化

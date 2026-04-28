@@ -24,7 +24,7 @@ import type Router from '@koa/router';
 import { PassThrough } from 'node:stream';
 import { createLogger } from '@main/common/logger';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
-import { threadExecutor } from '@main/agent/ThreadExecutor';
+import { ThreadExecutor } from '@main/agent/ThreadExecutor';
 import type { ApiResponse } from '@shared/api';
 import type { ThreadIndexEntry, ThreadDefinition } from '@main/agent/threads/types';
 
@@ -135,7 +135,7 @@ export function registerChatRoutes(router: Router): void {
       ctx.body = stream;
 
       // 启动 ThreadExecutor：外部只传 threadId + message，内部自动装配 Agent 执行请求
-      const gen = threadExecutor.stream(threadId, body.message);
+      const gen = ThreadExecutor.stream(threadId, body.message);
 
       // 异步处理流
       (async () => {

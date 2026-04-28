@@ -9,7 +9,7 @@
  *   - threadId = sessionId（统一标识，workspace 目录以此命名）
  *   - 每个 Thread 绑定一个 agentId（哪个智能体在处理）
  *   - status 表示会话状态：active / archived / deleted
- *   - runStatus 跟踪运行时详细状态（idle / running / tool-pending 等）
+ *   - runStatus 跟踪运行时状态（idle / running / completed / error）
  *   - 文件存储，重启后保留
  */
 
@@ -18,7 +18,7 @@ import type { AgentMode } from '../runtime/types';
 // ==================== Thread 运行时状态 ====================
 
 /** Thread 运行时状态（跟踪当前执行进度） */
-export type ThreadRunStatus = 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
+export type ThreadRunStatus = 'idle' | 'running' | 'completed' | 'error';
 
 // ==================== Thread 定义 ====================
 

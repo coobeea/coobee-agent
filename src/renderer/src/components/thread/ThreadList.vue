@@ -76,7 +76,7 @@ const groupedThreads = computed<ThreadGroup[]>(() => {
 /** 检查任务是否正在执行 */
 function isThreadStreaming(threadId: string): boolean {
   const thread = threadsStore.threads.find((t) => t.id === threadId);
-  return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
+  return thread?.runStatus === 'running';
 }
 
 /** 格式化相对时间 */

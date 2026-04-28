@@ -14,7 +14,7 @@ export interface ThreadEntry {
   agentId: string;
   agentName?: string;
   status: 'active' | 'archived' | 'deleted';
-  runStatus: 'idle' | 'running' | 'tool-pending' | 'completed' | 'error';
+  runStatus: 'idle' | 'running' | 'completed' | 'error';
   createdAt: string;
   updatedAt: string;
   workspacePath: string;

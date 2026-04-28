@@ -1,40 +1,34 @@
 /**
  * ThreadWaker 集成测试
  *
- * 验证 Thread 恢复路径通过 ThreadExecutor 复用正常执行入口。
+ * 验证启动恢复逻辑直接扫描 ThreadStore，并通过 ThreadExecutor 提交恢复消息。
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
+  const logger = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
+  };
   const threadStore = {
-    get: vi.fn(),
-    list: vi.fn(),
-    update: vi.fn()
+    listAsync: vi.fn()
   };
   const threadExecutor = {
     submit: vi.fn()
   };
 
   return {
+    logger,
     threadStore,
     threadExecutor
   };
 });
 
 vi.mock('@main/common/logger', () => ({
-  log: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn()
-  },
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn()
-  })
+  createLogger: () => mocks.logger
 }));
 
 vi.mock('../ThreadStore', () => ({
@@ -44,73 +38,92 @@ vi.mock('../ThreadStore', () => ({
 }));
 
 vi.mock('../../ThreadExecutor', () => ({
-  threadExecutor: mocks.threadExecutor
+  ThreadExecutor: { submit: mocks.threadExecutor.submit }
 }));
 
-import { ThreadWaker } from '../ThreadWaker';
+import { recoverPendingThreads } from '../ThreadWaker';
 
-type PrivateThreadWaker = {
-  submitResumeMessage(threadId: string, message: string): Promise<void>;
-  handleRestartRecovery(threadId: string): Promise<void>;
-};
+function thread(id: string, runStatus: string, status = 'active'): Record<string, string> {
+  return {
+    id,
+    title: id,
+    agentId: 'agent-1',
+    status,
+    runStatus,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    workspacePath: `/tmp/${id}`,
+    agentHomePath: `/tmp/agents/agent-1`
+  };
+}
 
-describe('ThreadWaker 集成测试', () => {
+describe('ThreadWaker 启动恢复', () => {
   beforeEach(() => {
-    ThreadWaker.resetInstance();
     vi.clearAllMocks();
-    mocks.threadStore.get.mockResolvedValue({
-      id: 'thread-1',
-      agentId: 'agent-1',
-      status: 'active',
-      runStatus: 'running'
-    });
-    mocks.threadStore.list.mockResolvedValue([]);
-    mocks.threadStore.update.mockResolvedValue(undefined);
-    mocks.threadExecutor.submit.mockReturnValue({ status: 'accepted', sessionId: 'thread-1' });
+    mocks.threadStore.listAsync.mockResolvedValue([]);
+    mocks.threadExecutor.submit.mockResolvedValue({ status: 'accepted', sessionId: 'thread-1' });
   });
 
-  it('恢复提交应该通过 ThreadExecutor 提交 threadId/message', async () => {
-    const waker = ThreadWaker.getInstance() as unknown as PrivateThreadWaker;
+  it('无 pending threads 时不提交恢复消息', async () => {
+    mocks.threadStore.listAsync.mockResolvedValue([
+      thread('idle-thread', 'idle'),
+      thread('completed-thread', 'completed'),
+      thread('deleted-running-thread', 'running', 'deleted')
+    ]);
 
-    await waker.submitResumeMessage('thread-1', 'resume message');
-
-    expect(mocks.threadExecutor.submit).toHaveBeenCalledWith('thread-1', 'resume message');
-  });
-
-  it('恢复提交失败时不应该抛出', async () => {
-    mocks.threadExecutor.submit.mockRejectedValueOnce(new Error('Agent not found'));
-    const waker = ThreadWaker.getInstance() as unknown as PrivateThreadWaker;
-
-    await expect(waker.submitResumeMessage('thread-1', 'resume message')).resolves.toBeUndefined();
-  });
-
-  it('重启恢复只处理 running / tool-pending 状态', async () => {
-    const waker = ThreadWaker.getInstance() as unknown as PrivateThreadWaker;
-
-    await waker.handleRestartRecovery('thread-1');
-
-    expect(mocks.threadExecutor.submit).toHaveBeenCalledOnce();
-  });
-
-  it('idle 状态不应该触发恢复提交', async () => {
-    mocks.threadStore.get.mockResolvedValueOnce({
-      id: 'thread-1',
-      agentId: 'agent-1',
-      status: 'active',
-      runStatus: 'idle'
-    });
-    const waker = ThreadWaker.getInstance() as unknown as PrivateThreadWaker;
-
-    await waker.handleRestartRecovery('thread-1');
+    await recoverPendingThreads();
 
     expect(mocks.threadExecutor.submit).not.toHaveBeenCalled();
+    expect(mocks.logger.info).toHaveBeenCalledWith('[ThreadWaker] No pending threads to recover on startup');
   });
 
-  it('submit 返回 busy 时不应该抛错', async () => {
-    mocks.threadExecutor.submit.mockReturnValueOnce({ status: 'busy', sessionId: 'thread-1' });
-    const waker = ThreadWaker.getInstance() as unknown as PrivateThreadWaker;
+  it('只恢复 active 且 running 的 threads', async () => {
+    mocks.threadStore.listAsync.mockResolvedValue([
+      thread('running-thread', 'running'),
+      thread('idle-thread', 'idle'),
+      thread('archived-running-thread', 'running', 'archived')
+    ]);
 
-    await expect(waker.submitResumeMessage('thread-1', 'resume message')).resolves.toBeUndefined();
-    expect(mocks.threadExecutor.submit).toHaveBeenCalledOnce();
+    await recoverPendingThreads();
+
+    expect(mocks.threadExecutor.submit).toHaveBeenCalledTimes(1);
+    expect(mocks.threadExecutor.submit).toHaveBeenNthCalledWith(
+      1,
+      'running-thread',
+      expect.stringContaining('[System]')
+    );
+  });
+
+  it('submit 返回 busy 时记录 warn 且不抛出', async () => {
+    mocks.threadStore.listAsync.mockResolvedValue([thread('busy-thread', 'running')]);
+    mocks.threadExecutor.submit.mockResolvedValueOnce({ status: 'busy', sessionId: 'busy-thread' });
+
+    await expect(recoverPendingThreads()).resolves.toBeUndefined();
+
+    expect(mocks.logger.warn).toHaveBeenCalledWith('[ThreadWaker] Thread busy-thread is busy, skipping recovery');
+  });
+
+  it('单个 thread submit 失败不影响其他 thread 恢复', async () => {
+    mocks.threadStore.listAsync.mockResolvedValue([thread('bad-thread', 'running'), thread('good-thread', 'running')]);
+    mocks.threadExecutor.submit
+      .mockRejectedValueOnce(new Error('Agent not found'))
+      .mockResolvedValueOnce({ status: 'accepted', sessionId: 'good-thread' });
+
+    await recoverPendingThreads();
+
+    expect(mocks.threadExecutor.submit).toHaveBeenCalledTimes(2);
+    expect(mocks.logger.error).toHaveBeenCalledWith(
+      '[ThreadWaker] Failed to submit resume message for bad-thread:',
+      expect.any(Error)
+    );
+    expect(mocks.logger.info).toHaveBeenCalledWith('[ThreadWaker] Thread good-thread resumed successfully');
+  });
+
+  it('ThreadStore listAsync 失败时记录 error 且不抛出', async () => {
+    mocks.threadStore.listAsync.mockRejectedValueOnce(new Error('disk error'));
+
+    await expect(recoverPendingThreads()).resolves.toBeUndefined();
+
+    expect(mocks.logger.error).toHaveBeenCalledWith('[ThreadWaker] Startup recovery scan failed:', expect.any(Error));
   });
 });

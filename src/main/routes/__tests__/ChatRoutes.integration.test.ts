@@ -63,8 +63,8 @@ vi.mock('electron', () => ({
   }
 }));
 
-vi.mock('@main/agent/execution', () => ({
-  threadExecutor: {
+vi.mock('@main/agent/ThreadExecutor', () => ({
+  ThreadExecutor: {
     stream: vi.fn(() =>
       (async function* () {
         yield { type: 'text:delta', content: '测试成功' };

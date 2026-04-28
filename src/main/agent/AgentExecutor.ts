@@ -335,8 +335,6 @@ class AgentExecutor {
   private updateCheckpoint(sessionId: string, chunk: AgentStreamChunk): void {
     switch (chunk.type) {
       case 'tool:start':
-        this.updateSessionStatus(sessionId, 'tool-pending');
-        break;
       case 'tool:done':
         this.updateSessionStatus(sessionId, 'running');
         break;

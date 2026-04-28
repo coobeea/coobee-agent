@@ -95,6 +95,9 @@ export const ReadyAgentSystemHook: LifecycleHook = {
       const extIds = registry.getExtensionIds();
       const totalTools = builtinTools.length + extToolCount;
       log.info(`[ReadyAgentSystemHook] Agent system initialized — ${totalTools} tools, ${extIds.length} extensions`);
+
+      const { recoverPendingThreads } = await import('@main/agent/threads/ThreadWaker');
+      await recoverPendingThreads();
     } catch (error) {
       log.error('[ReadyAgentSystemHook] Failed to initialize Agent system:', error);
     }

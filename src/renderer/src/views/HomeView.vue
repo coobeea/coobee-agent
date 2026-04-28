@@ -27,9 +27,7 @@ const recentThreads = computed(() => threadsStore.threads.slice(0, 4));
 const agentCount = computed(() => agentsStore.agents.length);
 const threadCount = computed(() => threadsStore.threads.length);
 const runningThreadCount = computed(
-  () =>
-    threadsStore.threads.filter((thread) => thread.runStatus === 'running' || thread.runStatus === 'tool-pending')
-      .length
+  () => threadsStore.threads.filter((thread) => thread.runStatus === 'running').length
 );
 
 const greeting = computed(() => {

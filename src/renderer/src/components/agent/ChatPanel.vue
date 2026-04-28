@@ -45,7 +45,7 @@ const agentDisplayName = ref<string>('');
 const messages = computed(() => chatStore.getThreadMessages(props.threadId));
 const isStreaming = computed(() => {
   const thread = threadsStore.threads.find((t) => t.id === props.threadId);
-  return thread?.runStatus === 'running' || thread?.runStatus === 'tool-pending';
+  return thread?.runStatus === 'running';
 });
 
 // 获取当前 thread 信息
