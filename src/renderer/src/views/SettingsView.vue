@@ -2,10 +2,11 @@
 /**
  * SettingsView — 设置页面容器
  *
- * 采用更克制的侧栏式布局，突出分组、层次和选中态。
+ * 采用分组式设置导航，便于后续扩展外观、语言、语音等设置项。
  */
 
-import { computed, ref, markRaw } from 'vue';
+import { computed, markRaw, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import ProviderSettings from './settings/ProviderSettings.vue';
 import BasicSettings from './settings/BasicSettings.vue';
 import AboutView from './settings/AboutView.vue';
@@ -18,101 +19,146 @@ type MenuItem = {
   component: ReturnType<typeof markRaw>;
 };
 
-const menuItems: MenuItem[] = [
+type MenuGroup = {
+  id: string;
+  label: string;
+  items: MenuItem[];
+};
+
+const menuGroups: MenuGroup[] = [
   {
-    id: 'basic',
-    label: '基本配置',
-    description: '默认模型、启动与基础行为',
-    icon: 'i-carbon-settings',
-    component: markRaw(BasicSettings)
+    id: 'general',
+    label: '通用',
+    items: [
+      {
+        id: 'basic',
+        label: '基本设置',
+        description: '默认模型、应用偏好',
+        icon: 'i-carbon-settings',
+        component: markRaw(BasicSettings)
+      }
+    ]
   },
   {
-    id: 'providers',
-    label: '模型控制',
-    description: '供应商、连通性与模型选择',
-    icon: 'i-carbon-machine-learning-model',
-    component: markRaw(ProviderSettings)
+    id: 'model',
+    label: '智能能力',
+    items: [
+      {
+        id: 'providers',
+        label: '模型供应商',
+        description: '连接、密钥、模型能力',
+        icon: 'i-carbon-machine-learning-model',
+        component: markRaw(ProviderSettings)
+      }
+    ]
   },
   {
-    id: 'about',
-    label: '关于我们',
-    description: '版本信息与项目说明',
-    icon: 'i-carbon-information',
-    component: markRaw(AboutView)
+    id: 'system',
+    label: '系统',
+    items: [
+      {
+        id: 'about',
+        label: '关于',
+        description: '版本信息、项目说明',
+        icon: 'i-carbon-information',
+        component: markRaw(AboutView)
+      }
+    ]
   }
 ];
 
-const activeMenu = ref(menuItems[0].id);
-const activeComponent = computed(
-  () => menuItems.find((item) => item.id === activeMenu.value)?.component ?? menuItems[0].component
-);
+const route = useRoute();
+const router = useRouter();
+const menuItems = menuGroups.flatMap((group) => group.items);
+const defaultMenuItem = menuItems[0] as MenuItem;
+
+function isValidMenuId(menuId: unknown): menuId is string {
+  return typeof menuId === 'string' && menuItems.some((item) => item.id === menuId);
+}
+
+const activeMenu = ref(isValidMenuId(route.query.section) ? route.query.section : defaultMenuItem.id);
+const activeItem = computed(() => menuItems.find((item) => item.id === activeMenu.value) ?? defaultMenuItem);
+const activeComponent = computed(() => activeItem.value.component);
 
 function selectMenu(menuId: string): void {
   activeMenu.value = menuId;
+  void router.replace({
+    query: {
+      ...route.query,
+      section: menuId
+    }
+  });
 }
+
+watch(
+  () => route.query.section,
+  (section) => {
+    if (isValidMenuId(section)) {
+      activeMenu.value = section;
+    }
+  }
+);
 </script>
 
 <template>
   <div class="flex h-full bg-background text-foreground">
     <aside
-      class="flex w-[280px] shrink-0 flex-col border-r border-border/60 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/90">
-      <div class="border-b border-border/40 px-6 pb-5 pt-6">
-        <div class="flex items-center gap-3">
-          <div
-            class="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10">
-            <span class="i-carbon-settings text-xl"></span>
-          </div>
+      class="flex w-[236px] shrink-0 flex-col border-r border-border/60 bg-surface/95 supports-[backdrop-filter]:bg-surface/90">
+      <div class="border-b border-border/40 px-4 py-4">
+        <div class="flex items-center gap-2.5">
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <span class="i-carbon-settings-adjust inline-block h-4 w-4"></span>
+          </span>
           <div class="min-w-0">
-            <h1 class="truncate text-[15px] font-semibold tracking-tight text-foreground">系统设置</h1>
-            <p class="mt-1 text-xs text-muted-foreground">统一管理当前应用配置</p>
+            <h1 class="truncate text-sm font-semibold tracking-tight text-foreground">系统设置</h1>
+            <p class="mt-0.5 text-[11px] leading-4 text-muted-foreground">配置全局行为与能力</p>
           </div>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto px-4 py-5">
-        <div class="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
-          常规
-        </div>
+      <nav class="flex-1 overflow-y-auto px-3 py-3">
+        <div v-for="group in menuGroups" :key="group.id" class="mb-4 last:mb-0">
+          <div class="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/70">
+            {{ group.label }}
+          </div>
 
-        <div class="space-y-2">
-          <button
-            v-for="item in menuItems"
-            :key="item.id"
-            :class="[
-              'group relative flex w-full items-start gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left transition-all duration-200',
-              activeMenu === item.id
-                ? 'border-border bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                : 'border-transparent bg-transparent hover:border-border/60 hover:bg-background/60 hover:shadow-sm'
-            ]"
-            @click="selectMenu(item.id)">
-            <span
+          <div class="grid gap-1">
+            <button
+              v-for="item in group.items"
+              :key="item.id"
               :class="[
-                'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ring-1',
+                'group relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors',
                 activeMenu === item.id
-                  ? 'bg-primary text-primary-foreground ring-primary/10'
-                  : 'bg-muted/70 text-muted-foreground ring-border/50 group-hover:bg-muted group-hover:text-foreground'
-              ]">
-              <span :class="[item.icon, 'inline-block h-4 w-4']"></span>
-            </span>
-
-            <span v-if="activeMenu === item.id" class="absolute inset-y-3 left-0 w-1 rounded-r-full bg-primary"></span>
-
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-semibold tracking-tight text-foreground">
-                {{ item.label }}
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-background/80 hover:text-foreground'
+              ]"
+              type="button"
+              @click="selectMenu(item.id)">
+              <span
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors"
+                :class="activeMenu === item.id ? 'bg-primary-foreground/15' : 'bg-background/70 group-hover:bg-muted'">
+                <span :class="[item.icon, 'inline-block h-3.5 w-3.5']"></span>
               </span>
-              <span class="mt-1 block text-xs leading-5 text-muted-foreground">
-                {{ item.description }}
+
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-[13px] font-semibold leading-5">
+                  {{ item.label }}
+                </span>
+                <span
+                  class="block truncate text-[11px] leading-4"
+                  :class="activeMenu === item.id ? 'text-primary-foreground/72' : 'text-muted-foreground'">
+                  {{ item.description }}
+                </span>
               </span>
-            </span>
-          </button>
+            </button>
+          </div>
         </div>
-      </div>
+      </nav>
     </aside>
 
-    <section class="flex-1 overflow-hidden bg-background">
+    <section class="min-w-0 flex-1 overflow-hidden bg-background">
       <transition name="fade-slide" mode="out-in">
-        <component :is="activeComponent" />
+        <component :is="activeComponent" :key="activeItem.id" />
       </transition>
     </section>
   </div>

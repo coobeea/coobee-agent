@@ -15,26 +15,20 @@
       official: 'https://www.aliyun.com/product/bailian',
       apiKey: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
       docs: 'https://help.aliyun.com/zh/model-studio/getting-started/',
-      models: 'https://bailian.console.aliyun.com/?tab=model#/model-market',
+      models: 'https://bailian.console.aliyun.com/?tab=model#/model-market'
     },
     models: [
       {
         id: 'qwen3.5-plus',
         name: 'Qwen3.5 Plus',
-        contextWindow: 1000000,
-        maxInputTokens: 983616,
+        contextWindow: 262144,
+        maxInputTokens: 258048,
         maxOutputTokens: 65536,
         maxThinkingTokens: 81920,
         reasoning: true,
         functionCalling: true,
         webSearch: true,
-        features: [
-          '上下文1M',
-          '输出64k',
-          '思考模型',
-          'MoE 397B/17B',
-          '联网搜索',
-        ],
+        features: ['上下文256k', '输出64k', '思考模型', 'MoE 397B/17B', '联网搜索']
       },
       {
         id: 'qwen3-max',
@@ -46,13 +40,7 @@
         reasoning: true,
         functionCalling: true,
         webSearch: true,
-        features: [
-          '上下文256k',
-          '输出64k',
-          '思考模型',
-          '工具调用',
-          '联网搜索',
-        ],
+        features: ['上下文256k', '输出64k', '思考模型', '工具调用', '联网搜索']
       },
       {
         id: 'qwen-plus-latest',
@@ -62,12 +50,7 @@
         maxOutputTokens: 65536,
         maxThinkingTokens: 81920,
         reasoning: true,
-        features: [
-          '上下文1M',
-          '输出64k',
-          '思考模型',
-          '性价比高',
-        ],
+        features: ['上下文1M', '输出64k', '思考模型', '性价比高']
       },
       {
         id: 'qwen-max',
@@ -75,10 +58,7 @@
         contextWindow: 32768,
         maxInputTokens: 30720,
         maxOutputTokens: 8192,
-        features: [
-          '上下文32k',
-          '输出8k',
-        ],
+        features: ['上下文32k', '输出8k']
       },
       {
         id: 'qwen-turbo-latest',
@@ -87,12 +67,7 @@
         maxInputTokens: 1000000,
         maxOutputTokens: 8192,
         reasoning: true,
-        features: [
-          '上下文1M',
-          '极速',
-          '思考模型',
-          '低成本',
-        ],
+        features: ['上下文1M', '极速', '思考模型', '低成本']
       },
       {
         id: 'qwen-vl-plus',
@@ -101,10 +76,7 @@
         maxInputTokens: 131072,
         maxOutputTokens: 8192,
         vision: true,
-        features: [
-          '上下文128k',
-          '视觉理解',
-        ],
+        features: ['上下文128k', '视觉理解']
       },
       {
         id: 'qwen-coder-plus',
@@ -113,10 +85,7 @@
         maxInputTokens: 131072,
         maxOutputTokens: 8192,
         functionCalling: true,
-        features: [
-          '上下文128k',
-          '代码生成',
-        ],
+        features: ['上下文128k', '代码生成']
       },
       {
         id: 'text-embedding-v4',
@@ -124,23 +93,9 @@
         contextWindow: 8192,
         maxInputTokens: 8192,
         supportsEmbedding: true,
-        embeddingDimensions: [
-          2048,
-          1536,
-          1024,
-          768,
-          512,
-          256,
-          128,
-          64,
-        ],
+        embeddingDimensions: [2048, 1536, 1024, 768, 512, 256, 128, 64],
         defaultDimension: 1024,
-        features: [
-          '向量化',
-          '100+语种',
-          '灵活维度',
-          '0.0005元/千Token',
-        ],
+        features: ['向量化', '100+语种', '灵活维度', '0.0005元/千Token']
       },
       {
         id: 'text-embedding-v3',
@@ -148,20 +103,9 @@
         contextWindow: 8192,
         maxInputTokens: 8192,
         supportsEmbedding: true,
-        embeddingDimensions: [
-          1024,
-          768,
-          512,
-          256,
-          128,
-          64,
-        ],
+        embeddingDimensions: [1024, 768, 512, 256, 128, 64],
         defaultDimension: 1024,
-        features: [
-          '向量化',
-          '50+语种',
-          '灵活维度',
-        ],
+        features: ['向量化', '50+语种', '灵活维度']
       },
       {
         id: 'text-embedding-v2',
@@ -169,17 +113,11 @@
         contextWindow: 8192,
         maxInputTokens: 8192,
         supportsEmbedding: true,
-        embeddingDimensions: [
-          1536,
-        ],
+        embeddingDimensions: [1536],
         defaultDimension: 1536,
-        features: [
-          '向量化',
-          '10+语种',
-          '0.0007元/千Token',
-        ],
-      },
-    ],
+        features: ['向量化', '10+语种', '0.0007元/千Token']
+      }
+    ]
   },
   'dashscope-coding': {
     id: 'dashscope-coding',
@@ -194,26 +132,20 @@
       official: 'https://www.aliyun.com/product/bailian',
       apiKey: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
       docs: 'https://help.aliyun.com/zh/model-studio/coding-plan',
-      models: 'https://bailian.console.aliyun.com/?tab=doc#/doc/?type=model&url=3005961',
+      models: 'https://bailian.console.aliyun.com/?tab=doc#/doc/?type=model&url=3005961'
     },
     models: [
       {
         id: 'qwen3.5-plus',
         name: 'Qwen3.5 Plus',
-        contextWindow: 1000000,
-        maxInputTokens: 983616,
+        contextWindow: 262144,
+        maxInputTokens: 258048,
         maxOutputTokens: 65536,
         maxThinkingTokens: 81920,
         reasoning: true,
         functionCalling: true,
         webSearch: true,
-        features: [
-          '订阅套餐',
-          '上下文1M',
-          '输出64k',
-          '思考模型',
-          'Coding Plan',
-        ],
+        features: ['订阅套餐', '上下文256k', '输出64k', '思考模型', 'Coding Plan']
       },
       {
         id: 'qwen3-max-2026-01-23',
@@ -225,13 +157,7 @@
         reasoning: true,
         functionCalling: true,
         webSearch: true,
-        features: [
-          '订阅套餐',
-          '上下文256k',
-          '输出64k',
-          '思考模型',
-          'Coding Plan',
-        ],
+        features: ['订阅套餐', '上下文256k', '输出64k', '思考模型', 'Coding Plan']
       },
       {
         id: 'qwen3-coder-next',
@@ -240,12 +166,7 @@
         maxInputTokens: 131072,
         maxOutputTokens: 8192,
         functionCalling: true,
-        features: [
-          '订阅套餐',
-          '上下文128k',
-          '代码旗舰',
-          'Coding Plan',
-        ],
+        features: ['订阅套餐', '上下文128k', '代码旗舰', 'Coding Plan']
       },
       {
         id: 'qwen3-coder-plus',
@@ -254,12 +175,7 @@
         maxInputTokens: 131072,
         maxOutputTokens: 8192,
         functionCalling: true,
-        features: [
-          '订阅套餐',
-          '上下文128k',
-          '代码生成',
-          'Coding Plan',
-        ],
+        features: ['订阅套餐', '上下文128k', '代码生成', 'Coding Plan']
       },
       {
         id: 'glm-4.7',
@@ -268,13 +184,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 16384,
         reasoning: true,
-        features: [
-          '订阅套餐',
-          '上下文128k',
-          '输出16k',
-          '推理',
-          'Coding Plan',
-        ],
+        features: ['订阅套餐', '上下文128k', '输出16k', '推理', 'Coding Plan']
       },
       {
         id: 'kimi-k2.5',
@@ -282,14 +192,9 @@
         contextWindow: 262144,
         maxInputTokens: 262144,
         maxOutputTokens: 65536,
-        features: [
-          '订阅套餐',
-          '上下文256k',
-          '输出64k',
-          'Coding Plan',
-        ],
-      },
-    ],
+        features: ['订阅套餐', '上下文256k', '输出64k', 'Coding Plan']
+      }
+    ]
   },
   'volcengine-plan': {
     id: 'volcengine-plan',
@@ -304,7 +209,7 @@
       official: 'https://console.volcengine.com/ark/',
       apiKey: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
       docs: 'https://www.volcengine.com/docs/82379/1925114',
-      models: 'https://www.volcengine.com/docs/82379/1925115',
+      models: 'https://www.volcengine.com/docs/82379/1925115'
     },
     models: [
       {
@@ -315,12 +220,7 @@
         maxOutputTokens: 65536,
         reasoning: true,
         functionCalling: true,
-        features: [
-          'Coding Plan',
-          '自动切换最优模型',
-          '推理',
-          '代码旗舰',
-        ],
+        features: ['Coding Plan', '自动切换最优模型', '推理', '代码旗舰']
       },
       {
         id: 'doubao-seed-2.0-code',
@@ -330,12 +230,7 @@
         maxOutputTokens: 65536,
         reasoning: true,
         functionCalling: true,
-        features: [
-          'Coding Plan',
-          '上下文128k',
-          '输出64k',
-          '代码专用',
-        ],
+        features: ['Coding Plan', '上下文128k', '输出64k', '代码专用']
       },
       {
         id: 'doubao-seed-2.0-pro',
@@ -344,12 +239,7 @@
         maxInputTokens: 131072,
         maxOutputTokens: 65536,
         reasoning: true,
-        features: [
-          'Coding Plan',
-          '上下文128k',
-          '输出64k',
-          '通用旗舰',
-        ],
+        features: ['Coding Plan', '上下文128k', '输出64k', '通用旗舰']
       },
       {
         id: 'doubao-seed-2.0-lite',
@@ -357,12 +247,7 @@
         contextWindow: 131072,
         maxInputTokens: 131072,
         maxOutputTokens: 16384,
-        features: [
-          'Coding Plan',
-          '上下文128k',
-          '输出16k',
-          '轻量快速',
-        ],
+        features: ['Coding Plan', '上下文128k', '输出16k', '轻量快速']
       },
       {
         id: 'doubao-seed-code',
@@ -371,12 +256,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 65536,
         functionCalling: true,
-        features: [
-          'Coding Plan',
-          '上下文128k',
-          '输出64k',
-          '代码生成',
-        ],
+        features: ['Coding Plan', '上下文128k', '输出64k', '代码生成']
       },
       {
         id: 'minimax-m2.5',
@@ -385,11 +265,7 @@
         maxInputTokens: 204800,
         maxOutputTokens: 16384,
         functionCalling: true,
-        features: [
-          'Coding Plan',
-          '上下文200k',
-          '工具调用',
-        ],
+        features: ['Coding Plan', '上下文200k', '工具调用']
       },
       {
         id: 'glm-4.7',
@@ -398,12 +274,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 16384,
         reasoning: true,
-        features: [
-          'Coding Plan',
-          '上下文128k',
-          '输出16k',
-          '推理',
-        ],
+        features: ['Coding Plan', '上下文128k', '输出16k', '推理']
       },
       {
         id: 'deepseek-v3.2',
@@ -412,12 +283,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 65536,
         reasoning: true,
-        features: [
-          'Coding Plan',
-          '上下文128k',
-          '输出64k',
-          '深度推理',
-        ],
+        features: ['Coding Plan', '上下文128k', '输出64k', '深度推理']
       },
       {
         id: 'kimi-k2.5',
@@ -425,13 +291,9 @@
         contextWindow: 262144,
         maxInputTokens: 262144,
         maxOutputTokens: 65536,
-        features: [
-          'Coding Plan',
-          '上下文256k',
-          '输出64k',
-        ],
-      },
-    ],
+        features: ['Coding Plan', '上下文256k', '输出64k']
+      }
+    ]
   },
   deepseek: {
     id: 'deepseek',
@@ -445,7 +307,7 @@
       official: 'https://deepseek.com/',
       apiKey: 'https://platform.deepseek.com/api_keys',
       docs: 'https://platform.deepseek.com/api-docs/',
-      models: 'https://platform.deepseek.com/api-docs/',
+      models: 'https://platform.deepseek.com/api-docs/'
     },
     models: [
       {
@@ -455,11 +317,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 8192,
         functionCalling: true,
-        features: [
-          '上下文128k',
-          '输出8k',
-          '工具调用',
-        ],
+        features: ['上下文128k', '输出8k', '工具调用']
       },
       {
         id: 'deepseek-reasoner',
@@ -468,13 +326,9 @@
         maxInputTokens: 128000,
         maxOutputTokens: 65536,
         reasoning: true,
-        features: [
-          '上下文128k',
-          '输出64k',
-          '深度推理',
-        ],
-      },
-    ],
+        features: ['上下文128k', '输出64k', '深度推理']
+      }
+    ]
   },
   minimax: {
     id: 'minimax',
@@ -489,7 +343,7 @@
       official: 'https://platform.minimaxi.com/',
       apiKey: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
       docs: 'https://platform.minimaxi.com/docs/guides/quickstart',
-      models: 'https://platform.minimaxi.com/docs/api-reference/api-overview',
+      models: 'https://platform.minimaxi.com/docs/api-reference/api-overview'
     },
     models: [
       {
@@ -499,11 +353,7 @@
         maxInputTokens: 204800,
         maxOutputTokens: 16384,
         functionCalling: true,
-        features: [
-          '上下文200k',
-          '~60tps',
-          '工具调用',
-        ],
+        features: ['上下文200k', '~60tps', '工具调用']
       },
       {
         id: 'MiniMax-M2.5-highspeed',
@@ -511,11 +361,7 @@
         contextWindow: 204800,
         maxInputTokens: 204800,
         maxOutputTokens: 16384,
-        features: [
-          '上下文200k',
-          '~100tps',
-          '极速',
-        ],
+        features: ['上下文200k', '~100tps', '极速']
       },
       {
         id: 'MiniMax-M2.1',
@@ -524,11 +370,7 @@
         maxInputTokens: 204800,
         maxOutputTokens: 16384,
         functionCalling: true,
-        features: [
-          '上下文200k',
-          '多语言编程',
-          '工具调用',
-        ],
+        features: ['上下文200k', '多语言编程', '工具调用']
       },
       {
         id: 'MiniMax-M2',
@@ -537,13 +379,9 @@
         maxInputTokens: 204800,
         maxOutputTokens: 16384,
         functionCalling: true,
-        features: [
-          '上下文200k',
-          'Agent工作流',
-          '工具调用',
-        ],
-      },
-    ],
+        features: ['上下文200k', 'Agent工作流', '工具调用']
+      }
+    ]
   },
   doubao: {
     id: 'doubao',
@@ -556,7 +394,7 @@
     websites: {
       official: 'https://console.volcengine.com/ark/',
       apiKey: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
-      docs: 'https://www.volcengine.com/docs/82379/1182403',
+      docs: 'https://www.volcengine.com/docs/82379/1182403'
     },
     models: [
       {
@@ -565,10 +403,7 @@
         contextWindow: 32768,
         maxInputTokens: 32768,
         maxOutputTokens: 4096,
-        features: [
-          '上下文32k',
-          '输出4k',
-        ],
+        features: ['上下文32k', '输出4k']
       },
       {
         id: 'doubao-1-5-pro-256k-250115',
@@ -576,11 +411,7 @@
         contextWindow: 262144,
         maxInputTokens: 262144,
         maxOutputTokens: 4096,
-        features: [
-          '上下文256k',
-          '输出4k',
-          '长文本',
-        ],
+        features: ['上下文256k', '输出4k', '长文本']
       },
       {
         id: 'doubao-1-5-vision-pro-32k-250115',
@@ -589,10 +420,7 @@
         maxInputTokens: 32768,
         maxOutputTokens: 4096,
         vision: true,
-        features: [
-          '上下文32k',
-          '视觉理解',
-        ],
+        features: ['上下文32k', '视觉理解']
       },
       {
         id: 'deepseek-r1-250120',
@@ -601,11 +429,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 65536,
         reasoning: true,
-        features: [
-          '上下文128k',
-          '输出64k',
-          '深度推理',
-        ],
+        features: ['上下文128k', '输出64k', '深度推理']
       },
       {
         id: 'deepseek-v3-250324',
@@ -613,12 +437,9 @@
         contextWindow: 128000,
         maxInputTokens: 128000,
         maxOutputTokens: 8192,
-        features: [
-          '上下文128k',
-          '输出8k',
-        ],
-      },
-    ],
+        features: ['上下文128k', '输出8k']
+      }
+    ]
   },
   moonshot: {
     id: 'moonshot',
@@ -631,7 +452,7 @@
     websites: {
       official: 'https://moonshot.ai/',
       apiKey: 'https://platform.moonshot.cn/console/api-keys',
-      docs: 'https://platform.moonshot.cn/docs/',
+      docs: 'https://platform.moonshot.cn/docs/'
     },
     models: [
       {
@@ -640,13 +461,9 @@
         contextWindow: 262144,
         maxInputTokens: 262144,
         maxOutputTokens: 33000,
-        features: [
-          '上下文262k',
-          '输出33k',
-          '自动选型',
-        ],
-      },
-    ],
+        features: ['上下文262k', '输出33k', '自动选型']
+      }
+    ]
   },
   hunyuan: {
     id: 'hunyuan',
@@ -659,7 +476,7 @@
     websites: {
       official: 'https://cloud.tencent.com/product/hunyuan',
       apiKey: 'https://console.cloud.tencent.com/hunyuan/api-key',
-      docs: 'https://cloud.tencent.com/document/product/1729/111007',
+      docs: 'https://cloud.tencent.com/document/product/1729/111007'
     },
     models: [
       {
@@ -669,11 +486,7 @@
         maxInputTokens: 256000,
         maxOutputTokens: 16384,
         reasoning: true,
-        features: [
-          '上下文256k',
-          '自适应思维链',
-          '极速',
-        ],
+        features: ['上下文256k', '自适应思维链', '极速']
       },
       {
         id: 'hunyuan-turbo',
@@ -681,10 +494,7 @@
         contextWindow: 32768,
         maxInputTokens: 32768,
         maxOutputTokens: 4096,
-        features: [
-          '上下文32k',
-          '输出4k',
-        ],
+        features: ['上下文32k', '输出4k']
       },
       {
         id: 'hunyuan-pro',
@@ -692,11 +502,7 @@
         contextWindow: 32768,
         maxInputTokens: 32768,
         maxOutputTokens: 4096,
-        features: [
-          '上下文32k',
-          '输出4k',
-          '高质量',
-        ],
+        features: ['上下文32k', '输出4k', '高质量']
       },
       {
         id: 'hunyuan-vision',
@@ -705,9 +511,7 @@
         maxInputTokens: 8192,
         maxOutputTokens: 4096,
         vision: true,
-        features: [
-          '视觉理解',
-        ],
+        features: ['视觉理解']
       },
       {
         id: 'hunyuan-code',
@@ -715,12 +519,9 @@
         contextWindow: 32768,
         maxInputTokens: 32768,
         maxOutputTokens: 4096,
-        features: [
-          '上下文32k',
-          '代码生成',
-        ],
-      },
-    ],
+        features: ['上下文32k', '代码生成']
+      }
+    ]
   },
   zhipu: {
     id: 'zhipu',
@@ -733,7 +534,7 @@
     websites: {
       official: 'https://open.bigmodel.cn/',
       apiKey: 'https://open.bigmodel.cn/usercenter/apikeys',
-      docs: 'https://open.bigmodel.cn/dev/howuse/introduction',
+      docs: 'https://open.bigmodel.cn/dev/howuse/introduction'
     },
     models: [
       {
@@ -743,11 +544,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 4096,
         functionCalling: true,
-        features: [
-          '上下文128k',
-          '输出4k',
-          '工具调用',
-        ],
+        features: ['上下文128k', '输出4k', '工具调用']
       },
       {
         id: 'glm-z1-airx',
@@ -756,11 +553,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 16384,
         reasoning: true,
-        features: [
-          '上下文128k',
-          '输出16k',
-          '深度推理',
-        ],
+        features: ['上下文128k', '输出16k', '深度推理']
       },
       {
         id: 'glm-z1-flash',
@@ -769,12 +562,7 @@
         maxInputTokens: 128000,
         maxOutputTokens: 16384,
         reasoning: true,
-        features: [
-          '上下文128k',
-          '输出16k',
-          '推理',
-          '极速',
-        ],
+        features: ['上下文128k', '输出16k', '推理', '极速']
       },
       {
         id: 'glm-4v-plus-0111',
@@ -783,10 +571,7 @@
         maxInputTokens: 8192,
         maxOutputTokens: 4096,
         vision: true,
-        features: [
-          '视觉理解',
-          '多模态',
-        ],
+        features: ['视觉理解', '多模态']
       },
       {
         id: 'glm-4-alltools',
@@ -796,13 +581,9 @@
         maxOutputTokens: 4096,
         functionCalling: true,
         webSearch: true,
-        features: [
-          '上下文128k',
-          '全工具调用',
-          '联网搜索',
-        ],
-      },
-    ],
+        features: ['上下文128k', '全工具调用', '联网搜索']
+      }
+    ]
   },
   ollama: {
     id: 'ollama',
@@ -816,7 +597,7 @@
     websites: {
       official: 'https://ollama.com/',
       docs: 'https://github.com/ollama/ollama/tree/main/docs',
-      models: 'https://ollama.com/library',
+      models: 'https://ollama.com/library'
     },
     models: [
       {
@@ -827,73 +608,45 @@
         maxOutputTokens: 8192,
         reasoning: true,
         free: true,
-        features: [
-          '本地已安装',
-          '推理',
-          '9B',
-          '6.6GB',
-        ],
+        features: ['本地已安装', '推理', '9B', '6.6GB']
       },
       {
         id: 'gemma4:e4b',
         name: 'Gemma4 E4B',
-        contextWindow: 8192,
-        maxInputTokens: 8192,
+        contextWindow: 128000,
+        maxInputTokens: 128000,
         maxOutputTokens: 2048,
         free: true,
-        features: [
-          '本地已安装',
-          'Google',
-          '4B',
-          '9.6GB',
-        ],
+        features: ['本地已安装', 'Google', '4B', '9.6GB']
       },
       {
         id: 'gemma4:26b-a4b-it-q8_0',
         name: 'Gemma4 26B (Q8)',
-        contextWindow: 8192,
-        maxInputTokens: 8192,
+        contextWindow: 128000,
+        maxInputTokens: 128000,
         maxOutputTokens: 2048,
         free: true,
-        features: [
-          '本地已安装',
-          'Google',
-          '26B',
-          '量化版',
-          '28GB',
-        ],
+        features: ['本地已安装', 'Google', '26B', '量化版', '28GB']
       },
       {
         id: 'gemma4:e4b-it-bf16',
         name: 'Gemma4 E4B (BF16)',
-        contextWindow: 8192,
-        maxInputTokens: 8192,
+        contextWindow: 128000,
+        maxInputTokens: 128000,
         maxOutputTokens: 2048,
         free: true,
-        features: [
-          '本地已安装',
-          'Google',
-          '4B',
-          'BF16精度',
-          '16GB',
-        ],
+        features: ['本地已安装', 'Google', '4B', 'BF16精度', '16GB']
       },
       {
         id: 'gemma4:e4b-it-q8_0',
         name: 'Gemma4 E4B (Q8)',
-        contextWindow: 8192,
-        maxInputTokens: 8192,
+        contextWindow: 128000,
+        maxInputTokens: 128000,
         maxOutputTokens: 2048,
         free: true,
-        features: [
-          '本地已安装',
-          'Google',
-          '4B',
-          '量化版',
-          '11GB',
-        ],
-      },
-    ],
+        features: ['本地已安装', 'Google', '4B', '量化版', '11GB']
+      }
+    ]
   },
   lmstudio: {
     id: 'lmstudio',
@@ -907,25 +660,19 @@
     websites: {
       official: 'https://lmstudio.ai/',
       docs: 'https://lmstudio.ai/docs/basics/server',
-      models: 'https://lmstudio.ai/models',
+      models: 'https://lmstudio.ai/models'
     },
     models: [
       {
         id: 'google/gemma-4-e4b',
         name: 'Gemma 4 E4B (LM Studio)',
-        contextWindow: 8192,
-        maxInputTokens: 8192,
+        contextWindow: 128000,
+        maxInputTokens: 128000,
         maxOutputTokens: 2048,
         reasoning: true,
         free: true,
-        features: [
-          'LM Studio',
-          '本地运行',
-          'Google',
-          '思维链',
-          '4B参数',
-        ],
-      },
-    ],
-  },
+        features: ['LM Studio', '本地运行', 'Google', '思维链', '4B参数']
+      }
+    ]
+  }
 }
