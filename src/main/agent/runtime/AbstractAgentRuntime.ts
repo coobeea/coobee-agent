@@ -1,7 +1,7 @@
 /**
  * AbstractAgentRuntime — 运行时抽象基类
  *
- * 这层的职责很克制：它只服务于“已构建完成的 runtime 实例”。
+ * 这层的职责很克制：它只服务于"已构建完成的 runtime 实例"。
  * 它不负责：
  *   - 选择具体 runtime
  *   - 创建 builder
@@ -10,7 +10,7 @@
  * 它负责的公共行为是：
  *   - 固化运行时身份：`id` / `type` / `name` / `options`
  *   - 提供 `stream()` 模板方法
- *   - 在模板方法里统一做快照写入与错误恢复
+ *   - 在模板方法里统一做快照写入与网络错误重试
  *   - 提供 `run()` 默认实现
  *   - 提供统一 logger
  *
@@ -20,7 +20,6 @@
 import type { AgentRuntime } from './AgentRuntime';
 import type { AgentRuntimeOptions, ExecutionResult, StreamChunk } from './types';
 import { saveContextSnapshot } from './ContextSnapshotWriter';
-import { defaultRecoveryChain } from './ErrorRecoveryChain';
 
 // Re-export for backward compatibility
 export { type RuntimeLogger, createRuntimeLogger } from './RuntimeLogger';
@@ -41,7 +40,7 @@ export function generateRuntimeId(prefix: string): string {
  * AgentRuntime 的模板基类
  *
  * `stream()` 是统一入口，`doStream()` 是子类扩展点。
- * 这样可以把快照、恢复、默认执行封装收在内层，不让各 runtime 重复实现。
+ * 这样可以把快照、网络重试封装收在内层，不让各 runtime 重复实现。
  */
 export abstract class AbstractAgentRuntime implements AgentRuntime {
   readonly options: AgentRuntimeOptions;
@@ -54,28 +53,47 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
    * 子类实现此方法 — 核心流式逻辑
    *
    * 不直接暴露给调用方，由 `stream()` 模板方法包装。
-   * 子类在这里专注于“如何和具体 SDK 对接并产出标准 chunk”。
+   * 子类在这里专注于"如何和具体 SDK 对接并产出标准 chunk"。
    */
   protected abstract doStream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown>;
+
+  // ========== 网络错误重试配置 ==========
+
+  /** 最大重试次数（不含首次） */
+  private static readonly MaxRetries = 5;
+  /** 指数退避基数（ms） */
+  private static readonly BaseDelayMs = 1000;
+
+  /** 判断是否为可重试的网络/瞬时错误 */
+  private static isTransientError(error: Error): boolean {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes('timeout') ||
+      msg.includes('econnreset') ||
+      msg.includes('econnrefused') ||
+      msg.includes('socket hang up') ||
+      msg.includes('network') ||
+      msg.includes('rate limit') ||
+      msg.includes('429') ||
+      msg.includes('too many requests') ||
+      msg.includes('500') ||
+      msg.includes('502') ||
+      msg.includes('503') ||
+      msg.includes('service unavailable')
+    );
+  }
 
   /**
    * 流式执行 — 模板方法（最终暴露给调用方）
    *
    * 包装 `doStream()`，把公共控制逻辑统一收在这一层：
    *   - 正常完成后写上下文快照
-   *   - 出错后按恢复链决定是否重试
+   *   - 网络/瞬时错误自动指数退避重试
    * 子类通常不需要覆盖此方法，实现 `doStream()` 即可。
-   *
-   * 自动行为：
-   *   - 透传 doStream() 的所有 StreamChunk
-   *   - 执行完成后自动调用 saveContextSnapshot()
-   *   - 快照写入失败不阻断主流程
-   *   - 错误时尝试渐进式恢复（重试）
    */
   async *stream(input: string): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const maxAttempts = 3;
-    let attempt = 0;
     const runtimeOptions = this.options;
+    let attempt = 0;
 
     while (true) {
       try {
@@ -89,42 +107,31 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
         const result = r.value;
 
         // 自动写入上下文快照（异步，不阻塞返回）
-        // 从 result 中提取 rawApiRequest 并传递给 snapshot
         saveContextSnapshot(runtimeOptions, runtimeOptions.type, input, result, result.rawApiRequest).catch(() => {});
 
         return result;
       } catch (error: unknown) {
         if (!(error instanceof Error)) throw error;
 
-        // 渐进式错误恢复（重试 / 延迟等由恢复链决定）
-        const recovery = await defaultRecoveryChain.recover(error, {
-          attempt,
-          maxAttempts,
-          sessionId: runtimeOptions.sessionId
-        });
-
-        if (recovery.action === 'retry') {
+        // 只有网络/瞬时错误才重试，其余直接抛出
+        if (AbstractAgentRuntime.isTransientError(error) && attempt < AbstractAgentRuntime.MaxRetries) {
+          const delay = AbstractAgentRuntime.BaseDelayMs * Math.pow(2, attempt);
           attempt++;
-          // 延迟等待（如有）
-          if (recovery.delay && recovery.delay > 0) {
-            await new Promise((resolve) => setTimeout(resolve, recovery.delay));
-          }
-          // 发出恢复事件
+          await new Promise((resolve) => setTimeout(resolve, delay));
           yield {
             type: 'run:error' as const,
-            content: `Recovery: ${recovery.reason}`,
+            content: `网络错误，${delay}ms 后重试 (第 ${attempt}/${AbstractAgentRuntime.MaxRetries} 次)`,
             data: { recoveryAttempt: attempt }
           };
-          continue; // 重试 doStream
+          continue;
         }
 
-        // 不可恢复，抛出原错误
         throw error;
       }
     }
   }
 
-  // ========== 默认实现：run ==========
+  // ========== 默认实现：run / lifecycle ==========
 
   /**
    * 非流式执行 — 消费 `stream()` 收集结果
