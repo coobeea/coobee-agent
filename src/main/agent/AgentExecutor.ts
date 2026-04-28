@@ -35,6 +35,7 @@ import { prepareAgentEnv, type PreparedAgentEnv } from './AgentEnvInjector';
 import { streamConsumersManager } from './streaming/StreamConsumersManager';
 import { ProviderInjector } from './provider/ProviderInjector';
 import { SkillManager } from './skills/SkillManager';
+import { sessionRunRegistry as defaultSessionRunRegistry } from './execution/SessionRunRegistry';
 
 // ==================== 类型定义 ====================
 
@@ -87,14 +88,11 @@ type RuntimeNextResult =
 // ==================== AgentExecutor ====================
 
 class AgentExecutor {
-  /** 活跃会话状态管理 */
-  private activeSessions = new Map<string, { startedAt: number }>();
-
   /** Provider 配置注入器 */
   private providerInjector = new ProviderInjector();
 
-  /** 活跃会话的 AbortController 映射（用于按 sessionId 中止） */
-  private abortControllers = new Map<string, AbortController>();
+  /** 运行中 session 注册表 */
+  private sessionRunRegistry = defaultSessionRunRegistry;
 
   // ========== 提交执行 ==========
 
@@ -109,19 +107,18 @@ class AgentExecutor {
   ): { status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string } {
     const { sessionId } = request;
 
-    if (this.activeSessions.has(sessionId)) {
+    const run = this.sessionRunRegistry.start(sessionId);
+    if (run.status === 'busy') {
       log.warn(`[AgentExecutor] Session busy: ${sessionId}`);
       return { status: 'busy', sessionId };
     }
-
-    this.activeSessions.set(sessionId, { startedAt: Date.now() });
 
     this.execute(request)
       .catch((error: unknown) => {
         log.error(`[AgentExecutor] Execution failed: sessionId=${sessionId}`, error);
       })
       .finally(() => {
-        this.activeSessions.delete(sessionId);
+        this.sessionRunRegistry.finish(sessionId);
       });
 
     return { status: 'accepted', sessionId };
@@ -135,15 +132,15 @@ class AgentExecutor {
   async submitAndWait(request: AgentExecuteRequest): Promise<AgentExecutionResult> {
     const { sessionId } = request;
 
-    if (this.activeSessions.has(sessionId)) {
+    const run = this.sessionRunRegistry.start(sessionId);
+    if (run.status === 'busy') {
       throw new Error(`Session ${sessionId} is busy`);
     }
 
-    this.activeSessions.set(sessionId, { startedAt: Date.now() });
     try {
       return await this.execute(request);
     } finally {
-      this.activeSessions.delete(sessionId);
+      this.sessionRunRegistry.finish(sessionId);
     }
   }
 
@@ -151,16 +148,12 @@ class AgentExecutor {
 
   /** 查询 session 状态 */
   getStatus(sessionId: string): { busy: boolean; startedAt?: number } {
-    const info = this.activeSessions.get(sessionId);
-    return info ? { busy: true, startedAt: info.startedAt } : { busy: false };
+    return this.sessionRunRegistry.getStatus(sessionId);
   }
 
   /** 获取所有活跃 session */
   getActiveSessions(): Array<{ sessionId: string; startedAt: number }> {
-    return Array.from(this.activeSessions.entries()).map(([sessionId, info]) => ({
-      sessionId,
-      startedAt: info.startedAt
-    }));
+    return this.sessionRunRegistry.getActiveSessions();
   }
 
   /**
@@ -170,87 +163,7 @@ class AgentExecutor {
    * @returns 是否成功中止（false 表示 session 不存在或未在执行）
    */
   abort(sessionId: string): boolean {
-    const controller = this.abortControllers.get(sessionId);
-    if (controller) {
-      log.info(`[AgentExecutor] Aborting session: ${sessionId}`);
-      controller.abort();
-      return true;
-    }
-
-    log.warn(`[AgentExecutor] Cannot abort session: ${sessionId} (not found or not running)`);
-    return false;
-  }
-
-  // ========== Thread 便捷方法 ==========
-
-  /**
-   * 流式执行 Thread（便捷方法）
-   *
-   * 自动查 Thread → Agent → 构建请求，减少调用方样板代码。
-   * 适用场景：ChatRoutes、ChatMethods 的 SSE/RPC 端点。
-   */
-  async *streamThread(
-    threadId: string,
-    message: string,
-    runtimeType: AgentRuntimeKind = 'pi-mono'
-  ): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
-    const { ThreadStore } = await import('./threads/ThreadStore');
-    const { AgentStore } = await import('./agents/AgentStore');
-
-    const threadStore = await ThreadStore.getInstance();
-    const thread = await threadStore.get(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
-
-    const agentStore = AgentStore.getInstance();
-    const agent = await agentStore.get(thread.agentId);
-    if (!agent) throw new Error(`Agent ${thread.agentId} not found`);
-
-    return yield* this.stream({
-      sessionId: thread.id,
-      message,
-      agentId: agent.id,
-      instructions: agent.instructions,
-      modelOverride: thread.overrideModel || agent.model,
-      workspaceRoot: thread.metadata?.workspacePath as string | undefined,
-      mode: 'agent',
-      runtimeType,
-      sessionMode: 'file'
-    });
-  }
-
-  /**
-   * 提交 Thread 执行（便捷方法，非阻塞）
-   *
-   * 自动查 Thread → Agent → 构建请求。
-   * 适用场景：ThreadWaker 的恢复执行。
-   */
-  async submitThread(
-    threadId: string,
-    message: string,
-    runtimeType: AgentRuntimeKind = 'pi-mono'
-  ): Promise<{ status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string }> {
-    const { ThreadStore } = await import('./threads/ThreadStore');
-    const { AgentStore } = await import('./agents/AgentStore');
-
-    const threadStore = await ThreadStore.getInstance();
-    const thread = await threadStore.get(threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
-
-    const agentStore = AgentStore.getInstance();
-    const agent = await agentStore.get(thread.agentId);
-    if (!agent) throw new Error(`Agent ${thread.agentId} not found`);
-
-    return this.submit({
-      sessionId: thread.id,
-      message,
-      agentId: agent.id,
-      instructions: agent.instructions,
-      modelOverride: thread.overrideModel || agent.model,
-      workspaceRoot: thread.metadata?.workspacePath as string | undefined,
-      mode: 'agent',
-      runtimeType,
-      sessionMode: 'file'
-    });
+    return this.sessionRunRegistry.abort(sessionId);
   }
 
   // ========== 流式执行（SSE 透传） ==========
@@ -265,16 +178,16 @@ class AgentExecutor {
   async *stream(request: AgentExecuteRequest): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     const { sessionId } = request;
 
-    if (this.activeSessions.has(sessionId)) {
+    const run = this.sessionRunRegistry.start(sessionId);
+    if (run.status === 'busy') {
       throw new Error(`Session ${sessionId} is busy`);
     }
 
-    this.activeSessions.set(sessionId, { startedAt: Date.now() });
     try {
       const result = yield* this.executePipeline(request);
       return result;
     } finally {
-      this.activeSessions.delete(sessionId);
+      this.sessionRunRegistry.finish(sessionId);
     }
   }
 
@@ -416,14 +329,7 @@ class AgentExecutor {
    * 同步更新 Thread 的 runStatus。
    */
   private updateSessionStatus(sessionId: string, status: ThreadRunStatus): void {
-    const isSubAgent = sessionId.includes(':');
-
-    // 子 Agent 状态更新已移除（不再关注子智能体）
-    if (isSubAgent) {
-      return;
-    }
-
-    this.syncThreadRunStatus(sessionId, status);
+    this.sessionRunRegistry.updateRunStatus(sessionId, status);
   }
 
   private updateCheckpoint(sessionId: string, chunk: AgentStreamChunk): void {
@@ -444,19 +350,6 @@ class AgentExecutor {
   }
 
   /**
-   * 同步 Thread 的 runStatus（fire-and-forget）
-   *
-   * 仅在 sessionId 对应已有 Thread 时更新（子 Agent sessionId 含 ':' 不会匹配 Thread）。
-   */
-  private syncThreadRunStatus(sessionId: string, runStatus: ThreadRunStatus): void {
-    if (sessionId.includes(':')) return;
-    import('./threads/ThreadStore')
-      .then(({ ThreadStore }) => ThreadStore.getInstance())
-      .then((store) => store.update(sessionId, { runStatus }))
-      .catch(() => {});
-  }
-
-  /**
    * 核心执行管道：创建 → 推理 → 销毁
    *
    * 统一处理所有的 Hooks、环境注入、事件分发和生命周期。
@@ -471,14 +364,7 @@ class AgentExecutor {
     log.info(`[AgentExecutor] Execute Pipeline: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
     const startTime = Date.now();
 
-    // 创建或使用外部提供的 AbortController
-    let signal: AbortSignal | undefined;
-
-    if (!signal) {
-      const controller = new AbortController();
-      signal = controller.signal;
-      this.abortControllers.set(sessionId, controller);
-    }
+    const signal = this.sessionRunRegistry.getSignal(sessionId);
 
     let workspaceDir: string | undefined;
     let loader: import('../extension/ExtensionLoader').ExtensionLoader | null = null;
@@ -616,7 +502,6 @@ class AgentExecutor {
 
       await this.destroyRuntime(runtime);
       runtime = null;
-      this.abortControllers.delete(sessionId);
     }
   }
 

@@ -158,12 +158,12 @@ export class ThreadWaker {
    */
   private async submitResumeMessage(threadId: string, message: string): Promise<void> {
     try {
-      const { agentExecutor } = await import('../AgentExecutor');
+      const { threadExecutor } = await import('../ThreadExecutor');
 
       log.info(`[ThreadWaker] Resuming thread ${threadId} with message: ${message.slice(0, 100)}...`);
 
-      // 提交执行：自动查 Thread → Agent → 构建请求
-      const result = await agentExecutor.submitThread(threadId, message);
+      // 提交执行：外部只传 threadId + message，内部自动装配 Agent 执行请求
+      const result = await threadExecutor.submit(threadId, message);
 
       if (result.status === 'busy') {
         log.error(`[ThreadWaker] Thread ${threadId} is busy`);

@@ -324,16 +324,6 @@ describe('AgentExecutor', () => {
     });
   });
 
-  // ==================== Step 7: streamThread 错误路径 ====================
-
-  describe('步骤7：streamThread', () => {
-    it('Thread 不存在时 throw', async () => {
-      const gen = agentExecutor.streamThread('nonexistent-thread-id', 'hello');
-
-      await expect(gen.next()).rejects.toThrow('Thread nonexistent-thread-id not found');
-    });
-  });
-
   // ==================== Step 8: 并发安全 ====================
 
   describe('步骤8：并发安全', () => {

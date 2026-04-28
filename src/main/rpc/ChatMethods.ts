@@ -14,7 +14,7 @@
 import type { MethodGroup } from '@main/common/gateway/types';
 import { GatewayErrorCode, GatewayMethodError } from '@main/common/gateway/errors';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
-import { agentExecutor } from '@main/agent/AgentExecutor';
+import { threadExecutor } from '@main/agent/ThreadExecutor';
 import { createLogger } from '@main/common/logger';
 
 const log = createLogger('chat-methods');
@@ -110,8 +110,8 @@ export const chatMethods: MethodGroup = {
 
       log.info(`发送消息: threadId=${threadId}, message="${message.substring(0, 50)}..."`);
 
-      // 启动流式执行：自动查 Thread → Agent → 构建请求
-      const gen = agentExecutor.streamThread(threadId as string, message as string);
+      // 启动流式执行：外部只传 threadId + message，内部自动装配 Agent 执行请求
+      const gen = threadExecutor.stream(threadId as string, message as string);
 
       // 3. 异步消费流（触发 WebSocket 事件推送）
       (async () => {
@@ -147,7 +147,7 @@ export const chatMethods: MethodGroup = {
 
       log.info(`中止消息: threadId=${threadId}`);
 
-      const aborted = agentExecutor.abort(threadId as string);
+      const aborted = threadExecutor.abort(threadId as string);
 
       // 如果 abort 失败（session 不存在或已结束），清理 Thread 的 runStatus
       if (!aborted) {

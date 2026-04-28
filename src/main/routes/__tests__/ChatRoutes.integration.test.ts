@@ -4,6 +4,7 @@ import Koa from 'koa';
 import Router from '@koa/router';
 import bodyParser from 'koa-bodyparser';
 import http from 'http';
+import type { AddressInfo } from 'net';
 
 // Mock dependencies
 vi.mock('@main/common/env', () => {
@@ -62,23 +63,16 @@ vi.mock('electron', () => ({
   }
 }));
 
-vi.mock('@main/agent/execution/ThreadExecutionFactory', () => ({
-  ThreadExecutionFactory: {
-    getInstance: vi.fn(() => ({
-      createBuilder: vi.fn(async () => ({ mock: 'builder' }))
-    }))
-  }
-}));
-
-vi.mock('@main/agent/AgentExecutor', () => ({
-  agentExecutor: {
+vi.mock('@main/agent/execution', () => ({
+  threadExecutor: {
     stream: vi.fn(() =>
       (async function* () {
         yield { type: 'text:delta', content: '测试成功' };
         yield { type: 'run:done', content: '' };
         return { output: '测试成功' };
       })()
-    )
+    ),
+    abort: vi.fn()
   }
 }));
 
@@ -114,7 +108,7 @@ describe('ChatRoutes Integration', () => {
     server = http.createServer(app.callback());
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
-        port = (server.address() as any).port;
+        port = (server.address() as AddressInfo).port;
         resolve();
       });
     });
@@ -177,7 +171,7 @@ describe('ChatRoutes Integration', () => {
                   if (data.type === 'text:delta' && data.content) {
                     output += data.content;
                   }
-                } catch (e) {
+                } catch {
                   // ignore
                 }
               }
