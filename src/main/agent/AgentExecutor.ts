@@ -181,6 +181,78 @@ class AgentExecutor {
     return false;
   }
 
+  // ========== Thread 便捷方法 ==========
+
+  /**
+   * 流式执行 Thread（便捷方法）
+   *
+   * 自动查 Thread → Agent → 构建请求，减少调用方样板代码。
+   * 适用场景：ChatRoutes、ChatMethods 的 SSE/RPC 端点。
+   */
+  async *streamThread(
+    threadId: string,
+    message: string,
+    runtimeType: AgentRuntimeKind = 'pi-mono'
+  ): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
+    const { ThreadStore } = await import('./threads/ThreadStore');
+    const { AgentStore } = await import('./agents/AgentStore');
+
+    const threadStore = await ThreadStore.getInstance();
+    const thread = await threadStore.get(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+    const agentStore = AgentStore.getInstance();
+    const agent = await agentStore.get(thread.agentId);
+    if (!agent) throw new Error(`Agent ${thread.agentId} not found`);
+
+    return yield* this.stream({
+      sessionId: thread.id,
+      message,
+      agentId: agent.id,
+      instructions: agent.instructions,
+      modelOverride: thread.overrideModel || agent.model,
+      workspaceRoot: thread.metadata?.workspacePath as string | undefined,
+      mode: 'agent',
+      runtimeType,
+      sessionMode: 'file'
+    });
+  }
+
+  /**
+   * 提交 Thread 执行（便捷方法，非阻塞）
+   *
+   * 自动查 Thread → Agent → 构建请求。
+   * 适用场景：ThreadWaker 的恢复执行。
+   */
+  async submitThread(
+    threadId: string,
+    message: string,
+    runtimeType: AgentRuntimeKind = 'pi-mono'
+  ): Promise<{ status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string }> {
+    const { ThreadStore } = await import('./threads/ThreadStore');
+    const { AgentStore } = await import('./agents/AgentStore');
+
+    const threadStore = await ThreadStore.getInstance();
+    const thread = await threadStore.get(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+    const agentStore = AgentStore.getInstance();
+    const agent = await agentStore.get(thread.agentId);
+    if (!agent) throw new Error(`Agent ${thread.agentId} not found`);
+
+    return this.submit({
+      sessionId: thread.id,
+      message,
+      agentId: agent.id,
+      instructions: agent.instructions,
+      modelOverride: thread.overrideModel || agent.model,
+      workspaceRoot: thread.metadata?.workspacePath as string | undefined,
+      mode: 'agent',
+      runtimeType,
+      sessionMode: 'file'
+    });
+  }
+
   // ========== 流式执行（SSE 透传） ==========
 
   /**

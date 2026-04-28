@@ -15,7 +15,6 @@ import type { MethodGroup } from '@main/common/gateway/types';
 import { GatewayErrorCode, GatewayMethodError } from '@main/common/gateway/errors';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { agentExecutor } from '@main/agent/AgentExecutor';
-import { AgentStore } from '@main/agent/agents/AgentStore';
 import { createLogger } from '@main/common/logger';
 
 const log = createLogger('chat-methods');
@@ -109,35 +108,10 @@ export const chatMethods: MethodGroup = {
         throw new GatewayMethodError(GatewayErrorCode.INVALID_PARAMS, 'threadId is required');
       }
 
-      const store = await ThreadStore.getInstance();
-      const thread = await store.get(threadId as string);
-
-      if (!thread) {
-        throw new GatewayMethodError(GatewayErrorCode.NOT_FOUND, 'Thread not found');
-      }
-
       log.info(`发送消息: threadId=${threadId}, message="${message.substring(0, 50)}..."`);
 
-      const agentStore = AgentStore.getInstance();
-      const agent = await agentStore.get(thread.agentId);
-
-      if (!agent) {
-        throw new GatewayMethodError(GatewayErrorCode.NOT_FOUND, `Agent not found: ${thread.agentId}`);
-      }
-
-      // 2. 启动流式执行（Agent 结果会通过 WebSocket 事件推送）
-      // 入口只传普通参数；Builder 在 AgentExecutor 内部最后统一创建。
-      const gen = agentExecutor.stream({
-        sessionId: thread.id,
-        message: message as string,
-        agentId: agent.id,
-        instructions: agent.instructions,
-        modelOverride: thread.overrideModel || agent.model,
-        workspaceRoot: thread.metadata?.workspacePath as string | undefined,
-        mode: 'agent',
-        runtimeType: 'pi-mono',
-        sessionMode: 'file'
-      });
+      // 启动流式执行：自动查 Thread → Agent → 构建请求
+      const gen = agentExecutor.streamThread(threadId as string, message as string);
 
       // 3. 异步消费流（触发 WebSocket 事件推送）
       (async () => {

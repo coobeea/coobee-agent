@@ -159,39 +159,11 @@ export class ThreadWaker {
   private async submitResumeMessage(threadId: string, message: string): Promise<void> {
     try {
       const { agentExecutor } = await import('../AgentExecutor');
-      const { ThreadStore } = await import('./ThreadStore');
-      const { AgentStore } = await import('../agents/AgentStore');
 
       log.info(`[ThreadWaker] Resuming thread ${threadId} with message: ${message.slice(0, 100)}...`);
 
-      const threadStore = await ThreadStore.getInstance();
-      const thread = await threadStore.get(threadId);
-      if (!thread) {
-        log.error(`[ThreadWaker] Thread ${threadId} not found`);
-        return;
-      }
-
-      const agentStore = await AgentStore.getInstance();
-      const agent = await agentStore.get(thread.agentId);
-      if (!agent) {
-        log.error(`[ThreadWaker] Agent ${thread.agentId} not found`);
-        return;
-      }
-
-      log.info(`[ThreadWaker] Resuming thread ${threadId}`);
-
-      // 提交执行：只传普通参数，Builder 在 AgentExecutor 内部最后统一创建。
-      const result = agentExecutor.submit({
-        sessionId: threadId,
-        message,
-        agentId: agent.id,
-        instructions: agent.instructions,
-        modelOverride: thread.overrideModel || agent.model,
-        workspaceRoot: thread.metadata?.workspacePath as string | undefined,
-        mode: 'agent',
-        runtimeType: 'pi-mono',
-        sessionMode: 'file'
-      });
+      // 提交执行：自动查 Thread → Agent → 构建请求
+      const result = await agentExecutor.submitThread(threadId, message);
 
       if (result.status === 'busy') {
         log.error(`[ThreadWaker] Thread ${threadId} is busy`);

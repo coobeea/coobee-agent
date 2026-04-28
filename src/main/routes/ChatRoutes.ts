@@ -24,7 +24,6 @@ import type Router from '@koa/router';
 import { PassThrough } from 'node:stream';
 import { createLogger } from '@main/common/logger';
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
-import { AgentStore } from '@main/agent/agents/AgentStore';
 import { agentExecutor } from '@main/agent/AgentExecutor';
 import type { ApiResponse } from '@shared/api';
 import type { ThreadIndexEntry, ThreadDefinition } from '@main/agent/threads/types';
@@ -120,24 +119,6 @@ export function registerChatRoutes(router: Router): void {
         return;
       }
 
-      const threadStore = await ThreadStore.getInstance();
-      const thread = await threadStore.get(threadId);
-
-      if (!thread) {
-        ctx.status = 404;
-        ctx.body = { success: false, error: { message: 'Thread not found' } };
-        return;
-      }
-
-      const agentStore = AgentStore.getInstance();
-      const agent = await agentStore.get(thread.agentId);
-
-      if (!agent) {
-        ctx.status = 404;
-        ctx.body = { success: false, error: { message: `Agent ${thread.agentId} not found` } };
-        return;
-      }
-
       // 设置 SSE 响应头
       ctx.request.socket.setTimeout(0);
       ctx.req.socket.setNoDelay(true);
@@ -153,19 +134,8 @@ export function registerChatRoutes(router: Router): void {
       ctx.status = 200;
       ctx.body = stream;
 
-      // 启动 AgentExecutor（完整流程：持久化 + WebSocket + SSE）
-      // 入口只传普通参数；Builder 在 AgentExecutor 内部最后统一创建。
-      const gen = agentExecutor.stream({
-        sessionId: thread.id,
-        message: body.message,
-        agentId: agent.id,
-        instructions: agent.instructions,
-        modelOverride: thread.overrideModel || agent.model,
-        workspaceRoot: thread.metadata?.workspacePath as string | undefined,
-        mode: 'agent',
-        runtimeType: 'pi-mono',
-        sessionMode: 'file'
-      });
+      // 启动 AgentExecutor：自动查 Thread → Agent → 构建请求
+      const gen = agentExecutor.streamThread(threadId, body.message);
 
       // 异步处理流
       (async () => {
@@ -176,7 +146,7 @@ export function registerChatRoutes(router: Router): void {
           }
           stream.write(`event: done\ndata: [DONE]\n\n`);
         } catch (err) {
-          log.error(`[ChatRoutes] Stream error for thread ${thread.id}:`, err);
+          log.error(`[ChatRoutes] Stream error for thread ${threadId}:`, err);
           stream.write(`event: error\ndata: ${JSON.stringify({ message: String(err) })}\n\n`);
         } finally {
           stream.end();
