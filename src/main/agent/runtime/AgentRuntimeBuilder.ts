@@ -2,7 +2,7 @@ import type { ProviderConfig } from '@main/agent/provider/types';
 
 import { resolveApiKey } from '../provider/ApiKeyResolver';
 import type { ToolExecutionContext } from '../tools/types';
-import type { AgentRuntimeKind, AgentRuntimeOptions, AgentMode, ThinkingLevel } from './types';
+import type { AgentRuntimeKind, AgentRuntimeOptions, AgentMode, ThinkingLevel, CompactionConfig } from './types';
 import type { AgentRuntime } from './AgentRuntime';
 import { PiMonoAgentRuntime } from './pimono/PiMonoAgentRuntime';
 import { OpenAIAgentRuntime } from './openai/OpenAIAgentRuntime';
@@ -150,6 +150,10 @@ export class AgentRuntimeBuilder {
     return this;
   }
 
+  provider(provider: string): this {
+    this.options.provider = provider;
+    return this;
+  }
   model(model: string): this {
     this.options.model = model;
     return this;
@@ -175,7 +179,7 @@ export class AgentRuntimeBuilder {
     return this;
   }
 
-  compaction(compaction: { enabled?: boolean }): this {
+  compaction(compaction: CompactionConfig): this {
     this.options.compaction = compaction;
     return this;
   }
@@ -185,6 +189,10 @@ export class AgentRuntimeBuilder {
     return this;
   }
 
+  modelMeta(modelMeta: AgentRuntimeOptions['modelMeta']): this {
+    this.options.modelMeta = modelMeta;
+    return this;
+  }
   fromProviderConfig(config: ProviderConfig, modelId?: string): this {
     this._providerConfig = config;
     this._providerModelId = modelId;
