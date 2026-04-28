@@ -108,7 +108,7 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用 stream() 逐个收 chunk，模拟 SSE 场景
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-stream-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `pimono-stream-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 

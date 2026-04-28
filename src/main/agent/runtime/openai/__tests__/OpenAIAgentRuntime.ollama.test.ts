@@ -136,7 +136,7 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用 stream() 接收数据并写入文件
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step1-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `openai-step1-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 
@@ -184,7 +184,7 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用 stream() 逐个收 chunk，模拟 SSE 场景
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step2-stream-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `openai-step2-stream-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 
@@ -233,7 +233,7 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用一个需要思考的复杂问题来测试
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step3-reasoning-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `openai-step3-reasoning-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 
@@ -314,7 +314,7 @@ describe('Ollama 最简测试', () => {
     });
 
     // 用同样需要思考的复杂问题来测试关闭效果
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step4-no-reasoning-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `openai-step4-no-reasoning-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 
@@ -427,7 +427,7 @@ describe('Ollama 最简测试', () => {
     };
 
     const sessionId = `ollama-tool-test-compact`;
-    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', `ollama-step5-compact`);
+    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', `openai-step5-compact`);
     fs.mkdirSync(sessionDir, { recursive: true });
     const runtime = new OpenAIAgentRuntime({
       type: 'openai',
@@ -459,7 +459,7 @@ describe('Ollama 最简测试', () => {
       maxTurns: 10
     });
 
-    const streamLogFile = path.join(process.cwd(), 'test-results', `ollama-step5-tools-${Date.now()}.jsonl`);
+    const streamLogFile = path.join(process.cwd(), 'test-results', `openai-step5-tools-${Date.now()}.jsonl`);
     fs.mkdirSync(path.dirname(streamLogFile), { recursive: true });
     fs.writeFileSync(streamLogFile, '', 'utf-8');
 
@@ -504,7 +504,7 @@ describe('Ollama 最简测试', () => {
 
   it('步骤6：加载压缩会话数据（复用步骤5的 session，验证 getItems 行为）', { timeout: 30_000 }, async () => {
     // 复用步骤5相同的 sessionDir，session 文件已存在
-    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', 'ollama-step5-compact');
+    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', 'openai-step5-compact');
     const sessionId = 'ollama-tool-test-compact';
 
     const fileSession = new FileSession(sessionId, sessionDir);
@@ -583,7 +583,7 @@ describe('Ollama 最简测试', () => {
   it('步骤7：复用压缩会话发送追问（验证模型能利用历史上下文）', { timeout: 120_000 }, async () => {
     // 复用步骤5的 session，在此基础上继续对话
     const sessionId = 'ollama-tool-test-compact';
-    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', 'ollama-step5-compact');
+    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', 'openai-step5-compact');
 
     const runtime = new OpenAIAgentRuntime({
       type: 'openai',
