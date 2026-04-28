@@ -40,30 +40,34 @@ import { SkillManager } from './skills/SkillManager';
 
 /** 执行请求 */
 export interface AgentExecuteRequest {
-  /** 会话 ID */
-  sessionId: string;
+  // === 必填：执行身份 ===
   /** 用户消息 */
   message: string;
-  /** Runtime 实现类型（必填） */
+  /** Runtime 实现类型 */
   runtimeType: AgentRuntimeKind;
-  /** 运行模式（默认 agent） */
-  mode?: AgentMode;
+  /** 会话 ID */
+  sessionId: string;
   /** 会话持久化方式（默认 file） */
   sessionMode?: 'memory' | 'file';
-  /** 轻量模式：跳过环境准备、Extension Hook 和事件广播 */
-  lightweight?: boolean;
+
+  // === Agent 定义 ===
   /** Agent 定义 ID */
   agentId?: string;
+  /** 运行模式（默认 agent） */
+  mode?: AgentMode;
   /** 基础系统提示词 */
   instructions?: string;
+
+  // === 运行时控制 ===
   /** 模型覆盖（provider/model 或 model id） */
   modelOverride?: string;
   /** 手动指定工作区 */
   workspaceRoot?: string;
   /** 最大执行轮次 */
   maxTurns?: number;
+  /** 轻量模式：跳过环境准备、Extension Hook 和事件广播 */
+  lightweight?: boolean;
 }
-
 
 interface RunInputPatch {
   instructions?: string;
@@ -100,7 +104,9 @@ class AgentExecutor {
    * 立即返回状态，流式事件通过 StreamEmitter → EventBus → WebSocket 推送。
    * 如果 session 正在执行中，返回 busy 错误。
    */
-  submit(request: AgentExecuteRequest): { status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string } {
+  submit(
+    request: AgentExecuteRequest
+  ): { status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string } {
     const { sessionId } = request;
 
     if (this.activeSessions.has(sessionId)) {
@@ -145,7 +151,7 @@ class AgentExecutor {
 
   /** 查询 session 状态 */
   getStatus(sessionId: string): { busy: boolean; startedAt?: number } {
-    const info = this.activeSessions.get(sessionId)
+    const info = this.activeSessions.get(sessionId);
     return info ? { busy: true, startedAt: info.startedAt } : { busy: false };
   }
 
@@ -383,7 +389,9 @@ class AgentExecutor {
    *
    * 统一处理所有的 Hooks、环境注入、事件分发和生命周期。
    */
-  private async *executePipeline(request: AgentExecuteRequest): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
+  private async *executePipeline(
+    request: AgentExecuteRequest
+  ): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
     const { sessionId, message } = request;
 
     let runtime: AgentRuntime | null = null;
