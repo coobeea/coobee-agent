@@ -22,12 +22,13 @@ import type {
   GatewayOutMessage,
   ConnectionState
 } from '@shared/gateway-protocol';
+import type { GatewayEventPayloads, GatewayEventType } from '@shared/events/gateway';
 import { GatewayErrorCode } from '@shared/gateway-protocol';
 
 // ==================== 类型定义 ====================
 
 /** 事件监听器 */
-export type EventListener = (payload: unknown) => void;
+export type EventListener<T = unknown> = (payload: T) => void;
 
 /** RPC 请求超时（毫秒） */
 const DEFAULT_REQUEST_TIMEOUT = 30_000;
@@ -239,6 +240,8 @@ export class GatewayClient {
    *   // 取消监听
    *   off()
    */
+  on<T extends GatewayEventType>(event: T, listener: EventListener<GatewayEventPayloads[T]>): () => void;
+  on(event: string, listener: EventListener): () => void;
   on(event: string, listener: EventListener): () => void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, []);

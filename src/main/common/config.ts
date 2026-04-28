@@ -2,7 +2,7 @@ import ElectronStore from 'electron-store';
 
 import { eventBus } from './eventbus';
 import { log } from './logger';
-import { EventTypes } from '@shared/ipc/events';
+import { EventTypes } from '@shared/events/ipc';
 import type { Shortcut } from '@shared/api';
 
 enum ConfigKey {

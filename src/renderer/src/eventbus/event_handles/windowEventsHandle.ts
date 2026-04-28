@@ -3,7 +3,7 @@
  *
  * 职责：监听窗口事件，处理窗口相关业务逻辑
  */
-import { EventTypes, type EventPayloads } from '@shared/ipc/events';
+import { EventTypes, type EventPayloads } from '@shared/events/ipc';
 import eventBus from '@/eventbus';
 import { useWindowStore } from '@/stores/window';
 import { useLogStore } from '@/stores/log';

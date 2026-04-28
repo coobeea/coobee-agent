@@ -2,7 +2,7 @@
  * Gateway 初始化插件
  *
  * 创建全局 GatewayClient 单例，等待后端就绪后再建立连接。
- * 并自动启动全局流式消息监听。
+ * 并自动桥接 Gateway 推送事件到前端 EventBus。
  *
  * 使用方式：
  *   import { gateway } from '@/plugins/gatewaySetup'
@@ -12,10 +12,9 @@
 import type { App } from 'vue';
 import configManager from '@/config';
 import eventBus from '@/eventbus';
-import { EventTypes } from '@shared/ipc/events';
+import { EventTypes } from '@shared/events/ipc';
+import { GatewayEventTypes } from '@shared/events/gateway';
 import { GatewayClient } from '@/services/GatewayClient';
-import { useChatStore } from '@/stores/chat';
-import type { StreamMessage } from '@shared/stream-protocol';
 
 // ==================== 全局单例 ====================
 
@@ -48,24 +47,18 @@ async function connectWhenReady(): Promise<void> {
 }
 
 /**
- * 启动全局流式消息监听
+ * 桥接 Gateway 推送事件到前端 EventBus。
  */
-function setupGlobalStreamListener(): void {
-  gateway.on('stream:message', (payload: unknown) => {
-    const event = payload as { message?: StreamMessage };
-    const msg = event.message;
-
-    if (!msg) {
-      console.warn('[gatewaySetup] Invalid stream:message event, missing message field');
-      return;
-    }
-
-    // 自动存入 chatStore
-    const chatStore = useChatStore();
-    chatStore.handleStreamMessage(msg);
+function setupGatewayEventBridge(): void {
+  gateway.on(GatewayEventTypes.STREAM_MESSAGE, (payload) => {
+    eventBus.emit(GatewayEventTypes.STREAM_MESSAGE, payload);
   });
 
-  console.log('[gatewaySetup] Global stream listener initialized');
+  gateway.on(GatewayEventTypes.THREAD_MESSAGE, (payload) => {
+    eventBus.emit(GatewayEventTypes.THREAD_MESSAGE, payload);
+  });
+
+  console.log('[gatewaySetup] Gateway event bridge initialized');
 }
 
 export default {
@@ -77,7 +70,7 @@ export default {
 
     isInitialized = true;
     connectWhenReady();
-    setupGlobalStreamListener();
-    console.log('[gatewaySetup] Gateway and stream listener setup complete');
+    setupGatewayEventBridge();
+    console.log('[gatewaySetup] Gateway setup complete');
   }
 };

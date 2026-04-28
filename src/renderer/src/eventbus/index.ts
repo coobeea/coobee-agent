@@ -6,10 +6,10 @@
  */
 
 import mitt, { type Emitter } from 'mitt';
-import type { EventPayloads, EventType, GenericEventHandler } from '@shared/ipc/events';
+import type { FrontendEventPayloads, FrontendEventType, FrontendGenericEventHandler } from '@shared/events/frontend';
 
 class FrontendEventBus {
-  private emitter: Emitter<Record<EventType, unknown>>;
+  private emitter: Emitter<Record<FrontendEventType, unknown>>;
 
   constructor() {
     this.emitter = mitt();
@@ -20,8 +20,8 @@ class FrontendEventBus {
    * @param eventType 事件类型
    * @param callback 回调函数
    */
-  on<T extends keyof EventPayloads>(eventType: T, callback: (data: EventPayloads[T]) => void): void {
-    this.emitter.on(eventType as EventType, callback as GenericEventHandler);
+  on<T extends FrontendEventType>(eventType: T, callback: (data: FrontendEventPayloads[T]) => void): void {
+    this.emitter.on(eventType, callback as FrontendGenericEventHandler);
   }
 
   /**
@@ -29,25 +29,25 @@ class FrontendEventBus {
    * @param eventType 事件类型
    * @param data 事件数据
    */
-  emit<T extends keyof EventPayloads>(eventType: T, data: EventPayloads[T]): void {
-    this.emitter.emit(eventType as EventType, data);
+  emit<T extends FrontendEventType>(eventType: T, data: FrontendEventPayloads[T]): void {
+    this.emitter.emit(eventType, data);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  private onceMap = new WeakMap<Function, GenericEventHandler>();
+  private onceMap = new WeakMap<Function, FrontendGenericEventHandler>();
 
   /**
    * 单次订阅（触发一次后自动取消）
    * @param eventType 事件类型
    * @param callback 回调函数
    */
-  once<T extends keyof EventPayloads>(eventType: T, callback: (data: EventPayloads[T]) => void): void {
-    const wrappedCallback = (data: EventPayloads[T]): void => {
+  once<T extends FrontendEventType>(eventType: T, callback: (data: FrontendEventPayloads[T]) => void): void {
+    const wrappedCallback = (data: FrontendEventPayloads[T]): void => {
       this.off(eventType, wrappedCallback);
       this.onceMap.delete(callback);
       callback(data);
     };
-    this.onceMap.set(callback, wrappedCallback as GenericEventHandler);
+    this.onceMap.set(callback, wrappedCallback as FrontendGenericEventHandler);
     this.on(eventType, wrappedCallback);
   }
 
@@ -56,14 +56,14 @@ class FrontendEventBus {
    * @param eventType 事件类型
    * @param callback 回调函数
    */
-  off<T extends keyof EventPayloads>(eventType: T, callback: (data: EventPayloads[T]) => void): void {
+  off<T extends FrontendEventType>(eventType: T, callback: (data: FrontendEventPayloads[T]) => void): void {
     // 检查是否是被 once 包裹的回调
     const wrappedCallback = this.onceMap.get(callback);
     if (wrappedCallback) {
-      this.emitter.off(eventType as EventType, wrappedCallback);
+      this.emitter.off(eventType, wrappedCallback);
       this.onceMap.delete(callback);
     } else {
-      this.emitter.off(eventType as EventType, callback as GenericEventHandler);
+      this.emitter.off(eventType, callback as FrontendGenericEventHandler);
     }
   }
 
@@ -77,8 +77,8 @@ class FrontendEventBus {
   /**
    * 获取所有已注册的事件类型
    */
-  getRegisteredEvents(): EventType[] {
-    return Array.from(this.emitter.all.keys()) as EventType[];
+  getRegisteredEvents(): FrontendEventType[] {
+    return Array.from(this.emitter.all.keys()) as FrontendEventType[];
   }
 }
 

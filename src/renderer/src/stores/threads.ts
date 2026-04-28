@@ -9,11 +9,8 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import {
-  getThreads,
-  updateThread as updateThreadApi,
-  type ThreadEntry
-} from '@/api/threads';
+import { getThreads, updateThread as updateThreadApi, type ThreadEntry } from '@/api/threads';
+import type { ThreadMessageEventPayload } from '@shared/events/thread';
 
 // Re-export types for consumers
 export type { ThreadEntry };
@@ -31,6 +28,39 @@ export const useThreadsStore = defineStore('threads', () => {
   const total = ref(0);
 
   const threadCount = computed(() => threads.value.length);
+
+  function sortThreads(): void {
+    threads.value.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  function upsertThread(thread: ThreadEntry): void {
+    const index = threads.value.findIndex((item) => item.id === thread.id);
+
+    if (index >= 0) {
+      threads.value[index] = {
+        ...threads.value[index],
+        ...thread
+      };
+    } else {
+      threads.value.unshift(thread);
+      total.value += 1;
+    }
+
+    sortThreads();
+  }
+
+  function removeThread(threadId: string): void {
+    const before = threads.value.length;
+    threads.value = threads.value.filter((thread) => thread.id !== threadId);
+
+    if (threads.value.length < before) {
+      total.value = Math.max(0, total.value - 1);
+    }
+
+    if (activeThreadId.value === threadId) {
+      activeThreadId.value = null;
+    }
+  }
 
   /**
    * 从后端获取 Thread 列表（首次加载，重置数据）
@@ -145,10 +175,13 @@ export const useThreadsStore = defineStore('threads', () => {
       const result = await updateThreadApi(threadId, updates);
 
       if (result.success) {
-        // 更新本地状态
-        const thread = threads.value.find((t) => t.id === threadId);
-        if (thread) {
-          Object.assign(thread, updates);
+        if (result.data?.thread) {
+          upsertThread(result.data.thread);
+        } else {
+          const thread = threads.value.find((t) => t.id === threadId);
+          if (thread) {
+            Object.assign(thread, updates);
+          }
         }
 
         console.log(`[ThreadsStore] Thread ${threadId} 更新成功`);
@@ -160,6 +193,17 @@ export const useThreadsStore = defineStore('threads', () => {
     } catch (err) {
       console.error('[ThreadsStore] 更新失败:', err);
       return false;
+    }
+  }
+
+  function applyThreadMessage(payload: ThreadMessageEventPayload): void {
+    if (payload.action === 'deleted') {
+      removeThread(payload.threadId);
+      return;
+    }
+
+    if (payload.thread) {
+      upsertThread(payload.thread);
     }
   }
 
@@ -175,6 +219,7 @@ export const useThreadsStore = defineStore('threads', () => {
     loadMoreThreads,
     selectThread,
     clearSelection,
-    updateThread
+    updateThread,
+    applyThreadMessage
   };
 });

@@ -86,7 +86,7 @@ export default (payload: { [key]: [type] }): void => {
 
 ### 5. Payload 类型定义
 
-所有事件的 Payload 类型都定义在 `@shared/ipc/events.ts` 中的 `EventPayloads` 接口：
+所有事件的 Payload 类型都定义在 `@shared/events/ipc.ts` 中的 `EventPayloads` 接口：
 
 ```typescript
 export interface EventPayloads {
@@ -219,7 +219,7 @@ export default (payload): void => {
 
 ### 添加新的事件处理器
 
-1. 在 `@shared/ipc/events.ts` 中定义事件类型和 Payload
+1. 在 `@shared/events/ipc.ts` 中定义事件类型和 Payload
 2. 在 `src/main/events/` 创建 `[eventName]Changed.ts` 文件
 3. 实现事件处理逻辑
 4. 在 `config.ts` 相应的 setter 方法中触发事件

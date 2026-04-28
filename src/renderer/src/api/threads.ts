@@ -6,22 +6,9 @@
 
 import { apiClient } from './client';
 import type { ApiResponse } from '@shared/api';
+import type { ThreadEntry } from '@shared/events/thread';
 
-/** Thread 索引条目（轻量版） */
-export interface ThreadEntry {
-  id: string;
-  title: string;
-  agentId: string;
-  agentName?: string;
-  status: 'active' | 'archived' | 'deleted';
-  runStatus: 'idle' | 'running' | 'completed' | 'error';
-  createdAt: string;
-  updatedAt: string;
-  workspacePath: string;
-  agentHomePath: string;
-  overrideModel?: string | null;
-  enableThinking?: boolean;
-}
+export type { ThreadEntry };
 
 /** Thread 列表响应 */
 export interface ListThreadsResponse {

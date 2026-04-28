@@ -8,7 +8,7 @@ import { log } from './logger';
 import { getTrayNativeImage } from './icons';
 import { config } from './config';
 import { eventBus } from './eventbus';
-import { EventTypes } from '@shared/ipc/events';
+import { EventTypes } from '@shared/events/ipc';
 
 class TrayManager {
   private tray: Tray | null = null;

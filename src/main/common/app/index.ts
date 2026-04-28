@@ -7,7 +7,7 @@ import { LifecyclePhase } from '../types';
 import type { IAppManager } from './types';
 import { ElectronAppEvents } from './types';
 import { eventBus } from '../eventbus';
-import { EventTypes } from '@shared/ipc/events';
+import { EventTypes } from '@shared/events/ipc';
 
 /**
  * 预加载核心模块（确保尽早初始化）

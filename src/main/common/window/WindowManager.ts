@@ -30,7 +30,7 @@ import type {
 import { getWindowPresets, CHROME_HEIGHT, BrowserWindowEvents, WebContentsEvents } from './types';
 import { log } from '@main/common/logger';
 import { eventBus } from '@main/common/eventbus';
-import { EventTypes } from '@shared/ipc/events';
+import { EventTypes } from '@shared/events/ipc';
 import { Env } from '@main/common/env';
 import { IconManager } from '@main/common/icons';
 

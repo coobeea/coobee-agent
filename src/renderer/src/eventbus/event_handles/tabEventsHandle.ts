@@ -3,7 +3,7 @@
  *
  * 职责：监听 Tab 事件，刷新窗口信息
  */
-import { EventTypes, type EventPayloads } from '@shared/ipc/events';
+import { EventTypes, type EventPayloads } from '@shared/events/ipc';
 import eventBus from '@/eventbus';
 import { useWindowStore } from '@/stores/window';
 import { useLogStore } from '@/stores/log';

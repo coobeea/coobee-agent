@@ -20,6 +20,8 @@ import * as lockfile from 'proper-lockfile';
 import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
 import { generateSnowflakeId } from '@main/utils/SnowflakeIdGenerator';
+import { ThreadEventTypes } from '@shared/events/thread';
+import type { ThreadMessageAction, ThreadMessageEventPayload } from '@shared/events/thread';
 import type {
   ThreadDefinition,
   ThreadIndexEntry,
@@ -119,7 +121,7 @@ export class ThreadStore {
     });
 
     log.info(`[ThreadStore] Created thread: ${definition.id} (agent: ${definition.agentId})`);
-    eventBus.emit(ThreadEventType.CREATED, { thread: toIndexEntry(definition, this.workspacesDir) });
+    this.emitThreadMessage('created', toIndexEntry(definition, this.workspacesDir));
     return definition;
   }
 
@@ -291,16 +293,11 @@ export class ThreadStore {
 
     log.info(`[ThreadStore] Updated thread: ${threadId}`);
 
-    if (updated.runStatus !== prevRunStatus) {
-      eventBus.emit(ThreadEventType.STATUS, {
-        threadId,
-        runStatus: updated.runStatus,
-        prevStatus: prevRunStatus
-      });
-    }
-    eventBus.emit(ThreadEventType.UPDATED, {
-      thread: toIndexEntry(updated, this.workspacesDir)
-    });
+    this.emitThreadMessage(
+      'updated',
+      toIndexEntry(updated, this.workspacesDir),
+      updated.runStatus !== prevRunStatus ? { prevRunStatus } : undefined
+    );
 
     return updated;
   }
@@ -315,7 +312,7 @@ export class ThreadStore {
     try {
       fs.unlinkSync(filePath);
       log.info(`[ThreadStore] Deleted thread: ${threadId}`);
-      eventBus.emit(ThreadEventType.DELETED, { threadId });
+      this.emitThreadMessage('deleted', undefined, { threadId });
       return true;
     } catch (err) {
       log.warn(`[ThreadStore] Failed to delete thread ${threadId}:`, err);
@@ -400,31 +397,29 @@ export class ThreadStore {
       log.warn(`[ThreadStore] Failed to append to agent session index (${agentId}):`, err);
     }
   }
+
+  private emitThreadMessage(
+    action: ThreadMessageAction,
+    thread?: ThreadIndexEntry,
+    options?: { threadId?: string; prevRunStatus?: ThreadRunStatus }
+  ): void {
+    const payload: ThreadMessageEventPayload = {
+      type: ThreadEventTypes.MESSAGE,
+      action,
+      threadId: thread?.id ?? options?.threadId ?? '',
+      ...(thread && { thread }),
+      ...(options?.prevRunStatus && { prevRunStatus: options.prevRunStatus }),
+      timestamp: Date.now()
+    };
+
+    eventBus.emit(ThreadEventTypes.MESSAGE, payload);
+  }
 }
 
 // ==================== Thread EventBus 事件类型 ====================
 
-export const ThreadEventType = {
-  CREATED: 'thread:created',
-  UPDATED: 'thread:updated',
-  DELETED: 'thread:deleted',
-  STATUS: 'thread:status'
-} as const;
-
-export interface ThreadCreatedEvent {
-  thread: ThreadIndexEntry;
-}
-export interface ThreadUpdatedEvent {
-  thread: ThreadIndexEntry;
-}
-export interface ThreadDeletedEvent {
-  threadId: string;
-}
-export interface ThreadStatusEvent {
-  threadId: string;
-  runStatus: ThreadRunStatus;
-  prevStatus: ThreadRunStatus;
-}
+export const ThreadEventType = ThreadEventTypes;
+export type ThreadMessageEvent = ThreadMessageEventPayload;
 
 // ==================== 辅助函数 ====================
 

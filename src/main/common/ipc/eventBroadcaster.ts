@@ -45,7 +45,7 @@
 import { BrowserWindow, WebContentsView, webContents } from 'electron';
 import { eventBus } from '@main/common/eventbus';
 import { log } from '@main/common/logger';
-import { EventTypes, type IpcEventMessage, type EventPayloads } from '@shared/ipc/events';
+import { EventTypes, type IpcEventMessage, type EventPayloads } from '@shared/events/ipc';
 
 /**
  * IPC 事件通道常量

@@ -12,7 +12,7 @@ import { monaco } from '@/utils/monaco-setup';
 import { useOpenFiles, type OpenFile } from '@/composables/useOpenFiles';
 import { routePreview, type PreviewMode } from '@/utils/previewRouter';
 import eventBus from '@/eventbus';
-import { EventTypes } from '@shared/ipc/events';
+import { EventTypes } from '@shared/events/ipc';
 
 /** 判断当前是否为暗色模式（支持 class 和 prefers-color-scheme） */
 function isDarkMode(): boolean {

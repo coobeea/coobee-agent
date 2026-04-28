@@ -15,19 +15,20 @@ export {
   OnboardingChannels
 } from './channels';
 
-export type {
-  ShellChannel,
-  WindowChannel,
-  TabChannel,
-  AppChannel,
-  EventChannel,
-  OnboardingChannel
-} from './channels';
+export type { ShellChannel, WindowChannel, TabChannel, AppChannel, EventChannel, OnboardingChannel } from './channels';
 
 // ==================== 事件类型 ====================
-export type { EventType, EventPayloads, EventHandler, GenericEventHandler, IpcEventMessage } from './events';
+export type {
+  EventType,
+  EventPayloads,
+  EventHandler,
+  GenericEventHandler,
+  EventMessage,
+  IpcEventMessage,
+  IpcEventType
+} from '../events/ipc';
 
-export { EventTypes } from './events';
+export { EventTypes } from '../events/ipc';
 
 // ==================== 类型定义 ====================
 export type {
