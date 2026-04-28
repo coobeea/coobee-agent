@@ -131,11 +131,11 @@ export const chatMethods: MethodGroup = {
         sessionId: thread.id,
         message: message as string,
         agentId: agent.id,
-        name: agent.id,
         instructions: agent.instructions,
         modelOverride: thread.overrideModel || agent.model,
         workspaceRoot: thread.metadata?.workspacePath as string | undefined,
         mode: 'agent',
+        runtimeType: 'pi-mono',
         sessionMode: 'file'
       });
 

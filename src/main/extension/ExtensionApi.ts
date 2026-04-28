@@ -173,7 +173,7 @@ function createExtensionServices(): ExtensionServices {
           message,
           lightweight: true,
           mode: 'chat',
-          name: agentId,
+          runtimeType: 'pi-mono',
           sessionMode: 'memory',
           maxTurns: 1,
           instructions: agentDef.instructions,

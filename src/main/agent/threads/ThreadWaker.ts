@@ -185,11 +185,11 @@ export class ThreadWaker {
         sessionId: threadId,
         message,
         agentId: agent.id,
-        name: agent.id,
         instructions: agent.instructions,
         modelOverride: thread.overrideModel || agent.model,
         workspaceRoot: thread.metadata?.workspacePath as string | undefined,
         mode: 'agent',
+        runtimeType: 'pi-mono',
         sessionMode: 'file'
       });
 

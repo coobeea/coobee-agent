@@ -22,20 +22,12 @@
  */
 
 import { createLogger } from '@main/common/logger';
-import { Models } from '@main/config';
 
 const log = createLogger('ai');
 
 import { SessionStatusManager, type SessionStatus } from './runtime/SessionStatusManager';
 import type { AgentRuntime } from './runtime/AgentRuntime';
-import type {
-  AgentMode,
-  AgentRuntimeKind,
-  ExecutionResult,
-  SkillDefinition,
-  StreamChunk,
-  ToolDefinition
-} from './runtime/types';
+import type { AgentMode, AgentRuntimeKind, ExecutionResult, StreamChunk } from './runtime/types';
 import type { ThreadRunStatus } from './threads/types';
 import { AgentRuntimeBuilder } from './runtime/AgentRuntimeBuilder';
 import { createStreamEmitter, type IStreamEmitter } from './streaming/StreamEmitter';
@@ -53,8 +45,8 @@ export interface ExecuteRequest {
   sessionId: string;
   /** 用户消息 */
   message: string;
-  /** Runtime 实现类型；不传则按模型 Provider 自动选择 */
-  runtimeType?: AgentRuntimeKind;
+  /** Runtime 实现类型（必填） */
+  runtimeType: AgentRuntimeKind;
   /** 运行模式（默认 agent） */
   mode?: AgentMode;
   /** 会话持久化方式（默认 file） */
@@ -63,8 +55,6 @@ export interface ExecuteRequest {
   lightweight?: boolean;
   /** Agent 定义 ID */
   agentId?: string;
-  /** Runtime 名称 */
-  name?: string;
   /** 基础系统提示词 */
   instructions?: string;
   /** 模型覆盖（provider/model 或 model id） */
@@ -73,16 +63,6 @@ export interface ExecuteRequest {
   workspaceRoot?: string;
   /** 最大执行轮次 */
   maxTurns?: number;
-  /** 调用方显式追加的指令 */
-  appendInstructions?: string[];
-  /** 调用方显式传入的 Skills */
-  skills?: SkillDefinition[];
-  /** 调用方显式传入的 Tools */
-  tools?: ToolDefinition[];
-  /** 流式事件回调（可选） */
-  onChunk?: (chunk: StreamChunk) => void;
-  /** 中止信号（会在 build 前注入 RuntimeOptions） */
-  signal?: AbortSignal;
 }
 
 /** 执行状态（从 SessionStatusManager re-export） */
@@ -203,7 +183,7 @@ class AgentExecutor {
    * 内部管理完整的 busy 锁 + 创建 → stream() → 销毁 生命周期。
    * 每个 chunk 同时通过 StreamEmitter.forward() 广播到 EventBus。
    */
-  async *stream(request: Omit<ExecuteRequest, 'onChunk'>): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
+  async *stream(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
     const { sessionId } = request;
 
     if (this.sessionStatus.isRunning(sessionId)) {
@@ -403,15 +383,15 @@ class AgentExecutor {
    * 统一处理所有的 Hooks、环境注入、事件分发和生命周期。
    */
   private async *executePipeline(request: ExecuteRequest): AsyncGenerator<StreamChunk, ExecutionResult, unknown> {
-    const { sessionId, message, onChunk } = request;
-    const externalSignal = request.signal;
+    const { sessionId, message } = request;
+
     let runtime: AgentRuntime | null = null;
 
     log.info(`[AgentExecutor] Execute Pipeline: sessionId=${sessionId}, message="${message.slice(0, 50)}..."`);
     const startTime = Date.now();
 
     // 创建或使用外部提供的 AbortController
-    let signal = externalSignal;
+    let signal: AbortSignal | undefined;
 
     if (!signal) {
       const controller = new AbortController();
@@ -424,7 +404,7 @@ class AgentExecutor {
     let preparedEnv: PreparedAgentEnv | undefined;
     const mode = request.mode ?? 'agent';
     const isLightweight = request.lightweight ?? false;
-    const agentName = request.name ?? request.agentId ?? 'agent';
+    const agentName = request.agentId ?? 'agent';
 
     let emitter: IStreamEmitter | null = null;
 
@@ -451,7 +431,7 @@ class AgentExecutor {
           workspaceRoot: workspaceDir,
           agentId: request.agentId,
           agentName,
-          hasRequestTools: !!request.tools?.length
+          hasRequestTools: false
         });
         workspaceDir = preparedEnv?.workspace ?? workspaceDir;
 
@@ -495,7 +475,7 @@ class AgentExecutor {
       const gen = runtime.stream(message);
       const requestAgentId = request.agentId;
 
-      const result = yield* this.consumeAndForward(gen, emitter, sessionId, onChunk, signal, requestAgentId);
+      const result = yield* this.consumeAndForward(gen, emitter, sessionId, undefined, signal, requestAgentId);
 
       const duration = Date.now() - startTime;
 
@@ -584,7 +564,7 @@ class AgentExecutor {
   }
 
   private getRunIdentity(request: ExecuteRequest, runtime: AgentRuntime): AgentRunIdentity {
-    const name = request.name ?? runtime.options.name ?? request.agentId ?? 'agent';
+    const name = request.agentId ?? runtime.options.name ?? 'agent';
     return {
       id: request.agentId ?? name,
       name
@@ -640,7 +620,7 @@ class AgentExecutor {
     const mode = request.mode ?? 'agent';
     const runtimeType = this.resolveRuntimeType(request);
     const sessionMode = request.sessionMode ?? 'file';
-    const name = request.name ?? request.agentId ?? 'agent';
+    const name = request.agentId ?? 'agent';
     const instructions = runInputPatch?.instructions ?? request.instructions ?? '';
 
     const builder = new AgentRuntimeBuilder()
@@ -666,15 +646,6 @@ class AgentExecutor {
     }
     if (signal) {
       builder.signal(signal);
-    }
-    if (request.appendInstructions?.length) {
-      builder.appendInstructions(...request.appendInstructions);
-    }
-    if (request.skills?.length) {
-      builder.skills(request.skills);
-    }
-    if (request.tools?.length) {
-      builder.tools(request.tools);
     }
 
     if (preparedEnv) {
@@ -704,22 +675,8 @@ class AgentExecutor {
   }
 
   private resolveRuntimeType(request: ExecuteRequest): AgentRuntimeKind {
-    if (request.runtimeType) {
-      return request.runtimeType;
-    }
-
-    try {
-      const resolved = Models.resolveModel(request.modelOverride);
-      if (resolved.provider.api === 'anthropic') {
-        return 'claude';
-      }
-    } catch (error) {
-      log.debug('[AgentExecutor] Runtime auto-select fallback to pi-mono:', error);
-    }
-
-    return 'pi-mono';
+    return request.runtimeType;
   }
-
   /** 根据 StreamChunk 触发 Agent 运行过程中的派生 Hook。 */
   private fireChunkHooks(
     chunk: StreamChunk,
@@ -832,6 +789,7 @@ class AgentExecutor {
     sessionId: string,
     agentId: string,
     result: ExecutionResult,
+
     durationMs: number
   ): Promise<void> {
     try {
