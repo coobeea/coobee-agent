@@ -53,6 +53,11 @@ import { setupEventSubscription } from './PiMonoStreamAdapter';
 import { convertTools } from './PiMonoToolConverter';
 
 const log = createRuntimeLogger('pimono-runtime');
+const DEFAULT_CONTEXT_WINDOW = 204800;
+
+function resolveContextWindow(modelMeta?: AgentRuntimeOptions['modelMeta']): number {
+  return modelMeta?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+}
 
 /**
  * 构造 Anthropic 模型对象
@@ -64,7 +69,7 @@ function createAnthropicModel(
   modelMeta?: AgentRuntimeOptions['modelMeta']
 ): Model<'anthropic-messages'> {
   const reasoning = modelMeta?.reasoning ?? true;
-  const contextWindow = modelMeta?.contextWindow ?? 204800;
+  const contextWindow = resolveContextWindow(modelMeta);
   const maxTokens = modelMeta?.maxOutputTokens ?? 131072;
   return {
     id: modelName,
@@ -101,7 +106,7 @@ function createOpenAICompatModel(
   modelMeta?: AgentRuntimeOptions['modelMeta']
 ): Model<'openai-completions'> {
   const reasoning = modelMeta?.reasoning ?? true;
-  const contextWindow = modelMeta?.contextWindow ?? 204800;
+  const contextWindow = resolveContextWindow(modelMeta);
   const maxTokens = modelMeta?.maxOutputTokens ?? 131072;
 
   return {
@@ -245,7 +250,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           onApiError: (errorMessage) => {
             apiError = errorMessage;
           },
-          contextWindow: options.modelMeta?.contextWindow
+          contextWindow: resolveContextWindow(options.modelMeta)
         },
         log
       );

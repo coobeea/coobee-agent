@@ -217,6 +217,12 @@ export class AgentRuntimeBuilder {
     return process.env.VITE_LLM_MODEL || 'qwen3-max';
   }
 
+  private resolveProvider(): string {
+    if (this.options.provider) return this.options.provider;
+    if (this._providerConfig?.id) return this._providerConfig.id;
+    return '';
+  }
+
   private resolveBaseURL(): string {
     if (this.options.baseURL) return this.options.baseURL;
     if (this._providerConfig?.baseUrl) return this._providerConfig.baseUrl;
@@ -235,13 +241,41 @@ export class AgentRuntimeBuilder {
     return this._providerConfig?.api || this.options.apiType || 'openai-compatible';
   }
 
+  private resolveModelMeta(modelId: string): AgentRuntimeOptions['modelMeta'] {
+    const modelConfig = this._providerConfig?.models.find((model) => model.id === modelId);
+    const meta: AgentRuntimeOptions['modelMeta'] = {};
+
+    if (modelConfig) {
+      if (modelConfig.reasoning !== undefined) meta.reasoning = modelConfig.reasoning;
+      if (modelConfig.contextWindow !== undefined) meta.contextWindow = modelConfig.contextWindow;
+      if (modelConfig.maxOutputTokens !== undefined) meta.maxOutputTokens = modelConfig.maxOutputTokens;
+      if (modelConfig.maxTokens !== undefined && meta.maxOutputTokens === undefined) {
+        meta.maxOutputTokens = modelConfig.maxTokens;
+      }
+      if (modelConfig.maxThinkingTokens !== undefined) meta.maxThinkingTokens = modelConfig.maxThinkingTokens;
+      if (modelConfig.functionCalling !== undefined) meta.functionCalling = modelConfig.functionCalling;
+    }
+
+    const explicitMeta = this.options.modelMeta;
+    if (explicitMeta.reasoning !== undefined) meta.reasoning = explicitMeta.reasoning;
+    if (explicitMeta.contextWindow !== undefined) meta.contextWindow = explicitMeta.contextWindow;
+    if (explicitMeta.maxOutputTokens !== undefined) meta.maxOutputTokens = explicitMeta.maxOutputTokens;
+    if (explicitMeta.maxThinkingTokens !== undefined) meta.maxThinkingTokens = explicitMeta.maxThinkingTokens;
+    if (explicitMeta.functionCalling !== undefined) meta.functionCalling = explicitMeta.functionCalling;
+
+    return meta;
+  }
+
   async build(): Promise<AgentRuntime> {
+    const model = this.resolveModel();
     const resolved: AgentRuntimeOptions = {
       ...this.options,
-      model: this.resolveModel(),
+      provider: this.resolveProvider(),
+      model,
       apiKey: this.resolveApiKey(),
       apiType: this.resolveApiType(),
-      baseURL: this.resolveBaseURL()
+      baseURL: this.resolveBaseURL(),
+      modelMeta: this.resolveModelMeta(model)
     };
 
     if (!resolved.apiKey && resolved.type !== 'claude') {

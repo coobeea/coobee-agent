@@ -11,6 +11,7 @@
 
 import { computed } from 'vue';
 import { useThreadsStore } from '@/stores/threads';
+import type { ThreadEntry } from '@/stores/threads';
 
 // ==================== Props & Emits ====================
 
@@ -79,21 +80,8 @@ function isThreadStreaming(threadId: string): boolean {
   return thread?.runStatus === 'running';
 }
 
-/** 格式化相对时间 */
-function formatRelativeTime(timestamp: string): string {
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diff = now - then;
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes} 分钟前`;
-  if (hours < 24) return `${hours} 小时前`;
-  if (days < 7) return `${days} 天前`;
-  return new Date(timestamp).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+function getThreadAgentLabel(thread: ThreadEntry): string {
+  return thread.agentName || thread.agentId || '智能体';
 }
 
 // ==================== 事件处理 ====================
@@ -179,9 +167,9 @@ function handleScroll(event: Event): void {
               </div>
             </div>
             <span
-              class="block text-[11px] leading-[15px] transition-colors"
+              class="mt-0.5 block min-w-0 truncate text-[11px] leading-[15px] transition-colors"
               :class="activeThreadId === thread.id ? 'text-primary/75' : 'text-muted-foreground/70'">
-              {{ formatRelativeTime(thread.updatedAt) }}
+              {{ getThreadAgentLabel(thread) }}
             </span>
           </div>
         </button>

@@ -7,6 +7,9 @@ export interface CreateThreadExecutionRequestParams {
   runtimeType?: AgentRuntimeKind;
 }
 
+const DEFAULT_THREAD_TITLES = new Set(['新任务', '新会话']);
+const AUTO_TITLE_MAX_CHARS = 28;
+
 /**
  * Thread 执行请求工厂。
  *
@@ -43,6 +46,13 @@ export class ThreadExecutionFactory {
       throw new Error(`Agent ${thread.agentId} not found`);
     }
 
+    if (this.shouldAutoTitle(thread.title)) {
+      const title = this.createTitleFromMessage(params.message);
+      if (title) {
+        await threadStore.update(thread.id, { title });
+      }
+    }
+
     return {
       sessionId: thread.id,
       message: params.message,
@@ -54,5 +64,15 @@ export class ThreadExecutionFactory {
       runtimeType: params.runtimeType ?? 'pi-mono',
       sessionMode: 'file'
     };
+  }
+
+  private shouldAutoTitle(title: string | undefined): boolean {
+    const normalized = title?.trim();
+    return !normalized || DEFAULT_THREAD_TITLES.has(normalized);
+  }
+
+  private createTitleFromMessage(message: string): string {
+    const normalized = message.replace(/\s+/g, ' ').trim();
+    return Array.from(normalized).slice(0, AUTO_TITLE_MAX_CHARS).join('');
   }
 }

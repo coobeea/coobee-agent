@@ -39,8 +39,22 @@ export interface ModelConfig {
   input?: ('text' | 'image')[];
   /** 上下文窗口大小 */
   contextWindow?: number;
+  /** 最大输入 token 数 */
+  maxInputTokens?: number;
+  /** 最大输出 token 数（新配置字段） */
+  maxOutputTokens?: number;
   /** 最大输出 token 数 */
   maxTokens?: number;
+  /** 最大推理思考 token 数 */
+  maxThinkingTokens?: number;
+  /** 是否支持视觉输入 */
+  vision?: boolean;
+  /** 是否支持工具调用 */
+  functionCalling?: boolean;
+  /** 是否支持 Web Search */
+  webSearch?: boolean;
+  /** 模型能力标签 */
+  features?: string[];
   /** 成本配置 */
   cost?: ModelCostConfig;
 }
