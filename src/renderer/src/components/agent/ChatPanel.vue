@@ -60,6 +60,14 @@ const assistantName = computed(() => {
   return thread?.agentName || agentDisplayName.value || listName || '智能体';
 });
 
+const contextStats = computed(() => {
+  const latestAssistant = [...messages.value].reverse().find((msg) => msg.role === 'assistant' && msg.stats);
+  const stats = latestAssistant?.stats;
+  if (!stats?.contextWindow) return undefined;
+  const usedTokens = stats.contextInputTokens ?? stats.inputTokens;
+  return usedTokens > 0 ? stats : undefined;
+});
+
 // ==================== Methods ====================
 function scrollToBottom(force = false): void {
   chatMessagesRef.value?.scrollToBottom(force);
@@ -173,6 +181,10 @@ function collectHistoryToolCalls(msg: HistoryAssistantMessageV2): HistoryToolCal
   return msg.turns.flatMap((turn) => (Array.isArray(turn.toolCalls) ? turn.toolCalls : []));
 }
 
+function getLastUsage(msg: HistoryAssistantMessageV2) {
+  return [...msg.turns].reverse().find((turn) => turn.usage && turn.usage.totalTokens > 0)?.usage;
+}
+
 async function loadAgentDetails(): Promise<void> {
   const thread = currentThread.value;
   agentDisplayName.value = '';
@@ -281,11 +293,13 @@ async function loadThreadHistory(): Promise<void> {
 
         // 添加统计信息
         const duration = endTime ? endTime - startTime : undefined;
+        const lastUsage = getLastUsage(msgData);
         chatMsg.stats = {
           inputTokens: msgData.usage.inputTokens || 0,
           outputTokens: msgData.usage.outputTokens || 0,
           totalTokens: msgData.usage.totalTokens || 0,
-          contextWindow: msgData.usage.contextWindow,
+          contextWindow: lastUsage?.contextWindow ?? msgData.usage.contextWindow,
+          contextInputTokens: lastUsage?.inputTokens ?? msgData.usage.inputTokens,
           llmCalls: msgData.turns.filter((turn) => turn.usage.totalTokens > 0).length,
           toolCalls: toolCalls.length,
           startTime,
@@ -386,6 +400,7 @@ defineExpose({
       :disabled="isStreaming"
       :placeholder="isStreaming ? '智能体正在处理中...' : '输入消息，Enter 发送，Shift+Enter 换行'"
       :show-stop-button="isStreaming"
+      :context-stats="contextStats"
       @send="handleSend"
       @stop="handleStop" />
   </aside>

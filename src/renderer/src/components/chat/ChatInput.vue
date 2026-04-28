@@ -201,7 +201,7 @@ onUnmounted(() => {
       <div class="toolbar-right">
         <!-- 停止按钮（流式时显示） -->
         <button v-if="showStopButton" class="toolbar-btn toolbar-btn-stop" title="中断" @click="emit('stop')">
-          <span class="i-carbon-stop-filled inline-block h-4 w-4" />
+          <span class="i-carbon-stop-filled inline-block h-3.5 w-3.5" />
         </button>
         <!-- 发送按钮（未流式时显示） -->
         <button
@@ -210,7 +210,7 @@ onUnmounted(() => {
           title="发送 (Enter)"
           :disabled="disabled"
           @click="handleSend">
-          <span class="i-carbon-arrow-up inline-block h-4 w-4" />
+          <span class="i-carbon-arrow-up inline-block h-3.5 w-3.5" />
         </button>
       </div>
     </div>
@@ -264,7 +264,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 4px 10px;
   background: transparent;
   border-top: 1px solid hsl(var(--border) / 0.14);
 }
@@ -272,7 +272,7 @@ onUnmounted(() => {
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   flex: 1;
 }
@@ -280,7 +280,7 @@ onUnmounted(() => {
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
 }
 
@@ -288,9 +288,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 30px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;

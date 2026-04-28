@@ -78,6 +78,8 @@ export interface ExecutionStats {
   totalTokens: number;
   /** 当前模型上下文窗口大小，保留最后一次 LLM 调用的值 */
   contextWindow?: number;
+  /** 最后一次 LLM 调用的输入 token，用于计算当前上下文占比 */
+  contextInputTokens?: number;
   /** 大模型调用次数 */
   llmCalls: number;
   /** 工具调用次数 */

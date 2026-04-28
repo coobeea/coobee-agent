@@ -11,7 +11,9 @@ import { useFlatConfigModels } from '@/composables/useFlatConfigModels';
 import ChatInput from '@/components/chat/ChatInput.vue';
 import ModelPickerDropdown from '@/components/chat/ModelPickerDropdown.vue';
 import ThinkingToggle from '@/components/chat/ThinkingToggle.vue';
+import ContextUsageIndicator from '@/components/chat/ContextUsageIndicator.vue';
 import { getDefaultModel } from '@/api/config';
+import type { ExecutionStats } from '@/types/chat';
 
 const props = withDefaults(
   defineProps<{
@@ -21,12 +23,15 @@ const props = withDefaults(
     showStopButton?: boolean;
     /** 是否显示任务级模型覆盖选择 */
     showModelPicker?: boolean;
+    /** 最近一次模型调用的上下文使用统计 */
+    contextStats?: ExecutionStats;
   }>(),
   {
     placeholder: '输入消息... (Enter 发送，Shift+Enter 换行)',
     disabled: false,
     showStopButton: false,
-    showModelPicker: true
+    showModelPicker: true,
+    contextStats: undefined
   }
 );
 
@@ -124,13 +129,15 @@ defineExpose({
     @send="emit('send', $event)"
     @stop="emit('stop')">
     <!-- 左下角：模型选择器 + 思维链开关（slot） -->
-    <template v-if="showModelPicker" #toolbar-left>
+    <template #toolbar-left>
       <ModelPickerDropdown
+        v-if="showModelPicker"
         :items="flatModelList"
         :selected-value="selectedModel"
         :disabled="disabled"
         @select="onSelectModel" />
-      <ThinkingToggle v-model="enableThinking" :disabled="disabled" />
+      <ThinkingToggle v-if="showModelPicker" v-model="enableThinking" :disabled="disabled" />
+      <ContextUsageIndicator :stats="contextStats" />
     </template>
   </ChatInput>
 </template>

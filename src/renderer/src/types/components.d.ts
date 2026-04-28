@@ -32,6 +32,7 @@ declare module 'vue' {
     Container: typeof import('./../components/Container.vue')['default']
     ContextMenu: typeof import('./../components/common/ContextMenu.vue')['default']
     ContextMenuItem: typeof import('./../components/common/ContextMenuItem.vue')['default']
+    ContextUsageIndicator: typeof import('./../components/chat/ContextUsageIndicator.vue')['default']
     DangerButton: typeof import('./../components/Form/DangerButton.vue')['default']
     ErrorDisplay: typeof import('./../components/common/ErrorDisplay.vue')['default']
     FilePreviewModal: typeof import('./../components/common/FilePreviewModal.vue')['default']

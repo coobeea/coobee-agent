@@ -84,12 +84,12 @@ onUnmounted(() => {
   <div ref="rootRef" class="relative z-50 min-w-0 shrink-0">
     <button
       type="button"
-      class="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/45 bg-background/80 px-2.5 py-1.5 text-left text-[11.5px] font-medium text-muted-foreground transition-colors hover:border-primary/25 hover:bg-muted/45 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      class="inline-flex h-6 max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/45 bg-background/80 px-2 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/25 hover:bg-muted/45 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
       :disabled="disabled"
       @click="toggle">
       <span class="min-w-0 truncate">{{ displayLabel }}</span>
       <span
-        class="i-carbon-chevron-down inline-block h-3 w-3 shrink-0 opacity-60 transition"
+        class="i-carbon-chevron-down inline-block h-2.5 w-2.5 shrink-0 opacity-60 transition"
         :class="open ? 'rotate-180' : ''" />
     </button>
 

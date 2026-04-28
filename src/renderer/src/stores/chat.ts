@@ -194,9 +194,11 @@ export const useChatStore = defineStore(
             | undefined;
           if (usage) {
             const stats = threadState.currentAssistantMsg.stats;
-            stats.inputTokens += usage.inputTokens || 0;
+            const inputTokens = usage.inputTokens || 0;
+            stats.inputTokens += inputTokens;
             stats.outputTokens += usage.outputTokens || 0;
             stats.totalTokens += usage.totalTokens || 0;
+            stats.contextInputTokens = inputTokens;
             if (usage.contextWindow) {
               stats.contextWindow = usage.contextWindow;
             }

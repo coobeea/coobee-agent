@@ -44,10 +44,11 @@ function toggle(): void {
 .thinking-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  font-size: 11.5px;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 500;
   border: 1px solid hsl(var(--border) / 0.25);
   background: transparent;
@@ -81,8 +82,8 @@ function toggle(): void {
 
 .thinking-toggle-icon {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
