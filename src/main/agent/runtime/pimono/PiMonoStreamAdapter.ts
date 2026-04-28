@@ -370,8 +370,8 @@ export function setupEventSubscription(
         break;
       }
 
-      // ===== 压缩（SDK 内置！）=====
-      case 'auto_compaction_start' as any:
+      // ===== 压缩（SDK 内置！事件名为 compaction_start / compaction_end）=====
+      case 'compaction_start' as any:
         onChunk({
           type: 'compression:start',
           content: `Compaction triggered: ${evt.reason}`,
@@ -379,14 +379,14 @@ export function setupEventSubscription(
         });
         break;
 
-      case 'auto_compaction_end' as any:
+      case 'compaction_end' as any:
         onChunk({
           type: 'compression:done',
           content: evt.aborted ? 'Compaction aborted' : 'Compaction done',
           data: {
             summarizedSeqs: [],
             endSeq: 0,
-            originalTokens: 0,
+            originalTokens: evt.result?.tokensBefore || 0,
             summaryTokens: 0,
             compressionRatio: 0,
             duration: 0

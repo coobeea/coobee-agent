@@ -365,7 +365,11 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
 
   private createSettingsManager(options: AgentRuntimeOptions): SettingsManager {
     return SettingsManager.inMemory({
-      compaction: { enabled: options.compaction?.enabled ?? false },
+      compaction: {
+        enabled: options.compaction?.enabled ?? false,
+        reserveTokens: options.compaction?.reserveTokens,
+        keepRecentTokens: options.compaction?.keepRecentTokens
+      },
       retry: {
         enabled: options.retry?.enabled ?? true,
         maxRetries: options.retry?.maxRetries ?? 3,

@@ -223,6 +223,18 @@ export interface CompactionConfig {
   minMessageCount?: number;
   /** 是否调试模式 */
   debug?: boolean;
+  /**
+   * PiMono SDK: 保留用于生成总结的 token 数（默认 16384）
+   *
+   * 压缩触发条件：contextTokens > contextWindow - reserveTokens
+   */
+  reserveTokens?: number;
+  /**
+   * PiMono SDK: 保留最近消息的 token 数（默认 20000）
+   *
+   * 压缩时保留最近 keepRecentTokens 个 token 的消息不压缩。
+   */
+  keepRecentTokens?: number;
 }
 
 // ========== Agent 运行时通用选项 ==========
