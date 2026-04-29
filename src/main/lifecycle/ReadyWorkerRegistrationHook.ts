@@ -9,8 +9,31 @@
  */
 
 import { log } from '@main/common/logger';
+import { eventBus } from '@main/common/eventbus';
 import { WorkerManager } from '@main/common/worker';
+import type { WorkerStatusEvent } from '@main/common/worker/types';
 import { LifecyclePhase, type LifecycleContext, type LifecycleHook } from '@main/common/types';
+
+let bridgedManager: WorkerManager | null = null;
+let cleanupWorkerEventBridge: (() => void) | null = null;
+
+function ensureWorkerEventBridge(manager: WorkerManager): void {
+  if (bridgedManager === manager) return;
+
+  cleanupWorkerEventBridge?.();
+
+  const forwardStatus = (event: WorkerStatusEvent): void => {
+    eventBus.emit('worker:status', event);
+  };
+
+  manager.on('worker:status', forwardStatus);
+  bridgedManager = manager;
+  cleanupWorkerEventBridge = () => {
+    manager.off('worker:status', forwardStatus);
+    bridgedManager = null;
+    cleanupWorkerEventBridge = null;
+  };
+}
 
 /**
  * READY 阶段 Hook：扫描 + 注册 + 异步启动
@@ -23,6 +46,7 @@ export const ReadyWorkerRegistrationHook: LifecycleHook = {
 
   async execute(_context: LifecycleContext): Promise<void> {
     const manager = WorkerManager.getInstance();
+    ensureWorkerEventBridge(manager);
 
     // 自动扫描内置 Worker 目录，发现并注册所有 Worker
     const count = manager.scanAndRegister();

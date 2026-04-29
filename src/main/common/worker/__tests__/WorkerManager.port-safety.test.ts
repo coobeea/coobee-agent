@@ -167,4 +167,35 @@ describe('WorkerManager 端口安全', () => {
       expect(worker?.status).toBe('initializing');
     });
   });
+
+  describe('stop() 运行期资源清理', () => {
+    it('进程对象不存在时仍清理健康检查和指标采集器', async () => {
+      const config = {
+        name: 'test-cleanup',
+        label: 'Test Cleanup',
+        entry: 'server.py',
+        port: 19997,
+        type: 'python' as const
+      };
+      manager.register(config);
+
+      const worker = manager.workers.get('test-cleanup');
+      const interval = setInterval(() => {}, 1000);
+      const metricsCollector = {
+        stop: vi.fn()
+      };
+
+      worker.status = 'ready';
+      worker.process = null;
+      worker.healthCheckInterval = interval;
+      worker.metricsCollector = metricsCollector;
+
+      await manager.stop('test-cleanup');
+
+      expect(metricsCollector.stop).toHaveBeenCalledOnce();
+      expect(worker.healthCheckInterval).toBeUndefined();
+      expect(worker.metricsCollector).toBeUndefined();
+      expect(worker.status).toBe('stopped');
+    });
+  });
 });

@@ -39,8 +39,9 @@ MODEL_NAME = "GLM-OCR"
 DEFAULT_MODEL_DIR = os.path.join(os.environ.get("HOME", ""), ".cache", "modelscope", "hub")
 MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
 
-# 尝试读取本地配置覆盖 (local_config.json)
-local_config_path = os.path.join(SCRIPT_DIR, "local_config.json")
+# 尝试读取运行时配置覆盖 (WORKER_CONFIG_PATH)，local_config.json 仅作兼容兜底
+local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
+local_config_base_dir = os.path.dirname(os.path.abspath(local_config_path))
 if os.path.exists(local_config_path):
     try:
         import json
@@ -50,7 +51,7 @@ if os.path.exists(local_config_path):
             if "model_dir" in config and isinstance(config["model_dir"], str):
                 p = config["model_dir"]
                 if not os.path.isabs(p):
-                    p = os.path.abspath(os.path.join(SCRIPT_DIR, p))
+                    p = os.path.abspath(os.path.join(local_config_base_dir, p))
                 MODEL_DIR = p
                 print(f"[OCR Config] MODEL_DIR -> {MODEL_DIR}")
 

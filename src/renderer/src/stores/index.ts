@@ -10,3 +10,4 @@ export * from './preference';
 export * from './window';
 export * from './loading';
 export * from './log';
+export * from './worker';

@@ -5,7 +5,7 @@ FastAPI + WebSocket 服务，支持两种后端：
   1. 本地 Qwen3-TTS 模型（需要 GPU / Apple Silicon）
   2. Microsoft Edge TTS（免费在线，无需 API Key）
 
-通过 local_config.json 的 model_name 切换：
+通过 WORKER_CONFIG_PATH 指向的运行时配置（或 local_config.json 兼容兜底）的 model_name 切换：
   - "Qwen3-TTS-*"  → 本地模型
   - "edge-tts"      → 微软 Edge TTS
 
@@ -46,8 +46,9 @@ MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
 API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
 API_URL = ""
 
-# 一次性读取 local_config.json（所有配置项）
-local_config_path = os.path.join(SCRIPT_DIR, "local_config.json")
+# 一次性读取运行时配置（所有配置项）
+local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
+local_config_base_dir = os.path.dirname(os.path.abspath(local_config_path))
 if os.path.exists(local_config_path):
     try:
         import json
@@ -58,7 +59,7 @@ if os.path.exists(local_config_path):
             if "model_dir" in _cfg and isinstance(_cfg["model_dir"], str):
                 p = _cfg["model_dir"]
                 if not os.path.isabs(p):
-                    p = os.path.abspath(os.path.join(SCRIPT_DIR, p))
+                    p = os.path.abspath(os.path.join(local_config_base_dir, p))
                 MODEL_DIR = p
                 print(f"[TTS Config] MODEL_DIR -> {MODEL_DIR}")
 
@@ -68,7 +69,7 @@ if os.path.exists(local_config_path):
 
             if "api_key" in _cfg and isinstance(_cfg["api_key"], str) and _cfg["api_key"].strip():
                 API_KEY = _cfg["api_key"].strip()
-                print("[TTS Config] API_KEY loaded from local_config")
+                print("[TTS Config] API_KEY loaded from runtime config")
 
             if "api_url" in _cfg and isinstance(_cfg["api_url"], str) and _cfg["api_url"].strip():
                 API_URL = _cfg["api_url"].strip()

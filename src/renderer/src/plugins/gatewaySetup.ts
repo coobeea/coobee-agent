@@ -61,6 +61,9 @@ function setupGatewayEventBridge(): void {
   bridgeGatewayEvent(GatewayEventTypes.STREAM_MESSAGE);
   bridgeGatewayEvent(GatewayEventTypes.THREAD_MESSAGE);
   bridgeGatewayEvent(GatewayEventTypes.AGENT_MESSAGE);
+  bridgeGatewayEvent(GatewayEventTypes.WORKER_STATUS);
+  bridgeGatewayEvent(GatewayEventTypes.WORKER_PROGRESS);
+  bridgeGatewayEvent(GatewayEventTypes.WORKER_ERROR);
   console.log('[gatewaySetup] Gateway event bridge initialized');
 }
 

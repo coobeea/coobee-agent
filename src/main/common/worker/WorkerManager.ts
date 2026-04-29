@@ -288,7 +288,17 @@ export class WorkerManager extends EventEmitter {
    */
   async stop(name: string): Promise<void> {
     const worker = this.workers.get(name);
-    if (!worker || !worker.process) {
+    if (!worker) {
+      return;
+    }
+
+    if (!worker.process) {
+      this.cleanupWorkerRuntimeResources(worker);
+      if (worker.status !== 'stopped') {
+        worker.stopping = false;
+        worker.consecutiveHealthCheckFailures = 0;
+        this.updateStatus(worker, 'stopped');
+      }
       return;
     }
 
@@ -310,15 +320,7 @@ export class WorkerManager extends EventEmitter {
       proc.once('exit', () => {
         clearTimeout(killTimeout);
 
-        // 停止运行期健康检查
-        this.stopRuntimeHealthCheck(worker);
-
-        // 停止监控指标收集
-        if (worker.metricsCollector) {
-          worker.metricsCollector.stop();
-          worker.metricsCollector = undefined;
-          log.debug(`[WorkerManager] Worker "${name}" 指标收集已停止`);
-        }
+        this.cleanupWorkerRuntimeResources(worker);
 
         worker.process = null;
         worker.stopping = false;
@@ -565,6 +567,7 @@ export class WorkerManager extends EventEmitter {
     // 进程退出 → WorkerManager 日志（控制台可见，重要事件）
     child.on('exit', (code, signal) => {
       log.info(`[WorkerManager] Worker "${config.name}" 退出 (code=${code}, signal=${signal})`);
+      this.cleanupWorkerRuntimeResources(worker);
       worker.process = null;
 
       if (!worker.stopping && !this.shuttingDown) {
@@ -615,6 +618,7 @@ export class WorkerManager extends EventEmitter {
     child.on('error', (err) => {
       log.error(`[WorkerManager] Worker "${config.name}" 进程错误:`, err);
       worker.error = err.message;
+      this.cleanupWorkerRuntimeResources(worker);
       worker.process = null;
       this.updateStatus(worker, 'error');
     });
@@ -813,6 +817,21 @@ export class WorkerManager extends EventEmitter {
       clearInterval(worker.healthCheckInterval);
       worker.healthCheckInterval = undefined;
       worker.log.debug('运行期健康检查已停止');
+    }
+  }
+
+  /**
+   * 清理 Worker 运行期资源。
+   *
+   * 主动停止、异常退出、进程错误都会走到这里，避免指标采集和健康检查定时器泄漏。
+   */
+  private cleanupWorkerRuntimeResources(worker: ManagedWorker): void {
+    this.stopRuntimeHealthCheck(worker);
+
+    if (worker.metricsCollector) {
+      worker.metricsCollector.stop();
+      worker.metricsCollector = undefined;
+      log.debug(`[WorkerManager] Worker "${worker.config.name}" 指标收集已停止`);
     }
   }
 

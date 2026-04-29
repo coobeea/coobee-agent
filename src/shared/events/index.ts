@@ -42,6 +42,16 @@ export type {
   ThreadRunStatus,
   ThreadStatus
 } from './thread';
+export { WorkerEventTypes } from './worker';
+export type {
+  WorkerErrorEventPayload,
+  WorkerEventType,
+  WorkerInfo,
+  WorkerMetrics,
+  WorkerProgressEventPayload,
+  WorkerStatus,
+  WorkerStatusEventPayload
+} from './worker';
 
 export {
   AppEvents,

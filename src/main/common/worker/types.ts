@@ -93,78 +93,14 @@ export interface WorkerConfig {
   autoStart?: boolean;
 }
 
-// ==================== Worker 状态 ====================
-
-/** Worker 运行状态 */
-export type WorkerStatus =
-  | 'stopped' // 未启动
-  | 'initializing' // 正在初始化虚拟环境/安装依赖
-  | 'starting' // 进程已启动，等待健康检查通过
-  | 'ready' // 健康检查通过，服务可用
-  | 'error' // 启动或运行中出错
-  | 'stopping'; // 正在停止
-
-/**
- * Worker 监控指标
- *
- * 实时性能和健康数据。
- */
-export interface WorkerMetrics {
-  /** CPU 使用率（0-100%） */
-  cpuPercent: number;
-  /** 内存使用（字节） */
-  memoryBytes: number;
-  /** 内存使用率（0-100%） */
-  memoryPercent: number;
-  /** 健康检查平均响应时间（ms） */
-  healthCheckLatency: number;
-  /** 运行时长（秒） */
-  uptimeSeconds: number;
-  /** 最近健康检查状态 */
-  lastHealthCheck: {
-    success: boolean;
-    timestamp: number;
-    latency: number;
-  };
-}
-
-/**
- * Worker 运行时信息
- *
- * 通过 IPC 推送给 Renderer，用于 UI 展示。
- */
-export interface WorkerInfo {
-  /** Worker 名称 */
-  name: string;
-  /** 显示名称 */
-  label: string;
-  /** 当前状态 */
-  status: WorkerStatus;
-  /** 服务端口（ready 时有效） */
-  port?: number;
-  /** 错误信息（error 时有效） */
-  error?: string;
-  /** 进程 PID */
-  pid?: number;
-  /** 重启次数 */
-  restartCount: number;
-  /** 最近一次状态变更时间 */
-  updatedAt: number;
-  /** 监控指标（ready 时有效） */
-  metrics?: WorkerMetrics;
-}
-
 // ==================== Worker 事件 ====================
 
-/**
- * Worker 状态变更事件（Main → Renderer）
- */
-export interface WorkerStatusEvent {
-  /** 事件类型 */
-  type: 'worker:status';
-  /** Worker 信息 */
-  worker: WorkerInfo;
-}
+export type {
+  WorkerInfo,
+  WorkerMetrics,
+  WorkerStatus,
+  WorkerStatusEventPayload as WorkerStatusEvent
+} from '@shared/events/worker';
 
 /**
  * Worker 日志事件（Main → Renderer，可选）

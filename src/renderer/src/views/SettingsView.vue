@@ -9,6 +9,7 @@ import { computed, markRaw, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ProviderSettings from './settings/ProviderSettings.vue';
 import BasicSettings from './settings/BasicSettings.vue';
+import WorkersSettings from './settings/WorkersSettings.vue';
 import AboutView from './settings/AboutView.vue';
 
 type MenuItem = {
@@ -49,6 +50,13 @@ const menuGroups: MenuGroup[] = [
         description: '连接、密钥、模型能力',
         icon: 'i-carbon-machine-learning-model',
         component: markRaw(ProviderSettings)
+      },
+      {
+        id: 'workers',
+        label: '内置服务',
+        description: 'ASR、TTS、OCR',
+        icon: 'i-carbon-server',
+        component: markRaw(WorkersSettings)
       }
     ]
   },
