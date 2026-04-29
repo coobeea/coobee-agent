@@ -10,7 +10,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
 import { useThreadsStore } from '@/stores/threads';
 import { useAgentsStore } from '@/stores/agents';
-import type { HistoryAssistantMessageV2, HistoryToolCallV2, StreamChatMessage } from '@/types/chat';
+import type { ExecutionStats, HistoryAssistantMessageV2, HistoryToolCallV2, StreamChatMessage } from '@/types/chat';
 import { useGateway } from '@/composables/useGateway';
 import { getThreadHistory } from '@/api/threads';
 import ChatMessages from '@/components/chat/ChatMessages.vue';
@@ -60,12 +60,22 @@ const assistantName = computed(() => {
   return thread?.agentName || agentDisplayName.value || listName || '智能体';
 });
 
+function getContextUsedTokens(stats: ExecutionStats): number {
+  return stats.contextInputTokens ?? stats.inputTokens;
+}
+
 const contextStats = computed(() => {
-  const latestAssistant = [...messages.value].reverse().find((msg) => msg.role === 'assistant' && msg.stats);
-  const stats = latestAssistant?.stats;
-  if (!stats?.contextWindow) return undefined;
-  const usedTokens = stats.contextInputTokens ?? stats.inputTokens;
-  return usedTokens > 0 ? stats : undefined;
+  for (const msg of [...messages.value].reverse()) {
+    if (msg.role !== 'assistant' || !msg.stats) continue;
+
+    const stats = msg.stats;
+    const usedTokens = getContextUsedTokens(stats);
+    if (stats.contextWindow && usedTokens > 0) {
+      return stats;
+    }
+  }
+
+  return undefined;
 });
 
 // ==================== Methods ====================

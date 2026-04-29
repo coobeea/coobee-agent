@@ -84,6 +84,7 @@ const emit = defineEmits<{
 .msg-block {
   position: relative;
   padding: 5px 12px;
+  min-width: 0;
 }
 
 .msg-block--with-stats {
@@ -121,6 +122,7 @@ const emit = defineEmits<{
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
 }
 
 .msg-block :deep(.stats-bar) {

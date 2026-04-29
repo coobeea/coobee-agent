@@ -83,14 +83,37 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="contentRef"
-    class="prose prose-zinc prose-sm dark:prose-invert w-full max-w-none"
+    class="assistant-markdown prose prose-zinc prose-sm dark:prose-invert w-full max-w-none"
     v-html="renderedHtml"></div>
 </template>
 
 <style scoped>
+.assistant-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
+}
+
 /* 自定义 prose 样式微调 */
 .prose :deep(p) {
   margin: 0.4rem 0;
+  text-align: start;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
+}
+
+.prose :deep(li) {
+  margin: 0.18rem 0;
+  display: list-item;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
+}
+
+.prose :deep(li > p) {
+  text-align: start;
 }
 
 .prose :deep(p:first-child) {
@@ -135,11 +158,6 @@ onBeforeUnmount(() => {
   list-style-type: square;
 }
 
-.prose :deep(li) {
-  margin: 0.18rem 0;
-  display: list-item;
-}
-
 .prose :deep(li p) {
   margin: 0;
 }
@@ -161,6 +179,7 @@ onBeforeUnmount(() => {
   margin: 0.45rem 0;
   border-collapse: collapse;
   width: 100%;
+  text-align: left;
 }
 
 .prose :deep(table th),
@@ -182,6 +201,8 @@ onBeforeUnmount(() => {
   border-radius: 0.25rem;
   font-size: 0.875em;
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* 代码块容器 */
@@ -192,6 +213,7 @@ onBeforeUnmount(() => {
   background: hsl(var(--muted) / 0.24);
   overflow: hidden;
   border: 1px solid hsl(var(--border) / 0.7);
+  text-align: left;
 }
 
 /* 代码块顶部工具栏 */
@@ -265,6 +287,7 @@ onBeforeUnmount(() => {
   background: transparent !important;
   border: none !important;
   overflow-x: auto;
+  white-space: pre;
 }
 
 .prose :deep(.code-content pre code) {
@@ -281,6 +304,8 @@ onBeforeUnmount(() => {
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: color 0.2s;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .prose :deep(a:hover) {

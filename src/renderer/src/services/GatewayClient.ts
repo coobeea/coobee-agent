@@ -32,6 +32,8 @@ export type EventListener<T = unknown> = (payload: T) => void;
 
 /** RPC 请求超时（毫秒） */
 const DEFAULT_REQUEST_TIMEOUT = 30_000;
+/** 发起 RPC 前等待 WebSocket 建连的最长时间（毫秒） */
+const DEFAULT_CONNECT_WAIT_TIMEOUT = 10_000;
 
 /** 重连参数 */
 const RECONNECT_BASE_DELAY = 2000;
@@ -183,6 +185,7 @@ export class GatewayClient {
 
   /**
    * 发送 RPC 请求并等待响应
+   * 如处于启动建连阶段，会先等待 WebSocket 连接成功后再发送。
    *
    * @param method  方法名（如 'chat.send', 'stream.subscribe'）
    * @param params  方法参数
@@ -192,9 +195,15 @@ export class GatewayClient {
    *   const result = await gateway.request('worker.list')
    *   const data = await gateway.request('chat.send', { message: 'hi', sessionId: 'abc' })
    */
-  request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+  async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+    await this.waitUntilConnected();
+    return this.sendRequest<T>(method, params);
+  }
+
+  private sendRequest<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      const socket = this.ws;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
         reject(new GatewayRpcError(GatewayErrorCode.INTERNAL_ERROR, 'WebSocket not connected'));
         return;
       }
@@ -222,8 +231,55 @@ export class GatewayClient {
         params
       };
 
-      this.ws.send(JSON.stringify(req));
+      try {
+        socket.send(JSON.stringify(req));
+      } catch (err) {
+        this.pendingRequests.delete(id);
+        clearTimeout(timer);
+        const message = err instanceof Error ? err.message : String(err);
+        reject(new GatewayRpcError(GatewayErrorCode.INTERNAL_ERROR, message));
+      }
     });
+  }
+
+  private waitUntilConnected(timeoutMs = Math.min(this.requestTimeout, DEFAULT_CONNECT_WAIT_TIMEOUT)): Promise<void> {
+    if (this.isConnected()) {
+      return Promise.resolve();
+    }
+
+    if (!this.ws || this.ws.readyState === WebSocket.CLOSING || this.ws.readyState === WebSocket.CLOSED) {
+      this.connect();
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      let off: (() => void) | null = null;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+
+      const cleanup = (): void => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (off) {
+          off();
+          off = null;
+        }
+      };
+
+      timer = setTimeout(() => {
+        cleanup();
+        reject(new GatewayRpcError(GatewayErrorCode.TIMEOUT, 'WebSocket connection timeout'));
+      }, timeoutMs);
+
+      off = this.onConnect(() => {
+        cleanup();
+        resolve();
+      });
+    });
+  }
+
+  private isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 
   // ==================== 事件监听 ====================

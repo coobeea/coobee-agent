@@ -13,10 +13,14 @@ import { useThreadsStore } from '@/stores/threads';
 import { useGateway } from '@/composables/useGateway';
 import { importAgent, exportAgent } from '@/api/agents';
 
+interface CreateThreadResponse {
+  id?: string;
+}
+
 const agentsStore = useAgentsStore();
 const threadsStore = useThreadsStore();
 const router = useRouter();
-const { request } = useGateway();
+const { request, connectionState } = useGateway();
 
 /** 删除确认 */
 const confirmDeleteId = ref<string | null>(null);
@@ -26,6 +30,9 @@ const importing = ref(false);
 
 /** 创建任务中 */
 const creatingTask = ref<string | null>(null);
+
+/** Gateway 是否可以执行 RPC */
+const isGatewayReady = computed(() => connectionState.value === 'connected');
 
 /** 文件输入框引用 */
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -67,15 +74,20 @@ async function startNewTask(agentId: string, event: MouseEvent): Promise<void> {
   event.stopPropagation();
   if (creatingTask.value) return;
 
+  if (!isGatewayReady.value) {
+    toast.info('服务连接中，请稍后再试');
+    return;
+  }
+
   creatingTask.value = agentId;
   try {
-    const res = await request('chat.createThread', {
+    const res = await request<CreateThreadResponse>('chat.createThread', {
       title: '新任务',
       agentId
     });
-    if (res && (res as any).id) {
-      threadsStore.fetchThreads(); // 刷新列表
-      router.push(`/thread/${(res as any).id}`);
+    if (res?.id) {
+      void threadsStore.fetchThreads(); // 刷新列表
+      await router.push(`/thread/${res.id}`);
     }
   } catch (err) {
     console.error('Failed to create thread:', err);
@@ -371,8 +383,9 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
 
             <!-- 开始任务按钮 -->
             <button
-              class="shrink-0 flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-all hover:bg-primary/90 shadow-sm hover:shadow"
-              :disabled="creatingTask === agent.id"
+              class="shrink-0 flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="creatingTask === agent.id || !isGatewayReady"
+              :title="isGatewayReady ? '开始对话' : '服务连接中'"
               @click="startNewTask(agent.id, $event)">
               <span v-if="creatingTask === agent.id" class="i-carbon-renew animate-spin"></span>
               <span v-else class="i-carbon-chat"></span>

@@ -45,15 +45,25 @@ import {
   SessionManager,
   SettingsManager
 } from '@mariozechner/pi-coding-agent';
-import path from 'node:path';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import type { AgentRuntimeOptions, AgentExecutionResult, AgentStreamChunk } from '../types';
 import { ChunkQueue } from './ChunkQueue';
+import { migrateLegacyPiMonoSessionFiles, resolvePiMonoSessionRoot } from './PiMonoSessionPaths';
 import { setupEventSubscription } from './PiMonoStreamAdapter';
 import { convertTools } from './PiMonoToolConverter';
 
 const log = createRuntimeLogger('pimono-runtime');
 const DEFAULT_CONTEXT_WINDOW = 204800;
+
+export function applyPiMonoCustomTools(
+  sessionConfig: CreateAgentSessionOptions,
+  allSdkTools: PiToolDefinition[]
+): void {
+  if (allSdkTools.length === 0) return;
+
+  sessionConfig.customTools = allSdkTools;
+  sessionConfig.tools = Array.from(new Set(allSdkTools.map((tool) => tool.name)));
+}
 
 function resolveContextWindow(modelMeta?: AgentRuntimeOptions['modelMeta']): number {
   return modelMeta?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
@@ -336,10 +346,11 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   /**
    * 解析当前运行使用的 session 根目录
    *
-   * `sessionDir` 在 runtime 选项里已经表示“会话根目录”，这里不再额外拼接 `/sessions`。
+   * AgentExecutor 传入的 `sessionDir` 是 workspace 根目录；PiMono SDK 的会话
+   * 文件统一放到 workspace/sessions/，避免落在 workspace 根目录。
    */
   private getSessionRoot(cwd: string, options: AgentRuntimeOptions): string {
-    return options.sessionDir || path.join(cwd, '.coobee-test', 'sessions');
+    return resolvePiMonoSessionRoot(cwd, options);
   }
 
   private createAuthStorage(options: AgentRuntimeOptions): AuthStorage {
@@ -358,6 +369,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     }
 
     const sessionDir = this.getSessionRoot(cwd, options);
+    await migrateLegacyPiMonoSessionFiles(options.workspaceRoot, sessionDir, options.sessionId, log);
     const existingSessions = await SessionManager.list(cwd, sessionDir);
     const existing = existingSessions.find((session) => session.id === options.sessionId);
     if (existing) {
@@ -463,10 +475,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       resourceLoader: args.resourceLoader
     };
 
-    if (args.allSdkTools.length > 0) {
-      sessionConfig.customTools = args.allSdkTools;
-      sessionConfig.tools = [];
-    }
+    applyPiMonoCustomTools(sessionConfig, args.allSdkTools);
 
     return sessionConfig;
   }
