@@ -112,38 +112,29 @@ function formatCompactNumber(value: number): string {
 
 .context-usage-bars {
   display: inline-flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 13px;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 13px;
+  height: 16px;
 }
 
 .context-usage-bar {
-  width: 3px;
+  width: 13px;
+  flex-shrink: 0;
+  height: 2px;
   border-radius: 999px;
   background: hsl(var(--muted-foreground) / 0.22);
-  transition:
-    height 0.18s ease,
-    background-color 0.18s ease;
-}
-
-.context-usage-bar:nth-child(1) {
-  height: 4px;
-}
-
-.context-usage-bar:nth-child(2) {
-  height: 6px;
-}
-
-.context-usage-bar:nth-child(3) {
-  height: 8px;
+  transition: background-color 0.18s ease;
 }
 
 .context-usage-bar:nth-child(4) {
-  height: 11px;
+  height: 1.5px;
 }
 
 .context-usage-bar:nth-child(5) {
-  height: 13px;
+  height: 1px;
 }
 
 .context-usage-bar--active {

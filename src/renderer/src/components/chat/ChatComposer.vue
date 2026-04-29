@@ -13,6 +13,7 @@ import ModelPickerDropdown from '@/components/chat/ModelPickerDropdown.vue';
 import ThinkingToggle from '@/components/chat/ThinkingToggle.vue';
 import ThreadRunSettings from '@/components/chat/ThreadRunSettings.vue';
 import ContextUsageIndicator from '@/components/chat/ContextUsageIndicator.vue';
+import VoiceConversationInput from '@/components/chat/VoiceConversationInput.vue';
 import { getDefaultModel } from '@/api/config';
 import type { ExecutionStats } from '@/types/chat';
 import type { ThreadRuntimeType } from '@shared/events/thread';
@@ -47,7 +48,8 @@ const agentsStore = useAgentsStore();
 const { flatModelList, loadFlatModels } = useFlatConfigModels();
 const defaultModelSpec = ref('');
 
-const inputRef = ref<InstanceType<typeof ChatInput> | null>(null);
+const textInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
+const voiceInputRef = ref<InstanceType<typeof VoiceConversationInput> | null>(null);
 
 const currentThread = computed(() => threadsStore.threads.find((x) => x.id === props.threadId));
 const currentAgent = computed(() => agentsStore.agents.find((a) => a.id === currentThread.value?.agentId));
@@ -148,11 +150,17 @@ watch(
 );
 
 function insertFileReference(file: { path: string; name: string }): void {
-  inputRef.value?.insertFileReference(file);
+  if (asrEnabled.value) return;
+  textInputRef.value?.insertFileReference(file);
 }
 
 function focusInput(): void {
-  inputRef.value?.focus();
+  if (asrEnabled.value) {
+    voiceInputRef.value?.focus();
+    return;
+  }
+
+  textInputRef.value?.focus();
 }
 
 defineExpose({
@@ -162,8 +170,34 @@ defineExpose({
 </script>
 
 <template>
+  <VoiceConversationInput
+    v-if="asrEnabled"
+    ref="voiceInputRef"
+    :disabled="disabled"
+    :show-stop-button="showStopButton"
+    :tts-enabled="ttsEnabled"
+    @send="emit('send', $event)"
+    @stop="emit('stop')">
+    <template #toolbar-left>
+      <ModelPickerDropdown
+        v-if="showModelPicker"
+        :items="flatModelList"
+        :selected-value="selectedModel"
+        :disabled="disabled"
+        @select="onSelectModel" />
+      <ThinkingToggle v-if="showModelPicker" v-model="enableThinking" :disabled="disabled" />
+      <ThreadRunSettings
+        v-model:runtime-type="runtimeType"
+        v-model:asr-enabled="asrEnabled"
+        v-model:tts-enabled="ttsEnabled"
+        :disabled="disabled" />
+      <ContextUsageIndicator :stats="contextStats" />
+    </template>
+  </VoiceConversationInput>
+
   <ChatInput
-    ref="inputRef"
+    v-else
+    ref="textInputRef"
     :placeholder="placeholder"
     :disabled="disabled"
     :show-stop-button="showStopButton"

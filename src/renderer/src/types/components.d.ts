@@ -74,6 +74,7 @@ declare module 'vue' {
     ToolTipContainer: typeof import('./../components/ToolTip/ToolTipContainer.vue')['default']
     Versions: typeof import('./../components/Versions.vue')['default']
     VideoPlayer: typeof import('./../components/agent/preview/VideoPlayer.vue')['default']
+    VoiceConversationInput: typeof import('./../components/chat/VoiceConversationInput.vue')['default']
     VoicePanel: typeof import('./../components/agent/VoicePanel.vue')['default']
     WorkbenchPanel: typeof import('./../components/agent/WorkbenchPanel.vue')['default']
   }
