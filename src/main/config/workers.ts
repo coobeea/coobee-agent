@@ -13,32 +13,46 @@ class WorkersConfig {
   }
 
   /**
-   * Worker 脚本目录（只读，随应用打包分发）
+   * Worker 运行根目录（可写）
    *
-   * 包含 Python Worker 的源码、requirements.txt 和虚拟环境：
-   *   workers/
-   *   ├── tts/         TTS 语音合成
-   *   │   ├── venv/    虚拟环境（gitignore）
-   *   │   └── server.py
-   *   ├── asr/         ASR 语音识别（FunASR）
-   *   │   ├── venv/    虚拟环境（gitignore）
-   *   │   └── server.py
-   *   └── ...          未来新增的 Worker
+   * 所有 Worker 运行产物都从这里派生，开发态和生产态保持相同目录形状。
    *
-   * @example 开发: <项目>/workers | 生产: resources/workers
+   * 优先级：
+   *   1. WORKER_RUNTIME_HOME / VITE_WORKER_RUNTIME_HOME 环境变量
+   *   2. Env.paths.userHome
+   *
+   * @example 开发: <项目>/.home | 生产: ~/.coobee-agent
    */
-  get scripts(): string {
-    return is.dev ? path.join(app.getAppPath(), 'workers') : path.join(process.resourcesPath, 'workers');
+  get runtimeHome(): string {
+    return process.env.WORKER_RUNTIME_HOME || process.env.VITE_WORKER_RUNTIME_HOME || this.userHome;
   }
 
   /**
-   * Worker 虚拟环境目录（已废弃）
+   * Worker 脚本目录（只读，随应用打包分发）
    *
-   * @deprecated 现在所有虚拟环境都在 Worker 目录内（workers/{name}/venv/）
-   * @example workers/asr/venv/, workers/tts/venv/, workers/ocr/venv/
+   * 包含 Python Worker 的源码、requirements.txt 和 worker.json：
+   *   workers/
+   *   ├── tts/         TTS 语音合成
+   *   │   ├── worker.json
+   *   │   └── server.py
+   *   ├── asr/         ASR 语音识别（FunASR）
+   *   │   ├── worker.json
+   *   │   └── server.py
+   *   └── ...          未来新增的 Worker
+   *
+   * @example 开发: <项目>/resources/workers | 生产: resources/workers
    */
-  get envs(): string {
-    return is.dev ? path.join(app.getAppPath(), 'worker-envs') : path.join(this.userHome, 'worker-envs');
+  get scripts(): string {
+    return is.dev ? path.join(app.getAppPath(), 'resources', 'workers') : path.join(process.resourcesPath, 'workers');
+  }
+
+  /**
+   * Worker 运行目录根（可写）
+   *
+   * @example <runtimeHome>/workers
+   */
+  get runtimeWorkers(): string {
+    return path.join(this.runtimeHome, 'workers');
   }
 
   /**
@@ -55,7 +69,56 @@ class WorkersConfig {
    *   └── hub/                     HuggingFace hub 缓存
    */
   get models(): string {
-    return process.env.VITE_MODEL_DIR || path.join(this.userHome, 'models');
+    return process.env.VITE_MODEL_DIR || path.join(this.runtimeHome, 'models');
+  }
+
+  /**
+   * 获取 Worker 源码目录（只读）
+   */
+  getScriptDir(name: string): string {
+    return path.join(this.scripts, name);
+  }
+
+  /**
+   * 获取 Worker 运行目录（可写）
+   */
+  getRuntimeDir(name: string): string {
+    return path.join(this.runtimeWorkers, name);
+  }
+
+  /**
+   * 获取 Worker 用户源码副本目录（第二阶段使用）
+   */
+  getRuntimeSourceDir(name: string): string {
+    return path.join(this.getRuntimeDir(name), 'source');
+  }
+
+  /**
+   * 获取 Worker Python 虚拟环境目录
+   */
+  getVenvDir(name: string): string {
+    return path.join(this.getRuntimeDir(name), 'venv');
+  }
+
+  /**
+   * 获取 Worker 专属数据目录
+   */
+  getDataDir(name: string): string {
+    return path.join(this.getRuntimeDir(name), 'data');
+  }
+
+  /**
+   * 获取 Worker 专属缓存目录
+   */
+  getCacheDir(name: string): string {
+    return path.join(this.getRuntimeDir(name), 'cache');
+  }
+
+  /**
+   * 获取 Worker 用户配置文件路径
+   */
+  getConfigPath(name: string): string {
+    return path.join(this.getRuntimeDir(name), 'config.json');
   }
 
   /**

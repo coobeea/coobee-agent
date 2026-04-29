@@ -10,7 +10,7 @@
  * Worker 配置
  *
  * 描述一个 Worker 的启动参数和行为策略。
- * 脚本从 workers/ 目录读取（只读），虚拟环境在用户目录创建（可写）。
+ * 脚本从内置 resources/workers 目录读取（只读），运行产物在 Worker Runtime 目录创建（可写）。
  */
 export interface WorkerConfig {
   /** Worker 唯一标识（如 'tts', 'asr'） */
@@ -42,7 +42,7 @@ export interface WorkerConfig {
   /**
    * Worker 入口文件
    *
-   * - type='python': 脚本路径（相对于 workers/{name}/），如 'server.py'
+   * - type='python': 脚本路径（相对于 resources/workers/{name}/），如 'server.py'
    * - type='native': 二进制文件名（相对于 runtime/{platform}/），如 'whisper-server'
    */
   entry: string;
@@ -61,12 +61,12 @@ export interface WorkerConfig {
    *
    * 优先级：
    *   1. worker.json 中的 modelDir（最高，per-worker 指定）
-   *   2. Env.paths.modelsDir（全局默认，~/.coobee-ai/models）
+   *   2. Workers.models（全局默认，{runtimeHome}/models）
    */
   modelDir?: string;
 
   /**
-   * 依赖文件（相对于 workers/{name}/ 目录）
+   * 依赖文件（相对于 resources/workers/{name}/ 目录）
    * @default 'requirements.txt'
    */
   requirementsFile?: string;

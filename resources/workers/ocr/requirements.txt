@@ -1,0 +1,15 @@
+# OCR Worker 依赖
+# 由 RuntimeManager 通过 uv pip install 安装到独立 venv
+
+# HTTP + WebSocket 服务
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+websockets>=14.0
+
+# OCR 模型（GLM-OCR / PaddleOCR-VL）
+torch>=2.0.0
+torchvision>=0.15.0
+# transformers 需要从 GitHub 安装开发版（GLM-OCR 需要）
+# 安装命令: uv pip install git+https://github.com/huggingface/transformers.git
+transformers>=5.2.0
+Pillow>=10.0.0

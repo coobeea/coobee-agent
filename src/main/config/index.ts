@@ -35,9 +35,25 @@ export type { ResolvedModel } from './models';
 import { Workers } from './workers';
 export const BusinessPaths = {
   workers: {
-    scripts: Workers.scripts,
-    envs: Workers.envs,
-    models: Workers.models
+    get scripts() {
+      return Workers.scripts;
+    },
+    get runtimeHome() {
+      return Workers.runtimeHome;
+    },
+    get runtimeWorkers() {
+      return Workers.runtimeWorkers;
+    },
+    get models() {
+      return Workers.models;
+    },
+    getScriptDir: Workers.getScriptDir.bind(Workers),
+    getRuntimeDir: Workers.getRuntimeDir.bind(Workers),
+    getRuntimeSourceDir: Workers.getRuntimeSourceDir.bind(Workers),
+    getVenvDir: Workers.getVenvDir.bind(Workers),
+    getDataDir: Workers.getDataDir.bind(Workers),
+    getCacheDir: Workers.getCacheDir.bind(Workers),
+    getConfigPath: Workers.getConfigPath.bind(Workers)
   },
   getAppRuntimeDir: Workers.getAppRuntimeDir.bind(Workers),
   getPlatformRuntimeDir: Workers.getPlatformRuntimeDir.bind(Workers)

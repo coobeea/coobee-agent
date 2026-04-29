@@ -37,11 +37,15 @@ vi.mock('@main/common/logger', () => ({
 }));
 
 const tmpDir = path.join(os.tmpdir(), `worker-test-${Date.now()}`);
+const tmpRuntimeDir = path.join(os.tmpdir(), `worker-runtime-test-${Date.now()}`);
 
 vi.mock('@main/common/env', () => {
   return {
     Env: {
-      paths: {},
+      paths: {
+        userHome: tmpRuntimeDir,
+        userData: path.join(tmpRuntimeDir, 'data')
+      },
       main: {
         serverHost: 'localhost'
       },
@@ -55,8 +59,19 @@ vi.mock('@main/config', () => {
   return {
     BusinessPaths: {
       workers: {
-        scripts: tmpDir
-      }
+        scripts: tmpDir,
+        runtimeHome: tmpRuntimeDir,
+        runtimeWorkers: path.join(tmpRuntimeDir, 'workers'),
+        models: path.join(tmpRuntimeDir, 'models'),
+        getScriptDir: (name: string) => path.join(tmpDir, name),
+        getRuntimeDir: (name: string) => path.join(tmpRuntimeDir, 'workers', name),
+        getRuntimeSourceDir: (name: string) => path.join(tmpRuntimeDir, 'workers', name, 'source'),
+        getVenvDir: (name: string) => path.join(tmpRuntimeDir, 'workers', name, 'venv'),
+        getDataDir: (name: string) => path.join(tmpRuntimeDir, 'workers', name, 'data'),
+        getCacheDir: (name: string) => path.join(tmpRuntimeDir, 'workers', name, 'cache'),
+        getConfigPath: (name: string) => path.join(tmpRuntimeDir, 'workers', name, 'config.json')
+      },
+      getPlatformRuntimeDir: () => path.join(tmpRuntimeDir, 'runtime')
     }
   };
 });
@@ -64,6 +79,11 @@ vi.mock('@main/config', () => {
 describe('WorkerManager 配置文件监控', () => {
   let testWorkersDir: string;
   let WorkerManager: typeof import('../WorkerManager').WorkerManager;
+
+  type WorkerManagerInternals = {
+    getVenvDir(name: string): string;
+    getWorkerRuntimeEnv(name: string): Record<string, string>;
+  };
 
   beforeEach(async () => {
     // 动态导入以使用 mock
@@ -86,10 +106,32 @@ describe('WorkerManager 配置文件监控', () => {
     if (fs.existsSync(testWorkersDir)) {
       fs.rmSync(testWorkersDir, { recursive: true, force: true });
     }
+    if (fs.existsSync(tmpRuntimeDir)) {
+      fs.rmSync(tmpRuntimeDir, { recursive: true, force: true });
+    }
 
     // 重置单例
     // @ts-expect-error 访问私有字段用于测试
     WorkerManager.instance = null;
+  });
+
+  it('应该把 Worker 运行产物放到 runtime 目录而不是源码目录', async () => {
+    const manager = WorkerManager.getInstance() as unknown as WorkerManagerInternals;
+    const workerName = 'runtime-layout-worker';
+
+    expect(manager.getVenvDir(workerName)).toBe(path.join(tmpRuntimeDir, 'workers', workerName, 'venv'));
+
+    const runtimeEnv = manager.getWorkerRuntimeEnv(workerName);
+
+    expect(runtimeEnv).toMatchObject({
+      WORKER_RUNTIME_DIR: path.join(tmpRuntimeDir, 'workers', workerName),
+      WORKER_DATA_DIR: path.join(tmpRuntimeDir, 'workers', workerName, 'data'),
+      WORKER_CACHE_DIR: path.join(tmpRuntimeDir, 'workers', workerName, 'cache'),
+      WORKER_CONFIG_PATH: path.join(tmpRuntimeDir, 'workers', workerName, 'config.json')
+    });
+    expect(runtimeEnv.WORKER_RUNTIME_DIR.startsWith(testWorkersDir)).toBe(false);
+    expect(fs.existsSync(runtimeEnv.WORKER_DATA_DIR)).toBe(true);
+    expect(fs.existsSync(runtimeEnv.WORKER_CACHE_DIR)).toBe(true);
   });
 
   it('应该监控配置文件变化', async () => {

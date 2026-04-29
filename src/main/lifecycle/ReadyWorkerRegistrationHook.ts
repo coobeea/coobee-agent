@@ -1,10 +1,10 @@
 /**
  * Worker Hook — Worker 子进程注册
  *
- * READY 阶段：扫描 workers/ 目录自动发现并注册所有 Worker，
+ * READY 阶段：扫描内置 Worker 目录自动发现并注册所有 Worker，
  *            异步启动 autoStart 的 Worker（不阻塞主进程）。
  *
- * 扩展方式：在 workers/ 下新建目录，放入 worker.json + server.py，
+ * 扩展方式：在 resources/workers 下新建目录，放入 worker.json + server.py，
  *          无需改动任何 TypeScript 代码。
  */
 
@@ -24,7 +24,7 @@ export const ReadyWorkerRegistrationHook: LifecycleHook = {
   async execute(_context: LifecycleContext): Promise<void> {
     const manager = WorkerManager.getInstance();
 
-    // 自动扫描 workers/ 目录，发现并注册所有 Worker
+    // 自动扫描内置 Worker 目录，发现并注册所有 Worker
     const count = manager.scanAndRegister();
 
     if (count === 0) {

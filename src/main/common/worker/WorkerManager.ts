@@ -106,11 +106,11 @@ export class WorkerManager extends EventEmitter {
   }
 
   /**
-   * 扫描 workers/ 目录，自动发现并注册所有 Worker
+   * 扫描内置 Worker 目录，自动发现并注册所有 Worker
    *
    * 约定：每个 Worker 目录下必须有 worker.json 配置文件。
    * 目录结构：
-   *   workers/
+   *   resources/workers/
    *   ├── tts/
    *   │   ├── worker.json      ← 扫描这个
    *   │   ├── server.py
@@ -397,6 +397,9 @@ export class WorkerManager extends EventEmitter {
     const venvDir = this.getVenvDir(config.name);
     const pythonBin = this.getPythonBin(config.name);
     const uvBin = this.getUvBin();
+    const scriptsDir = this.getWorkerScriptsDir(config.name);
+
+    this.ensureRuntimeDirs(config.name);
 
     // 检查 uv 是否存在
     if (!fs.existsSync(uvBin)) {
@@ -407,18 +410,18 @@ export class WorkerManager extends EventEmitter {
     if (!fs.existsSync(pythonBin)) {
       log.info(`[WorkerManager] 创建虚拟环境: ${venvDir}`);
       await this.exec(uvBin, ['venv', venvDir, '--python', '3.11'], {
-        cwd: this.getWorkerScriptsDir(config.name)
+        cwd: scriptsDir
       });
     }
 
     // 安装/更新依赖
     const requirementsFile = config.requirementsFile || 'requirements.txt';
-    const requirementsPath = path.join(this.getWorkerScriptsDir(config.name), requirementsFile);
+    const requirementsPath = path.join(scriptsDir, requirementsFile);
 
     if (fs.existsSync(requirementsPath)) {
       log.info(`[WorkerManager] 安装依赖: ${requirementsPath}`);
       await this.exec(uvBin, ['pip', 'install', '-r', requirementsPath, '--python', pythonBin], {
-        cwd: this.getWorkerScriptsDir(config.name)
+        cwd: scriptsDir
       });
     }
   }
@@ -433,6 +436,7 @@ export class WorkerManager extends EventEmitter {
     const pythonBin = this.getPythonBin(config.name);
     const scriptsDir = this.getWorkerScriptsDir(config.name);
     const entryPath = path.join(scriptsDir, config.entry);
+    const runtimeEnv = this.getWorkerRuntimeEnv(config.name);
 
     if (!fs.existsSync(entryPath)) {
       throw new Error(`Worker 入口文件不存在: ${entryPath}`);
@@ -440,8 +444,7 @@ export class WorkerManager extends EventEmitter {
 
     const args = [entryPath, '--port', String(config.port), '--host', Env.main.serverHost, ...(config.args || [])];
 
-    // 模型目录：统一由 .env VITE_MODEL_DIR 管理（BusinessPaths.workers.models 已读取）
-    const modelDir = BusinessPaths.workers.models;
+    const modelDir = config.modelDir || BusinessPaths.workers.models;
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
@@ -453,7 +456,8 @@ export class WorkerManager extends EventEmitter {
       // Worker 自定义环境变量
       ...(config.env || {}),
       USER_HOME: Env.paths.userHome,
-      USER_DATA: Env.paths.userData
+      USER_DATA: Env.paths.userData,
+      ...runtimeEnv
     };
 
     const child = spawn(pythonBin, args, {
@@ -484,6 +488,7 @@ export class WorkerManager extends EventEmitter {
 
     const scriptsDir = this.getWorkerScriptsDir(config.name);
     const modelDir = config.modelDir || BusinessPaths.workers.models;
+    const runtimeEnv = this.getWorkerRuntimeEnv(config.name);
 
     // 构建启动参数，替换 ${MODEL_DIR} 等变量
     const rawArgs = [...(config.args || []), '--port', String(config.port), '--host', Env.main.serverHost];
@@ -492,7 +497,8 @@ export class WorkerManager extends EventEmitter {
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       MODEL_DIR: modelDir,
-      ...(config.env || {})
+      ...(config.env || {}),
+      ...runtimeEnv
     };
 
     log.info(`[WorkerManager] 启动 Native Worker: ${binaryPath} ${args.join(' ')}`);
@@ -814,25 +820,36 @@ export class WorkerManager extends EventEmitter {
 
   /** Worker 脚本目录（只读） */
   private getWorkerScriptsDir(name: string): string {
-    return path.join(BusinessPaths.workers.scripts, name);
+    return BusinessPaths.workers.getScriptDir(name);
+  }
+
+  /** Worker 运行目录（可写） */
+  private getWorkerRuntimeDir(name: string): string {
+    return BusinessPaths.workers.getRuntimeDir(name);
+  }
+
+  /** Worker 专属数据目录（可写） */
+  private getWorkerDataDir(name: string): string {
+    return BusinessPaths.workers.getDataDir(name);
+  }
+
+  /** Worker 专属缓存目录（可写） */
+  private getWorkerCacheDir(name: string): string {
+    return BusinessPaths.workers.getCacheDir(name);
+  }
+
+  /** Worker 用户配置文件路径（可写） */
+  private getWorkerConfigPath(name: string): string {
+    return BusinessPaths.workers.getConfigPath(name);
   }
 
   /**
-   * Worker 虚拟环境目录（就地虚拟环境，在 Worker 目录内）
+   * Worker 虚拟环境目录（统一运行目录内）
    *
-   * 约定：所有 Worker 的虚拟环境都在其目录内的 venv/ 子目录
-   *
-   * 路径：workers/{name}/venv/
-   *
-   * 优势：
-   *   - Worker 自包含，便于打包分发
-   *   - 源码与环境一体化管理
-   *   - 适合 LLM 生成 Worker
-   *   - 简单清晰，无需额外目录
+   * 路径：{runtimeHome}/workers/{name}/venv
    */
   private getVenvDir(name: string): string {
-    const workerDir = this.getWorkerScriptsDir(name);
-    return path.join(workerDir, 'venv');
+    return BusinessPaths.workers.getVenvDir(name);
   }
 
   /** Worker Python 可执行文件路径（自动查找虚拟环境） */
@@ -845,6 +862,25 @@ export class WorkerManager extends EventEmitter {
   private getUvBin(): string {
     const platformDir = BusinessPaths.getPlatformRuntimeDir();
     return Env.isWindows ? path.join(platformDir, 'uv.exe') : path.join(platformDir, 'uv');
+  }
+
+  /** 确保 Worker 运行目录存在 */
+  private ensureRuntimeDirs(name: string): void {
+    fs.mkdirSync(this.getWorkerRuntimeDir(name), { recursive: true });
+    fs.mkdirSync(this.getWorkerDataDir(name), { recursive: true });
+    fs.mkdirSync(this.getWorkerCacheDir(name), { recursive: true });
+  }
+
+  /** 注入给 Worker 子进程的运行目录环境变量 */
+  private getWorkerRuntimeEnv(name: string): Record<string, string> {
+    this.ensureRuntimeDirs(name);
+
+    return {
+      WORKER_RUNTIME_DIR: this.getWorkerRuntimeDir(name),
+      WORKER_DATA_DIR: this.getWorkerDataDir(name),
+      WORKER_CACHE_DIR: this.getWorkerCacheDir(name),
+      WORKER_CONFIG_PATH: this.getWorkerConfigPath(name)
+    };
   }
 
   // ==================== 内部工具 ====================
@@ -904,7 +940,7 @@ export class WorkerManager extends EventEmitter {
    * 监控 Worker 配置文件变化（热重载）
    */
   private watchWorkerConfig(workerName: string): void {
-    const configPath = path.join(BusinessPaths.workers.scripts, workerName, 'worker.json');
+    const configPath = path.join(this.getWorkerScriptsDir(workerName), 'worker.json');
 
     if (!fs.existsSync(configPath)) {
       log.warn(`[WorkerManager] 配置文件不存在，跳过监控: ${configPath}`);
@@ -955,7 +991,7 @@ export class WorkerManager extends EventEmitter {
    */
   private async reloadWorkerConfig(workerName: string): Promise<void> {
     try {
-      const configPath = path.join(BusinessPaths.workers.scripts, workerName, 'worker.json');
+      const configPath = path.join(this.getWorkerScriptsDir(workerName), 'worker.json');
 
       if (!fs.existsSync(configPath)) {
         log.warn(`[WorkerManager] 配置文件已删除: ${workerName}`);

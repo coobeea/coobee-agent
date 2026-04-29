@@ -1,0 +1,12 @@
+# Worker Runtime 产物由 WorkerManager 写入 {runtimeHome}/workers/{name}
+# 不允许在源码目录提交虚拟环境或本机配置。
+*/venv/
+*/data/
+*/cache/
+*/logs/
+*/local_config.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
