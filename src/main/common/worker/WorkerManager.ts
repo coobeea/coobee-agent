@@ -952,6 +952,7 @@ export class WorkerManager extends EventEmitter {
     return {
       name: worker.config.name,
       label: worker.config.label,
+      autoStart: worker.config.autoStart ?? false,
       status: worker.status,
       port: worker.status === 'ready' ? worker.config.port : undefined,
       error: worker.error,
@@ -1017,7 +1018,7 @@ export class WorkerManager extends EventEmitter {
   /**
    * 重新加载配置并应用变更
    */
-  private async reloadWorkerConfig(workerName: string): Promise<void> {
+  public async reloadWorkerConfig(workerName: string): Promise<void> {
     try {
       const configPath = path.join(this.getWorkerScriptsDir(workerName), 'worker.json');
 
@@ -1046,6 +1047,10 @@ export class WorkerManager extends EventEmitter {
         log.debug(`[WorkerManager] 配置无关键变化，跳过: ${workerName}`);
         // 更新配置但不触发启停
         this.configs.set(workerName, newConfig);
+        if (worker) {
+          worker.config = newConfig;
+          this.updateStatus(worker, worker.status);
+        }
         return;
       }
 
@@ -1055,6 +1060,10 @@ export class WorkerManager extends EventEmitter {
 
       // 更新配置
       this.configs.set(workerName, newConfig);
+      if (worker) {
+        worker.config = newConfig;
+        this.updateStatus(worker, worker.status);
+      }
 
       // 应用变更
       if (newConfig.enable === false) {

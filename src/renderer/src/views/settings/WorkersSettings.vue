@@ -236,9 +236,17 @@ function upsertWorker(worker: WorkerInfo): void {
 function readWorkerFromEvent(payload: unknown): WorkerInfo | null {
   if (!payload || typeof payload !== 'object') return null;
   const event = payload as { worker?: WorkerInfo; name?: string; label?: string; status?: WorkerStatus };
-  if (event.worker?.name) return event.worker;
+  if (event.worker?.name) {
+    return {
+      ...event.worker,
+      autoStart: event.worker.autoStart ?? false
+    };
+  }
   if (typeof event.name === 'string' && typeof event.label === 'string' && typeof event.status === 'string') {
-    return event as WorkerInfo;
+    return {
+      ...(event as WorkerInfo),
+      autoStart: (event as { autoStart?: boolean }).autoStart ?? false
+    };
   }
   return null;
 }
@@ -575,6 +583,24 @@ async function stopWorker(worker: WorkerInfo): Promise<void> {
   }
 }
 
+async function toggleAutoStart(worker: WorkerInfo): Promise<void> {
+  operationLoading.value = `${worker.name}:autoStart`;
+
+  try {
+    const result = await request<{ name: string; autoStart: boolean }>('worker.autoStartUpdate', {
+      name: worker.name,
+      autoStart: !worker.autoStart
+    });
+    upsertWorker({ ...worker, autoStart: result.autoStart });
+    message.success(result.autoStart ? '已开启随应用启动' : '已关闭随应用启动');
+    setTimeout(() => void loadWorkers(), 800);
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : '更新自启动配置失败');
+  } finally {
+    operationLoading.value = null;
+  }
+}
+
 async function testWorker(worker: WorkerInfo): Promise<void> {
   if (!isTestableWorker(worker.name) || workerTesting.value[worker.name]) return;
 
@@ -766,6 +792,12 @@ onBeforeUnmount(() => {
                       ]"></span>
                     {{ statusMeta(worker.status).label }}
                   </span>
+                  <span
+                    v-if="worker.autoStart"
+                    class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    <span class="i-carbon-boot h-3 w-3"></span>
+                    自启动
+                  </span>
                 </span>
 
                 <span class="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{{ worker.name }}</span>
@@ -780,6 +812,22 @@ onBeforeUnmount(() => {
             </button>
 
             <div class="flex shrink-0 items-center justify-end gap-2 md:self-center">
+              <button
+                class="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                :disabled="operationLoading === `${worker.name}:autoStart`"
+                :title="worker.autoStart ? '关闭随应用启动' : '开启随应用启动'"
+                @click="toggleAutoStart(worker)">
+                <span
+                  class="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors"
+                  :class="worker.autoStart ? 'bg-primary' : 'bg-muted-foreground/25'">
+                  <span
+                    class="inline-block h-3 w-3 rounded-full bg-background transition-transform"
+                    :class="worker.autoStart ? 'translate-x-3.5' : 'translate-x-0.5'" />
+                </span>
+                <span class="hidden sm:inline">随应用启动</span>
+              </button>
+
               <button
                 v-if="canStart(worker)"
                 class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -889,6 +937,21 @@ onBeforeUnmount(() => {
               测试
             </button>
             <button
+              class="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              :disabled="operationLoading === `${selectedWorker.name}:autoStart`"
+              :title="selectedWorker.autoStart ? '关闭随应用启动' : '开启随应用启动'"
+              @click="toggleAutoStart(selectedWorker)">
+              <span
+                class="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors"
+                :class="selectedWorker.autoStart ? 'bg-primary' : 'bg-muted-foreground/25'">
+                <span
+                  class="inline-block h-3 w-3 rounded-full bg-background transition-transform"
+                  :class="selectedWorker.autoStart ? 'translate-x-3.5' : 'translate-x-0.5'" />
+              </span>
+              随应用启动
+            </button>
+            <button
               v-if="canStart(selectedWorker)"
               class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               type="button"
@@ -915,47 +978,35 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="grid gap-4">
-            <section class="rounded-lg border border-border bg-card">
-              <div class="border-b border-border/60 px-4 py-3">
-                <h3 class="text-sm font-semibold text-foreground">运行状态</h3>
-              </div>
+            <section class="rounded-lg border border-border bg-card px-4 py-3">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-3">
+                  <span
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    :class="statusMeta(selectedWorker.status).badgeClass">
+                    <span :class="[statusMeta(selectedWorker.status).icon, 'h-3.5 w-3.5']"></span>
+                  </span>
+                  <div class="min-w-0">
+                    <h3 class="text-sm font-semibold text-foreground">运行状态</h3>
+                    <p class="mt-0.5 truncate text-xs text-muted-foreground">
+                      {{ statusMeta(selectedWorker.status).description }}
+                    </p>
+                  </div>
+                </div>
 
-              <div class="grid gap-px bg-border/60 sm:grid-cols-2 lg:grid-cols-4">
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">端口</p>
-                  <p class="mt-1 font-mono text-sm font-semibold">{{ selectedWorker.port ?? '-' }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">PID</p>
-                  <p class="mt-1 font-mono text-sm font-semibold">{{ selectedWorker.pid ?? '-' }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">运行时长</p>
-                  <p class="mt-1 text-sm font-semibold">{{ formatUptime(selectedWorker.metrics?.uptimeSeconds) }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">重启次数</p>
-                  <p class="mt-1 text-sm font-semibold">{{ selectedWorker.restartCount }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">CPU</p>
-                  <p class="mt-1 text-sm font-semibold">{{ formatNumber(selectedWorker.metrics?.cpuPercent, '%') }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">内存</p>
-                  <p class="mt-1 text-sm font-semibold">{{ formatBytes(selectedWorker.metrics?.memoryBytes) }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">内存占比</p>
-                  <p class="mt-1 text-sm font-semibold">{{
-                    formatNumber(selectedWorker.metrics?.memoryPercent, '%')
-                  }}</p>
-                </div>
-                <div class="bg-card px-4 py-3">
-                  <p class="text-[11px] font-medium text-muted-foreground">健康检查</p>
-                  <p class="mt-1 text-sm font-semibold">
-                    {{ formatNumber(selectedWorker.metrics?.healthCheckLatency, 'ms') }}
-                  </p>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
+                  <span class="rounded-md bg-muted px-2 py-1">端口 {{ selectedWorker.port ?? '-' }}</span>
+                  <span class="rounded-md bg-muted px-2 py-1">PID {{ selectedWorker.pid ?? '-' }}</span>
+                  <span class="rounded-md bg-muted px-2 py-1">
+                    运行 {{ formatUptime(selectedWorker.metrics?.uptimeSeconds) }}
+                  </span>
+                  <span class="rounded-md bg-muted px-2 py-1">重启 {{ selectedWorker.restartCount }}</span>
+                  <span v-if="selectedWorker.metrics" class="rounded-md bg-muted px-2 py-1">
+                    CPU {{ formatNumber(selectedWorker.metrics.cpuPercent, '%') }}
+                  </span>
+                  <span v-if="selectedWorker.metrics" class="rounded-md bg-muted px-2 py-1">
+                    内存 {{ formatBytes(selectedWorker.metrics.memoryBytes) }}
+                  </span>
                 </div>
               </div>
             </section>

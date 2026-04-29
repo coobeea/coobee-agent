@@ -12,7 +12,7 @@ import type { MethodGroup } from '@main/common/gateway/types';
 import { Env } from '@main/common/env';
 import { createLogger } from '@main/common/logger';
 import { WorkerManager } from '@main/common/worker';
-import type { WorkerInfo } from '@main/common/worker/types';
+import type { WorkerConfig, WorkerInfo } from '@main/common/worker/types';
 import { BusinessPaths } from '@main/config';
 
 const log = createLogger('worker-methods');
@@ -52,8 +52,46 @@ function getWorkerScriptDir(name: string): string {
   return resolveUnder(BusinessPaths.workers.scripts, BusinessPaths.workers.getScriptDir(name));
 }
 
+function getWorkerManifestPath(name: string): string {
+  return resolveUnder(BusinessPaths.workers.scripts, path.join(getWorkerScriptDir(name), 'worker.json'));
+}
+
 function getWorkerConfigPath(name: string): string {
   return resolveUnder(BusinessPaths.workers.runtimeWorkers, BusinessPaths.workers.getConfigPath(name));
+}
+
+function readWorkerManifest(name: string): WorkerConfig {
+  const manifestPath = getWorkerManifestPath(name);
+
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('worker.json must be an object');
+    }
+    return parsed as WorkerConfig;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new GatewayMethodError(GatewayErrorCode.INTERNAL_ERROR, `Failed to read worker.json: ${message}`);
+  }
+}
+
+function writeWorkerManifest(name: string, manifest: WorkerConfig): void {
+  const manifestPath = getWorkerManifestPath(name);
+  const content = JSON.stringify(manifest, null, 2) + '\n';
+  const tmpPath = `${manifestPath}.tmp.${process.pid}`;
+
+  try {
+    fs.writeFileSync(tmpPath, content, 'utf-8');
+    fs.renameSync(tmpPath, manifestPath);
+  } catch (error) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      // ignore cleanup error
+    }
+    throw error;
+  }
 }
 
 function readWorkerConfig(name: string): Record<string, unknown> {
@@ -185,6 +223,39 @@ export const workerMethods: MethodGroup = {
         const message = error instanceof Error ? error.message : String(error);
         log.error(`[worker.stop] Failed: ${name}`, error);
         throw new GatewayMethodError(GatewayErrorCode.INTERNAL_ERROR, message);
+      }
+    },
+
+    /**
+     * 更新 worker.json 中的 autoStart。
+     */
+    autoStartUpdate: async (params) => {
+      const { name, autoStart } = params as { name?: unknown; autoStart?: unknown };
+      validateWorkerName(name);
+      ensureKnownWorker(name);
+
+      if (typeof autoStart !== 'boolean') {
+        throw new GatewayMethodError(GatewayErrorCode.INVALID_PARAMS, 'autoStart must be a boolean');
+      }
+
+      try {
+        const manifest = readWorkerManifest(name);
+        const nextManifest: WorkerConfig = {
+          ...manifest,
+          name: manifest.name || name,
+          autoStart
+        };
+
+        writeWorkerManifest(name, nextManifest);
+        await WorkerManager.getInstance().reloadWorkerConfig(name);
+
+        log.info(`[worker.autoStartUpdate] ${name}: autoStart=${autoStart}`);
+        return { name, autoStart };
+      } catch (error) {
+        if (error instanceof GatewayMethodError) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        log.error(`[worker.autoStartUpdate] Failed: ${name}`, error);
+        throw new GatewayMethodError(GatewayErrorCode.INTERNAL_ERROR, `Failed to update worker.json: ${message}`);
       }
     },
 

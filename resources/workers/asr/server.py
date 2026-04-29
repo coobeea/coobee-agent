@@ -120,9 +120,89 @@ app = FastAPI(title="ASR Worker", version="0.3.0")
 
 asr_engine = None
 model_loaded = False
+resolved_model_path = None
 
 
 # ==================== 模型加载 ====================
+
+MODEL_WEIGHT_EXTENSIONS = (".pt", ".bin", ".safetensors", ".onnx")
+MODEL_TEMP_DIR_NAMES = {"._____temp", "__pycache__", ".git"}
+
+
+def normalize_model_path(path: str) -> str:
+    """展开用户路径并规范为绝对路径。"""
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def append_unique_path(paths, seen, path: str):
+    normalized = normalize_model_path(path)
+    if normalized not in seen:
+        paths.append(normalized)
+        seen.add(normalized)
+
+
+def collect_local_model_candidates():
+    """按优先级收集可能的本地模型路径。"""
+    candidates = []
+    seen = set()
+    model_name_path = os.path.expanduser(MODEL_NAME)
+
+    if os.path.isabs(model_name_path):
+        append_unique_path(candidates, seen, model_name_path)
+        return candidates
+
+    append_unique_path(candidates, seen, os.path.join(local_config_base_dir, model_name_path))
+    append_unique_path(candidates, seen, os.path.join(MODEL_DIR, model_name_path))
+    append_unique_path(candidates, seen, os.path.join(MODEL_DIR, "models", model_name_path))
+
+    modelscope_cache = os.environ.get("MODELSCOPE_CACHE") or MODEL_DIR
+    append_unique_path(candidates, seen, os.path.join(modelscope_cache, model_name_path))
+    append_unique_path(candidates, seen, os.path.join(modelscope_cache, "models", model_name_path))
+
+    hf_cache = os.environ.get("HUGGINGFACE_HUB_CACHE") or os.path.join(MODEL_DIR, "hub")
+    hf_model_dir = f"models--{model_name_path.replace('/', '--')}"
+    append_unique_path(candidates, seen, os.path.join(hf_cache, hf_model_dir))
+
+    return candidates
+
+
+def has_model_weight_file(path: str) -> bool:
+    if os.path.isfile(path):
+        return path.lower().endswith(MODEL_WEIGHT_EXTENSIONS)
+
+    if not os.path.isdir(path):
+        return False
+
+    try:
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [name for name in dirs if name not in MODEL_TEMP_DIR_NAMES and not name.startswith("._____")]
+            for filename in files:
+                if filename.lower().endswith(MODEL_WEIGHT_EXTENSIONS):
+                    return True
+    except OSError as exc:
+        log.warning(f"检查模型目录失败: {path} ({exc})")
+
+    return False
+
+
+def is_complete_local_model_path(path: str) -> bool:
+    return os.path.exists(path) and has_model_weight_file(path)
+
+
+def resolve_local_model_path():
+    incomplete_paths = []
+
+    for candidate in collect_local_model_candidates():
+        if is_complete_local_model_path(candidate):
+            return candidate
+        if os.path.exists(candidate):
+            incomplete_paths.append(candidate)
+
+    for path in incomplete_paths:
+        log.warning(f"发现本地模型目录但权重未完整下载，暂不使用: {path}")
+
+    return None
+
 
 def detect_device() -> str:
     """自动选择最佳计算设备"""
@@ -136,7 +216,7 @@ def detect_device() -> str:
 
 def load_asr_model():
     """加载 FunASR 模型"""
-    global asr_engine, model_loaded
+    global asr_engine, model_loaded, resolved_model_path
 
     from funasr import AutoModel
 
@@ -146,15 +226,16 @@ def load_asr_model():
     log.info(f"设备: {device}")
     log.info(f"模型目录: {MODEL_DIR}")
 
-    os.environ.setdefault("MODELSCOPE_CACHE", MODEL_DIR)
-    os.environ.setdefault("HF_HOME", MODEL_DIR)
-    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", os.path.join(MODEL_DIR, "hub"))
+    os.environ["MODELSCOPE_CACHE"] = MODEL_DIR
+    os.environ["HF_HOME"] = MODEL_DIR
+    os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.join(MODEL_DIR, "hub")
 
-    model_path = os.path.join(MODEL_DIR, MODEL_NAME)
-    if os.path.exists(model_path):
-        log.info(f"使用本地模型路径: {model_path}")
-        model_arg = model_path
+    resolved_model_path = resolve_local_model_path()
+    if resolved_model_path:
+        print(f"[ASR Worker] 使用本地模型路径: {resolved_model_path}")
+        model_arg = resolved_model_path
     else:
+        print(f"[ASR Worker] 未找到完整本地模型缓存，将通过 ModelScope 加载: {MODEL_NAME}")
         model_arg = MODEL_NAME
 
     # remote_code 仅用于 Fun-ASR-Nano（自定义模型实现）
@@ -173,6 +254,8 @@ def load_asr_model():
 
     t0 = time.time()
     asr_engine = AutoModel(**model_kwargs)
+    if not resolved_model_path:
+        resolved_model_path = resolve_local_model_path()
     
     # 屏蔽 FunASR 的繁琐日志
     logging.getLogger("funasr").setLevel(logging.ERROR)
@@ -209,6 +292,7 @@ async def health():
         "provider": "aliyun" if USE_ALIYUN_QWEN_ASR else "local",
         "model_name": ALIYUN_MODEL_NAME if USE_ALIYUN_QWEN_ASR else MODEL_NAME,
         "model_dir": MODEL_DIR,
+        "resolved_model_path": None if USE_ALIYUN_QWEN_ASR else resolved_model_path,
     }
     if USE_ALIYUN_QWEN_ASR:
         resp["api_key_configured"] = bool(API_KEY)

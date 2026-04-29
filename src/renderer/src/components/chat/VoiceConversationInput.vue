@@ -35,6 +35,9 @@ const isMuted = ref(false);
 const partialText = ref('');
 const micError = ref('');
 const asrWs = ref<WebSocket | null>(null);
+const voiceLevel = ref(0);
+const recordingStartedAt = ref<number | null>(null);
+const recordingDurationMs = ref(0);
 
 let audioStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
@@ -42,6 +45,7 @@ let sourceNode: MediaStreamAudioSourceNode | null = null;
 let processorNode: ScriptProcessorNode | null = null;
 let pcmBuffer: Float32Array[] = [];
 let sendTimer: ReturnType<typeof setInterval> | null = null;
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
 
 const asrWorker = computed(() => workerStore.getWorker(workerStore.asrWorkerName));
 const asrReady = computed(() => asrWorker.value?.status === 'ready');
@@ -89,6 +93,27 @@ const primaryActionLabel = computed(() => {
   if (!asrWorker.value) return '刷新';
   if (asrWorker.value.status === 'error') return '重试';
   return '启动';
+});
+
+const showRecordingMeter = computed(() => isListening.value || isMuted.value);
+const recordingDurationLabel = computed(() => {
+  const totalSeconds = Math.floor(recordingDurationMs.value / 1000);
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+});
+const waveBars = computed(() => {
+  const level = isListening.value && !isMuted.value ? voiceLevel.value : 0;
+  const weights = [0.35, 0.58, 0.82, 1, 0.76, 0.52, 0.38];
+
+  return weights.map((weight, index) => {
+    const activity = Math.max(0.12, Math.min(1, level * weight + (isListening.value && !isMuted.value ? 0.18 : 0)));
+    return {
+      height: `${Math.round(6 + activity * 21)}px`,
+      opacity: `${0.34 + activity * 0.56}`,
+      transitionDelay: `${index * 12}ms`
+    };
+  });
 });
 
 function focus(): void {
@@ -237,11 +262,13 @@ async function startListening(): Promise<void> {
 
     processorNode.onaudioprocess = (event) => {
       if (isMuted.value) {
+        voiceLevel.value = 0;
         event.outputBuffer.getChannelData(0).fill(0);
         return;
       }
 
       const samples = event.inputBuffer.getChannelData(0);
+      updateVoiceLevel(samples);
       pcmBuffer.push(new Float32Array(samples));
       event.outputBuffer.getChannelData(0).fill(0);
     };
@@ -253,6 +280,7 @@ async function startListening(): Promise<void> {
     isListening.value = true;
     isMuted.value = false;
     micError.value = '';
+    startRecordingTimer();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     micError.value =
@@ -290,7 +318,9 @@ function stopListening(): void {
 
   isListening.value = false;
   partialText.value = '';
+  voiceLevel.value = 0;
   pcmBuffer = [];
+  stopRecordingTimer();
 }
 
 function toggleMute(): void {
@@ -299,7 +329,47 @@ function toggleMute(): void {
 
   if (isMuted.value) {
     partialText.value = '';
+    voiceLevel.value = 0;
   }
+}
+
+function updateVoiceLevel(samples: Float32Array): void {
+  let sum = 0;
+  let count = 0;
+
+  for (let i = 0; i < samples.length; i += 8) {
+    sum += samples[i] * samples[i];
+    count += 1;
+  }
+
+  const rms = count > 0 ? Math.sqrt(sum / count) : 0;
+  const nextLevel = Math.min(1, rms * 12);
+  voiceLevel.value = Math.max(nextLevel, voiceLevel.value * 0.72);
+}
+
+function startRecordingTimer(): void {
+  recordingStartedAt.value = Date.now();
+  recordingDurationMs.value = 0;
+
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+  }
+
+  recordingTimer = setInterval(() => {
+    if (recordingStartedAt.value) {
+      recordingDurationMs.value = Date.now() - recordingStartedAt.value;
+    }
+  }, 500);
+}
+
+function stopRecordingTimer(): void {
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+
+  recordingStartedAt.value = null;
+  recordingDurationMs.value = 0;
 }
 
 function sendPcmBuffer(): void {
@@ -421,6 +491,13 @@ function getStatusLabel(status: string): string {
           </span>
         </div>
         <p class="voice-detail" :class="{ 'voice-detail--error': statusTone === 'error' }">{{ statusDetail }}</p>
+        <div v-if="showRecordingMeter" class="voice-meter-row" :class="{ 'voice-meter-row--muted': isMuted }">
+          <div class="voice-wave" aria-hidden="true">
+            <span v-for="(bar, index) in waveBars" :key="index" class="voice-wave-bar" :style="bar" />
+          </div>
+          <span class="voice-duration">{{ recordingDurationLabel }}</span>
+          <span v-if="isMuted" class="voice-meter-label">暂停</span>
+        </div>
         <div v-if="partialText" class="voice-partial">
           <span class="i-carbon-circle-dash inline-block h-3.5 w-3.5" />
           <span>{{ partialText }}</span>
@@ -621,6 +698,57 @@ function getStatusLabel(status: string): string {
 
 .voice-detail--error {
   color: hsl(var(--error));
+}
+
+.voice-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin-top: 7px;
+}
+
+.voice-wave {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 3px;
+  color: hsl(var(--primary));
+}
+
+.voice-wave-bar {
+  display: inline-block;
+  width: 3px;
+  min-height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  transition:
+    height 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.voice-meter-row--muted .voice-wave {
+  color: hsl(var(--warning));
+}
+
+.voice-duration {
+  min-width: 34px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.voice-meter-label {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  border-radius: 999px;
+  background: hsl(var(--warning) / 0.12);
+  color: hsl(var(--warning));
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 7px;
 }
 
 .voice-partial {

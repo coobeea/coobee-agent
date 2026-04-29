@@ -28,6 +28,8 @@ export interface WorkerMetrics {
 export interface WorkerInfo {
   name: string;
   label: string;
+  /** 是否随应用启动自动拉起，对应 worker.json 中的 autoStart */
+  autoStart: boolean;
   status: WorkerStatus;
   port?: number;
   error?: string;
