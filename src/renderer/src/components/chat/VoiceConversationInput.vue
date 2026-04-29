@@ -2,11 +2,12 @@
 /**
  * VoiceConversationInput — 语音对话模式输入区。
  *
- * 不提供普通文本输入；ASR final 文本会通过 send 事件交给父组件。
+ * 不提供普通文本输入；ASR 识别文本通过 send 事件交给父组件。
+ * 录音与 ASR 逻辑由 useAudioRecorder composable 提供。
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useWorkerStore } from '@/stores/worker';
-import configManager from '@/config';
+import { useAudioRecorder } from '@/composables/useAudioRecorder';
 
 const props = withDefaults(
   defineProps<{
@@ -29,29 +30,58 @@ const emit = defineEmits<{
 const workerStore = useWorkerStore();
 
 const rootRef = ref<HTMLElement | null>(null);
-const asrConnected = ref(false);
-const isListening = ref(false);
-const isMuted = ref(false);
 const partialText = ref('');
 const micError = ref('');
-const asrWs = ref<WebSocket | null>(null);
 const voiceLevel = ref(0);
 const recordingStartedAt = ref<number | null>(null);
 const recordingDurationMs = ref(0);
-
-let audioStream: MediaStream | null = null;
-let audioContext: AudioContext | null = null;
-let sourceNode: MediaStreamAudioSourceNode | null = null;
-let processorNode: ScriptProcessorNode | null = null;
-let pcmBuffer: Float32Array[] = [];
-let sendTimer: ReturnType<typeof setInterval> | null = null;
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
+
+// ==================== ASR 录音 Composable ====================
+
+const MIN_EFFECTIVE_CHARS = 4;
+
+function countEffectiveChars(text: string): number {
+  const matches = text.match(/[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]/g);
+  return matches ? matches.length : 0;
+}
+
+function trySendOrQueue(text: string): void {
+  const cleaned = text.trim();
+  if (!cleaned || countEffectiveChars(cleaned) < MIN_EFFECTIVE_CHARS) return;
+  if (props.disabled) return;
+  emit('send', { text: cleaned, files: [] });
+}
+
+const recorder = useAudioRecorder({
+  onPartialResult: (text) => {
+    partialText.value = text;
+  },
+  onFinalResult: (text) => {
+    if (text) {
+      partialText.value = '';
+      trySendOrQueue(text);
+    }
+  },
+  onVolumeChange: (vol) => {
+    // composable 返回 0-100，转为 0-1 并带平滑衰减
+    const nextLevel = Math.min(1, vol / 100);
+    voiceLevel.value = Math.max(nextLevel, voiceLevel.value * 0.72);
+  },
+  onSilence: () => {
+    // 客户端 text-idle 检测：partial 文本稳定超时 → 提交
+    if (partialText.value.trim()) {
+      const text = partialText.value.trim();
+      partialText.value = '';
+      trySendOrQueue(text);
+    }
+  }
+});
 
 const asrWorker = computed(() => workerStore.getWorker(workerStore.asrWorkerName));
 const asrReady = computed(() => asrWorker.value?.status === 'ready');
-const asrWorkerName = computed(() => asrWorker.value?.name ?? workerStore.asrWorkerName);
 const canListen = computed(() => asrReady.value && !props.disabled);
-const canToggleMute = computed(() => isListening.value && !props.disabled);
+const canToggleMute = computed(() => recorder.isRecording.value && !props.disabled);
 const canStartWorker = computed(() => {
   const status = asrWorker.value?.status;
   return !props.disabled && (!status || status === 'stopped' || status === 'error');
@@ -60,8 +90,8 @@ const canStartWorker = computed(() => {
 const statusTone = computed<'idle' | 'listening' | 'muted' | 'warning' | 'error'>(() => {
   if (micError.value) return 'error';
   if (!asrWorker.value || canStartWorker.value) return 'warning';
-  if (isListening.value && isMuted.value) return 'muted';
-  if (isListening.value) return 'listening';
+  if (recorder.isRecording.value && recorder.isMuted.value) return 'muted';
+  if (recorder.isRecording.value) return 'listening';
   return 'idle';
 });
 
@@ -71,9 +101,9 @@ const statusTitle = computed(() => {
   if (!asrWorker.value) return '未找到 ASR Worker';
   if (canStartWorker.value) return 'ASR 未启动';
   if (asrWorker.value.status !== 'ready') return getStatusLabel(asrWorker.value.status);
-  if (isMuted.value) return '语音已暂停';
-  if (isListening.value) return '正在聆听';
-  if (asrConnected.value) return '正在连接麦克风';
+  if (recorder.isMuted.value) return '语音已暂停';
+  if (recorder.isRecording.value) return '正在聆听';
+  if (recorder.isConnected.value) return '正在连接麦克风';
   return '语音对话';
 });
 
@@ -83,9 +113,9 @@ const statusDetail = computed(() => {
   if (canStartWorker.value) return '启动后会自动进入聆听状态';
   if (props.showStopButton) return '当前回复完成后继续聆听';
   if (asrWorker.value.status !== 'ready') return '语音服务准备中';
-  if (isMuted.value) return '麦克风已暂停';
+  if (recorder.isMuted.value) return '麦克风已暂停';
   if (partialText.value) return '识别中';
-  if (isListening.value) return '说话后会自动发送识别结果';
+  if (recorder.isRecording.value) return '说话后会自动发送识别结果';
   return '正在准备语音输入';
 });
 
@@ -95,7 +125,7 @@ const primaryActionLabel = computed(() => {
   return '启动';
 });
 
-const showRecordingMeter = computed(() => isListening.value || isMuted.value);
+const showRecordingMeter = computed(() => recorder.isRecording.value || recorder.isMuted.value);
 const recordingDurationLabel = computed(() => {
   const totalSeconds = Math.floor(recordingDurationMs.value / 1000);
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
@@ -103,11 +133,14 @@ const recordingDurationLabel = computed(() => {
   return `${minutes}:${seconds}`;
 });
 const waveBars = computed(() => {
-  const level = isListening.value && !isMuted.value ? voiceLevel.value : 0;
+  const level = recorder.isRecording.value && !recorder.isMuted.value ? voiceLevel.value : 0;
   const weights = [0.35, 0.58, 0.82, 1, 0.76, 0.52, 0.38];
 
   return weights.map((weight, index) => {
-    const activity = Math.max(0.12, Math.min(1, level * weight + (isListening.value && !isMuted.value ? 0.18 : 0)));
+    const activity = Math.max(
+      0.12,
+      Math.min(1, level * weight + (recorder.isRecording.value && !recorder.isMuted.value ? 0.18 : 0))
+    );
     return {
       height: `${Math.round(6 + activity * 21)}px`,
       opacity: `${0.34 + activity * 0.56}`,
@@ -124,21 +157,32 @@ defineExpose({
   focus
 });
 
+// ==================== 生命周期 ====================
+
 onMounted(() => {
   void workerStore.requestWorkers();
 });
 
 onUnmounted(() => {
-  disconnectASR();
+  recorder.disconnect();
+  stopRecordingTimer();
 });
+
+// ==================== ASR Worker 就绪 → 自动连接 ====================
 
 watch(
   () => [canListen.value, asrWorker.value?.port] as const,
   ([ready]) => {
     if (ready) {
-      connectASRWebSocket();
+      recorder
+        .connect()
+        .then(() => startListening())
+        .catch((err) => {
+          micError.value = err instanceof Error ? err.message : String(err);
+        });
     } else {
-      disconnectASR();
+      recorder.disconnect();
+      stopRecordingTimer();
     }
   },
   { immediate: true }
@@ -148,11 +192,16 @@ watch(
   () => props.disabled,
   (disabled) => {
     if (disabled) {
-      isMuted.value = true;
+      recorder.mute();
       partialText.value = '';
+    } else {
+      // 大模型回复完成，自动恢复麦克风
+      recorder.unmute();
     }
   }
 );
+
+// ==================== 交互 ====================
 
 async function startCurrentAsrWorker(): Promise<void> {
   if (props.disabled) return;
@@ -167,72 +216,8 @@ async function startCurrentAsrWorker(): Promise<void> {
   }
 }
 
-function connectASRWebSocket(): void {
-  if (asrWs.value || !asrReady.value) return;
-
-  const url = configManager.getWorkerProxyWsUrl(asrWorkerName.value, '/ws/asr');
-  const ws = new WebSocket(url);
-
-  ws.onopen = () => {
-    if (asrWs.value !== ws) return;
-    asrConnected.value = true;
-    micError.value = '';
-    void startListening();
-  };
-
-  ws.onmessage = (event) => {
-    handleASRMessage(event.data);
-  };
-
-  ws.onclose = () => {
-    if (asrWs.value === ws) {
-      asrWs.value = null;
-    }
-    asrConnected.value = false;
-    stopListening();
-  };
-
-  ws.onerror = () => {
-    micError.value = 'ASR 连接异常，请检查语音服务';
-  };
-
-  asrWs.value = ws;
-}
-
-function disconnectASR(): void {
-  const ws = asrWs.value;
-  asrWs.value = null;
-
-  stopListening();
-
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    ws.close();
-  }
-
-  asrConnected.value = false;
-}
-
-function handleASRMessage(rawData: unknown): void {
-  try {
-    const data = JSON.parse(String(rawData)) as Record<string, unknown>;
-    const partial = typeof data.partial === 'string' ? data.partial : '';
-    const finalText = typeof data.final === 'string' ? data.final.trim() : '';
-
-    if (partial) {
-      partialText.value = partial;
-    }
-
-    if (finalText && !props.disabled) {
-      partialText.value = '';
-      emit('send', { text: finalText, files: [] });
-    }
-  } catch {
-    /* 忽略非 JSON ASR 消息 */
-  }
-}
-
 async function startListening(): Promise<void> {
-  if (isListening.value || props.disabled) return;
+  if (recorder.isRecording.value || props.disabled) return;
 
   if (!navigator.mediaDevices?.getUserMedia) {
     micError.value = '当前环境不支持麦克风输入';
@@ -248,37 +233,7 @@ async function startListening(): Promise<void> {
       return;
     }
 
-    audioStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true
-      }
-    });
-
-    audioContext = new AudioContext();
-    sourceNode = audioContext.createMediaStreamSource(audioStream);
-    processorNode = audioContext.createScriptProcessor(4096, 1, 1);
-
-    processorNode.onaudioprocess = (event) => {
-      if (isMuted.value) {
-        voiceLevel.value = 0;
-        event.outputBuffer.getChannelData(0).fill(0);
-        return;
-      }
-
-      const samples = event.inputBuffer.getChannelData(0);
-      updateVoiceLevel(samples);
-      pcmBuffer.push(new Float32Array(samples));
-      event.outputBuffer.getChannelData(0).fill(0);
-    };
-
-    sourceNode.connect(processorNode);
-    processorNode.connect(audioContext.destination);
-    sendTimer = setInterval(sendPcmBuffer, 250);
-
-    isListening.value = true;
-    isMuted.value = false;
+    await recorder.startRecording();
     micError.value = '';
     startRecordingTimer();
   } catch (error) {
@@ -288,64 +243,19 @@ async function startListening(): Promise<void> {
   }
 }
 
-function stopListening(): void {
-  if (sendTimer) {
-    clearInterval(sendTimer);
-    sendTimer = null;
-  }
-
-  sendPcmBuffer();
-
-  if (processorNode) {
-    processorNode.disconnect();
-    processorNode = null;
-  }
-
-  if (sourceNode) {
-    sourceNode.disconnect();
-    sourceNode = null;
-  }
-
-  if (audioContext) {
-    audioContext.close().catch(() => {});
-    audioContext = null;
-  }
-
-  if (audioStream) {
-    audioStream.getTracks().forEach((track) => track.stop());
-    audioStream = null;
-  }
-
-  isListening.value = false;
-  partialText.value = '';
-  voiceLevel.value = 0;
-  pcmBuffer = [];
-  stopRecordingTimer();
-}
-
 function toggleMute(): void {
   if (!canToggleMute.value) return;
-  isMuted.value = !isMuted.value;
 
-  if (isMuted.value) {
+  if (recorder.isMuted.value) {
+    recorder.unmute();
+  } else {
+    recorder.mute();
     partialText.value = '';
     voiceLevel.value = 0;
   }
 }
 
-function updateVoiceLevel(samples: Float32Array): void {
-  let sum = 0;
-  let count = 0;
-
-  for (let i = 0; i < samples.length; i += 8) {
-    sum += samples[i] * samples[i];
-    count += 1;
-  }
-
-  const rms = count > 0 ? Math.sqrt(sum / count) : 0;
-  const nextLevel = Math.min(1, rms * 12);
-  voiceLevel.value = Math.max(nextLevel, voiceLevel.value * 0.72);
-}
+// ==================== 录音计时器 ====================
 
 function startRecordingTimer(): void {
   recordingStartedAt.value = Date.now();
@@ -372,79 +282,7 @@ function stopRecordingTimer(): void {
   recordingDurationMs.value = 0;
 }
 
-function sendPcmBuffer(): void {
-  if (!asrWs.value || asrWs.value.readyState !== WebSocket.OPEN || pcmBuffer.length === 0 || !audioContext) return;
-
-  let totalLength = 0;
-  for (const chunk of pcmBuffer) {
-    totalLength += chunk.length;
-  }
-
-  const merged = new Float32Array(totalLength);
-  let offset = 0;
-  for (const chunk of pcmBuffer) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
-  pcmBuffer = [];
-
-  const downsampled = downsample(merged, audioContext.sampleRate, 16000);
-  asrWs.value.send(float32ToInt16(downsampled));
-}
-
-function downsample(samples: Float32Array, inputRate: number, outputRate: number): Float32Array {
-  if (inputRate === outputRate) return samples;
-
-  const ratio = inputRate / outputRate;
-  const intRatio = Math.round(ratio);
-
-  if (Math.abs(ratio - intRatio) < 0.01 && intRatio >= 2) {
-    const nextLength = Math.floor(samples.length / intRatio);
-    const result = new Float32Array(nextLength);
-
-    for (let i = 0; i < nextLength; i += 1) {
-      let sum = 0;
-      const base = i * intRatio;
-      for (let j = 0; j < intRatio; j += 1) {
-        sum += samples[base + j];
-      }
-      result[i] = sum / intRatio;
-    }
-
-    return result;
-  }
-
-  const windowHalf = Math.ceil(ratio / 2);
-  const nextLength = Math.round(samples.length / ratio);
-  const result = new Float32Array(nextLength);
-
-  for (let i = 0; i < nextLength; i += 1) {
-    const center = i * ratio;
-    const lo = Math.max(0, Math.floor(center) - windowHalf);
-    const hi = Math.min(samples.length - 1, Math.floor(center) + windowHalf);
-    let sum = 0;
-
-    for (let j = lo; j <= hi; j += 1) {
-      sum += samples[j];
-    }
-
-    result[i] = sum / (hi - lo + 1);
-  }
-
-  return result;
-}
-
-function float32ToInt16(float32: Float32Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(float32.length * 2);
-  const view = new DataView(buffer);
-
-  for (let i = 0; i < float32.length; i += 1) {
-    const sample = Math.max(-1, Math.min(1, float32[i]));
-    view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-  }
-
-  return buffer;
-}
+// ==================== 工具 ====================
 
 function getStatusLabel(status: string): string {
   switch (status) {
@@ -470,15 +308,19 @@ function getStatusLabel(status: string): string {
       <button
         type="button"
         class="voice-orb"
-        :class="{ 'voice-orb--listening': isListening && !isMuted }"
+        :class="{ 'voice-orb--listening': recorder.isRecording.value && !recorder.isMuted.value }"
         :disabled="!canToggleMute"
-        :title="isMuted ? '继续聆听' : '暂停聆听'"
-        :aria-label="isMuted ? '继续聆听' : '暂停聆听'"
+        :title="recorder.isMuted.value ? '继续聆听' : '暂停聆听'"
+        :aria-label="recorder.isMuted.value ? '继续聆听' : '暂停聆听'"
         @click="toggleMute">
         <span class="voice-orb-ring" />
         <span
           class="inline-block h-5 w-5"
-          :class="isMuted || !isListening ? 'i-carbon-microphone-off' : 'i-carbon-microphone-filled'" />
+          :class="
+            recorder.isMuted.value || !recorder.isRecording.value
+              ? 'i-carbon-microphone-off'
+              : 'i-carbon-microphone-filled'
+          " />
       </button>
 
       <div class="voice-state">
@@ -491,12 +333,15 @@ function getStatusLabel(status: string): string {
           </span>
         </div>
         <p class="voice-detail" :class="{ 'voice-detail--error': statusTone === 'error' }">{{ statusDetail }}</p>
-        <div v-if="showRecordingMeter" class="voice-meter-row" :class="{ 'voice-meter-row--muted': isMuted }">
+        <div
+          v-if="showRecordingMeter"
+          class="voice-meter-row"
+          :class="{ 'voice-meter-row--muted': recorder.isMuted.value }">
           <div class="voice-wave" aria-hidden="true">
             <span v-for="(bar, index) in waveBars" :key="index" class="voice-wave-bar" :style="bar" />
           </div>
           <span class="voice-duration">{{ recordingDurationLabel }}</span>
-          <span v-if="isMuted" class="voice-meter-label">暂停</span>
+          <span v-if="recorder.isMuted.value" class="voice-meter-label">暂停</span>
         </div>
         <div v-if="partialText" class="voice-partial">
           <span class="i-carbon-circle-dash inline-block h-3.5 w-3.5" />
@@ -533,13 +378,13 @@ function getStatusLabel(status: string): string {
           v-else
           type="button"
           class="toolbar-btn"
-          :class="isMuted ? 'toolbar-btn-voice-muted' : 'toolbar-btn-voice'"
+          :class="recorder.isMuted.value ? 'toolbar-btn-voice-muted' : 'toolbar-btn-voice'"
           :disabled="!canToggleMute"
-          :title="isMuted ? '继续聆听' : '暂停聆听'"
+          :title="recorder.isMuted.value ? '继续聆听' : '暂停聆听'"
           @click="toggleMute">
           <span
             class="inline-block h-3.5 w-3.5"
-            :class="isMuted ? 'i-carbon-microphone-off' : 'i-carbon-pause-filled'" />
+            :class="recorder.isMuted.value ? 'i-carbon-microphone-off' : 'i-carbon-pause-filled'" />
         </button>
       </div>
     </div>
