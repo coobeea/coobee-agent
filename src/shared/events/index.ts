@@ -11,6 +11,22 @@ export type {
 
 export { GatewayEventTypes } from './gateway';
 export type { GatewayEventPayloads, GatewayEventType, StreamMessageEventPayload } from './gateway';
+export {
+  AgentEventTypes,
+  BuiltinAgentMessageActions,
+  isBuiltinAgentMessageAction,
+  normalizeAgentMessage
+} from './agent';
+export type {
+  AgentEventType,
+  AgentMessage,
+  AgentMessageAction,
+  AgentMessageLevel,
+  AgentMessageMeta,
+  AgentMessagePayload,
+  BuiltinAgentMessageAction,
+  NormalizeAgentMessageResult
+} from './agent';
 export type {
   FrontendEventHandler,
   FrontendEventPayloads,

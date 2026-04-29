@@ -21,25 +21,34 @@ import { z } from 'zod';
 import type { ToolDefinition, ToolResult, ToolStreamUpdate, ToolExecutionContext } from '../types';
 import { ToolCategory } from '../types';
 import { eventBus } from '@main/common/eventbus';
+import { AgentEventTypes, normalizeAgentMessage } from '@shared/events/agent';
 
 export const emitEventTool: ToolDefinition = {
   name: 'emit_event',
   description:
-    'Send an event to the user interface. Use this to trigger UI actions like:\n' +
-    '- "open-preview": Open a URL preview in the workbench (e.g. after starting a dev server)\n' +
-    '  payload: { url: "http://localhost:3000", title?: "My App" }\n' +
-    '- "open-file": Open a file in the workbench editor\n' +
-    '  payload: { path: "/absolute/path/to/file" }\n' +
+    'Send a UI message to the user interface. The "event" parameter is the action name. ' +
+    'The payload object only supports two top-level fields: "text" for human-readable text and "data" for structured parameters.\n' +
     '- "notify": Show a notification to the user\n' +
-    '  payload: { message: "Task completed!", level?: "info"|"success"|"warning"|"error" }',
+    '  payload: { text: "Task completed!", data: { level?: "info"|"success"|"warning"|"error" } }\n' +
+    '- "open-preview": Open a URL preview in the workbench\n' +
+    '  payload: { text?: "My App", data: { url: "http://localhost:3000" } }\n' +
+    '- "open-file": Open a file in the workbench editor\n' +
+    '  payload: { text?: "View file", data: { path: "/absolute/path/to/file" } }',
   category: ToolCategory.Observability,
   needUserConfirm: false,
   parameters: z.object({
-    event: z.string().describe('Event type: "open-preview", "open-file", "notify", or custom event name'),
+    event: z.string().describe('Action name: "notify", "open-preview", or "open-file"'),
     payload: z
-      .record(z.string(), z.unknown())
+      .object({
+        text: z.string().optional().describe('Human-readable text, such as notification content or tab title'),
+        data: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe('Structured action parameters, such as url/path/level')
+      })
+      .strict()
       .optional()
-      .describe('Event payload (key-value object). Content depends on event type.')
+      .describe('Message payload with only text and data fields.')
   }),
 
   execute: async function* (
@@ -47,34 +56,48 @@ export const emitEventTool: ToolDefinition = {
     _signal?: AbortSignal,
     context?: ToolExecutionContext
   ): AsyncGenerator<ToolStreamUpdate, ToolResult, unknown> {
-    const event = params.event as string;
-    const payload = (params.payload as Record<string, unknown>) || {};
+    const event = typeof params.event === 'string' ? params.event : '';
 
-    if (!event || typeof event !== 'string') {
+    if (!event.trim()) {
       return {
         success: false,
-        llmContent: 'Error: event must be a non-empty string',
+        llmContent: 'Error: event must be one of notify, open-preview, or open-file.',
         error: { code: 'INVALID_PARAM', message: 'event must be a non-empty string' }
       };
     }
 
-    const enrichedPayload = {
-      ...payload,
-      _event: event,
-      _sessionId: context?.sessionId,
-      _agentName: context?.agentName,
-      _timestamp: Date.now()
-    };
+    const message = normalizeAgentMessage(event, params.payload, {
+      sessionId: context?.sessionId,
+      agentName: context?.agentName
+    });
 
-    eventBus.emit('agent:event', enrichedPayload);
+    if ('error' in message) {
+      return {
+        success: false,
+        llmContent:
+          `Error: ${message.error}.\n` +
+          'Supported examples:\n' +
+          '- { event: "notify", payload: { text: "Task completed", data: { level: "success" } } }\n' +
+          '- { event: "open-preview", payload: { text: "Preview", data: { url: "http://localhost:3000" } } }\n' +
+          '- { event: "open-file", payload: { text: "View file", data: { path: "/absolute/path/to/file" } } }',
+        error: { code: 'INVALID_PARAM', message: message.error }
+      };
+    }
 
-    yield { type: 'progress', content: `Event "${event}" sent`, percentage: 100 };
+    eventBus.emit(AgentEventTypes.MESSAGE, message);
+
+    yield { type: 'progress', content: `UI action "${message.action}" sent`, percentage: 100 };
 
     return {
       success: true,
-      llmContent: `Event "${event}" has been sent to the user interface.`,
-      userContent: `📡 ${event}`,
-      metadata: { event, payload }
+      llmContent: `UI action "${message.action}" has been sent to the user interface.`,
+      userContent: message.action,
+      metadata: {
+        action: message.action,
+        payload: message.payload,
+        meta: message.meta,
+        timestamp: message.timestamp
+      }
     };
   }
 };

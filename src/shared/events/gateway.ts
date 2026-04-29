@@ -1,4 +1,6 @@
 import type { StreamMessage } from '../stream-protocol';
+import { AgentEventTypes } from './agent';
+import type { AgentMessage } from './agent';
 import { ThreadEventTypes } from './thread';
 import type { ThreadMessageEventPayload } from './thread';
 
@@ -9,7 +11,9 @@ export const GatewayEventTypes = {
   /** Agent 流式消息 */
   STREAM_MESSAGE: 'stream:message',
   /** Thread 元信息变更 */
-  THREAD_MESSAGE: ThreadEventTypes.MESSAGE
+  THREAD_MESSAGE: ThreadEventTypes.MESSAGE,
+  /** Agent 主动发送给前端的 UI 消息 */
+  AGENT_MESSAGE: AgentEventTypes.MESSAGE
 } as const;
 
 export type GatewayEventType = (typeof GatewayEventTypes)[keyof typeof GatewayEventTypes];
@@ -32,4 +36,5 @@ export interface StreamMessageEventPayload {
 export interface GatewayEventPayloads {
   [GatewayEventTypes.STREAM_MESSAGE]: StreamMessageEventPayload;
   [GatewayEventTypes.THREAD_MESSAGE]: ThreadMessageEventPayload;
+  [GatewayEventTypes.AGENT_MESSAGE]: AgentMessage;
 }

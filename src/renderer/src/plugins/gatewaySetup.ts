@@ -14,6 +14,8 @@ import configManager from '@/config';
 import eventBus from '@/eventbus';
 import { EventTypes } from '@shared/events/ipc';
 import { GatewayEventTypes } from '@shared/events/gateway';
+import type { GatewayEventPayloads, GatewayEventType } from '@shared/events/gateway';
+import type { FrontendEventPayloads } from '@shared/events/frontend';
 import { GatewayClient } from '@/services/GatewayClient';
 
 // ==================== 全局单例 ====================
@@ -49,15 +51,16 @@ async function connectWhenReady(): Promise<void> {
 /**
  * 桥接 Gateway 推送事件到前端 EventBus。
  */
+function bridgeGatewayEvent<T extends GatewayEventType>(eventType: T): void {
+  gateway.on(eventType, (payload: GatewayEventPayloads[T]) => {
+    eventBus.emit(eventType, payload as FrontendEventPayloads[T]);
+  });
+}
+
 function setupGatewayEventBridge(): void {
-  gateway.on(GatewayEventTypes.STREAM_MESSAGE, (payload) => {
-    eventBus.emit(GatewayEventTypes.STREAM_MESSAGE, payload);
-  });
-
-  gateway.on(GatewayEventTypes.THREAD_MESSAGE, (payload) => {
-    eventBus.emit(GatewayEventTypes.THREAD_MESSAGE, payload);
-  });
-
+  bridgeGatewayEvent(GatewayEventTypes.STREAM_MESSAGE);
+  bridgeGatewayEvent(GatewayEventTypes.THREAD_MESSAGE);
+  bridgeGatewayEvent(GatewayEventTypes.AGENT_MESSAGE);
   console.log('[gatewaySetup] Gateway event bridge initialized');
 }
 

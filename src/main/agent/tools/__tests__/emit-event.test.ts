@@ -12,6 +12,8 @@ vi.mock('@main/common/eventbus', async () => {
 
 import { emitEventTool } from '../builtin/emit-event';
 import { eventBus } from '@main/common/eventbus';
+import { AgentEventTypes, BuiltinAgentMessageActions } from '@shared/events/agent';
+import type { AgentMessage } from '@shared/events/agent';
 import type { ToolExecutionContext } from '../types';
 
 async function consumeGenerator(
@@ -31,12 +33,12 @@ describe('emit_event tool', () => {
     vi.clearAllMocks();
   });
 
-  it('should emit event via eventBus', async () => {
+  it('should emit notify as agent:message via eventBus', async () => {
     const spy = vi.fn();
-    eventBus.on('agent:event', spy);
+    eventBus.on(AgentEventTypes.MESSAGE, spy);
 
     const gen = emitEventTool.execute!(
-      { event: 'open-preview', payload: { url: 'http://localhost:3000' } },
+      { event: 'notify', payload: { text: 'Task completed', data: { level: 'success' } } },
       undefined,
       { sessionId: 'sess-1', agentName: 'test-agent' } as ToolExecutionContext
     );
@@ -44,14 +46,56 @@ describe('emit_event tool', () => {
     const { result } = await consumeGenerator(gen);
 
     expect(spy).toHaveBeenCalledTimes(1);
-    const emitted = spy.mock.calls[0][0];
-    expect(emitted._event).toBe('open-preview');
-    expect(emitted.url).toBe('http://localhost:3000');
-    expect(emitted._sessionId).toBe('sess-1');
-    expect(emitted._agentName).toBe('test-agent');
+    const emitted = spy.mock.calls[0][0] as AgentMessage;
+    expect(emitted.type).toBe(AgentEventTypes.MESSAGE);
+    expect(emitted.action).toBe(BuiltinAgentMessageActions.NOTIFY);
+    expect(emitted.payload).toEqual({ text: 'Task completed', data: { level: 'success' } });
+    expect(Object.keys(emitted.payload).sort()).toEqual(['data', 'text']);
+    expect(emitted.meta).toEqual({ sessionId: 'sess-1', agentName: 'test-agent' });
+    expect(typeof emitted.timestamp).toBe('number');
     expect((result as { success: boolean }).success).toBe(true);
 
-    eventBus.off('agent:event', spy);
+    eventBus.off(AgentEventTypes.MESSAGE, spy);
+  });
+
+  it('should emit open-preview as agent:message', async () => {
+    const spy = vi.fn();
+    eventBus.on(AgentEventTypes.MESSAGE, spy);
+
+    const gen = emitEventTool.execute!(
+      { event: 'open-preview', payload: { text: 'Preview app', data: { url: 'http://localhost:3000' } } },
+      undefined,
+      undefined
+    );
+    const { result } = await consumeGenerator(gen);
+
+    expect((result as { success: boolean }).success).toBe(true);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const emitted = spy.mock.calls[0][0] as AgentMessage;
+    expect(emitted.action).toBe(BuiltinAgentMessageActions.OPEN_PREVIEW);
+    expect(emitted.payload).toEqual({ text: 'Preview app', data: { url: 'http://localhost:3000' } });
+
+    eventBus.off(AgentEventTypes.MESSAGE, spy);
+  });
+
+  it('should emit open-file as agent:message', async () => {
+    const spy = vi.fn();
+    eventBus.on(AgentEventTypes.MESSAGE, spy);
+
+    const gen = emitEventTool.execute!(
+      { event: 'open-file', payload: { text: 'View file', data: { path: '/tmp/result.md' } } },
+      undefined,
+      undefined
+    );
+    const { result } = await consumeGenerator(gen);
+
+    expect((result as { success: boolean }).success).toBe(true);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const emitted = spy.mock.calls[0][0] as AgentMessage;
+    expect(emitted.action).toBe(BuiltinAgentMessageActions.OPEN_FILE);
+    expect(emitted.payload).toEqual({ text: 'View file', data: { path: '/tmp/result.md' } });
+
+    eventBus.off(AgentEventTypes.MESSAGE, spy);
   });
 
   it('should reject empty event name', async () => {
@@ -62,17 +106,41 @@ describe('emit_event tool', () => {
     expect((result as { error: { code: string } }).error.code).toBe('INVALID_PARAM');
   });
 
-  it('should work without payload', async () => {
+  it('should reject unknown action', async () => {
     const spy = vi.fn();
-    eventBus.on('agent:event', spy);
+    eventBus.on(AgentEventTypes.MESSAGE, spy);
 
-    const gen = emitEventTool.execute!({ event: 'notify' }, undefined, undefined);
+    const gen = emitEventTool.execute!({ event: 'custom-action', payload: { text: 'hello' } }, undefined, undefined);
     const { result } = await consumeGenerator(gen);
 
-    expect((result as { success: boolean }).success).toBe(true);
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]._event).toBe('notify');
+    expect((result as { success: boolean }).success).toBe(false);
+    expect((result as { error: { code: string } }).error.code).toBe('INVALID_PARAM');
+    expect(spy).not.toHaveBeenCalled();
 
-    eventBus.off('agent:event', spy);
+    eventBus.off(AgentEventTypes.MESSAGE, spy);
+  });
+
+  it('should reject notify without text', async () => {
+    const gen = emitEventTool.execute!({ event: 'notify', payload: { data: { level: 'info' } } }, undefined, undefined);
+    const { result } = await consumeGenerator(gen);
+
+    expect((result as { success: boolean }).success).toBe(false);
+    expect((result as { error: { code: string } }).error.code).toBe('INVALID_PARAM');
+  });
+
+  it('should reject open-preview without url', async () => {
+    const gen = emitEventTool.execute!({ event: 'open-preview', payload: { text: 'Preview' } }, undefined, undefined);
+    const { result } = await consumeGenerator(gen);
+
+    expect((result as { success: boolean }).success).toBe(false);
+    expect((result as { error: { code: string } }).error.code).toBe('INVALID_PARAM');
+  });
+
+  it('should reject open-file without path', async () => {
+    const gen = emitEventTool.execute!({ event: 'open-file', payload: { text: 'File' } }, undefined, undefined);
+    const { result } = await consumeGenerator(gen);
+
+    expect((result as { success: boolean }).success).toBe(false);
+    expect((result as { error: { code: string } }).error.code).toBe('INVALID_PARAM');
   });
 });
