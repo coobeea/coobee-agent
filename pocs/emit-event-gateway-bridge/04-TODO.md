@@ -40,11 +40,11 @@
   - 本项不支持任意 action 执行。
   - 本项不把 payload 扩成每个 action 一套类型。
 - **验收标准**：
-  - [ ] shared 层只定义一个 Gateway Agent 通道：`agent:message`
-  - [ ] payload 只有 `text` 和 `data` 两个业务字段
-  - [ ] normalize 函数能生成 `AgentMessage`
-  - [ ] normalize 函数能拒绝未知 action 和无效 payload
-- **状态**：[ ]
+  - [x] shared 层只定义一个 Gateway Agent 通道：`agent:message`
+  - [x] payload 只有 `text` 和 `data` 两个业务字段
+  - [x] normalize 函数能生成 `AgentMessage`
+  - [x] normalize 函数能拒绝未知 action 和无效 payload
+- **状态**：[x]
 
 ### T2. 扩展 shared Gateway 与 frontend 事件类型
 
@@ -68,10 +68,10 @@
     - `AgentMessageMeta`
     - helper 函数
 - **验收标准**：
-  - [ ] `gateway.on(GatewayEventTypes.AGENT_MESSAGE, ...)` 有正确 payload 类型
-  - [ ] `eventBus.on(AgentEventTypes.MESSAGE, ...)` 有正确 payload 类型
-  - [ ] shared/events 的统一出口能导出 Agent Message 契约
-- **状态**：[ ]
+  - [x] `gateway.on(GatewayEventTypes.AGENT_MESSAGE, ...)` 有正确 payload 类型
+  - [x] `eventBus.on(AgentEventTypes.MESSAGE, ...)` 有正确 payload 类型
+  - [x] shared/events 的统一出口能导出 Agent Message 契约
+- **状态**：[x]
 
 ### T3. 改造 `emit_event` 工具为 AgentMessage 发射端
 
@@ -100,11 +100,11 @@
   - 不改变工具名称 `emit_event`
   - 暂不把参数名 `event` 改为 `action`
 - **验收标准**：
-  - [ ] 所有支持 action 都发射同一个事件：`agent:message`
-  - [ ] message.action 正确
-  - [ ] message.payload 只包含 `text/data`
-  - [ ] 未知 action 返回失败，不再静默 success
-- **状态**：[ ]
+  - [x] 所有支持 action 都发射同一个事件：`agent:message`
+  - [x] message.action 正确
+  - [x] message.payload 只包含 `text/data`
+  - [x] 未知 action 返回失败，不再静默 success
+- **状态**：[x]
 
 ### T4. 新增数组形式的 `AgentMessagePublisher`
 
@@ -120,10 +120,10 @@
   - 不写 `registerPublisher()`，因为现有扫描逻辑不会识别这个名字
   - 不为每个 action 新增 Publisher 事件
 - **验收标准**：
-  - [ ] Gateway 自动扫描能发现 `AgentMessagePublisher.ts`
-  - [ ] `agent:message` 能被 Gateway 原样广播
-  - [ ] 新增 action 时不需要修改 Publisher
-- **状态**：[ ]
+  - [x] Gateway 自动扫描能发现 `AgentMessagePublisher.ts`
+  - [x] `agent:message` 能被 Gateway 原样广播
+  - [x] 新增 action 时不需要修改 Publisher
+- **状态**：[x]
 
 ### T5. 修改 `gatewaySetup.ts` 桥接 `agent:message`
 
@@ -139,10 +139,10 @@
 - **非目标/边界**：
   - 本项不执行 UI 行为，只做事件转发
 - **验收标准**：
-  - [ ] Gateway 收到 `agent:message` 后，前端 EventBus 能收到同名事件
-  - [ ] 现有 stream/thread 桥接行为不变
-  - [ ] 新增 action 时不需要修改 gatewaySetup
-- **状态**：[ ]
+  - [x] Gateway 收到 `agent:message` 后，前端 EventBus 能收到同名事件
+  - [x] 现有 stream/thread 桥接行为不变
+  - [x] 新增 action 时不需要修改 gatewaySetup
+- **状态**：[x]
 
 ### T6. 新增 `agentEventsHandle.ts` 按 action 执行前端 UI 行为
 
@@ -170,11 +170,11 @@
   - 不新增工作台组件
   - 不新增预览 UI，复用 `useOpenFiles.openUrl`
 - **验收标准**：
-  - [ ] `agent:message + notify` 能显示通知
-  - [ ] `agent:message + open-preview` 能打开 URL 预览标签
-  - [ ] `agent:message + open-file` 能打开文件标签
-  - [ ] handler 注册入口在应用启动时执行
-- **状态**：[ ]
+  - [x] `agent:message + notify` 能显示通知
+  - [x] `agent:message + open-preview` 能打开 URL 预览标签
+  - [x] `agent:message + open-file` 能打开文件标签
+  - [x] handler 注册入口在应用启动时执行
+- **状态**：[x]
 
 ### T7. 更新后端单元测试
 
@@ -195,10 +195,10 @@
   - 增加 Publisher 测试：
     - 默认导出等于 `[AgentEventTypes.MESSAGE]`
 - **验收标准**：
-  - [ ] 后端相关测试通过
-  - [ ] 不再有测试依赖 `agent:event`
-  - [ ] 不再有测试依赖多个顶层 `agent:*` 事件
-- **状态**：[ ]
+  - [x] 后端相关测试通过
+  - [x] 不再有测试依赖 `agent:event`
+  - [x] 不再有测试依赖多个顶层 `agent:*` 事件
+- **状态**：[x]
 
 ### T8. 新增或补充前端 handler 测试
 
@@ -213,9 +213,9 @@
   - 触发 `eventBus.emit(AgentEventTypes.MESSAGE, openPreviewMessage)`，断言 `openUrl`
   - 触发 `eventBus.emit(AgentEventTypes.MESSAGE, openFileMessage)`，断言 `openFile`
 - **验收标准**：
-  - [ ] 前端 handler 测试通过
-  - [ ] 三种 action 的 UI 动作都有覆盖
-- **状态**：[ ]
+  - [x] 前端 handler 测试通过
+  - [x] 三种 action 的 UI 动作都有覆盖
+- **状态**：[x]
 
 ### T9. 手动端到端验证
 

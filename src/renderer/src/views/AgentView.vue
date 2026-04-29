@@ -7,11 +7,11 @@
 
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { toast } from 'vue-sonner';
 import { useAgentsStore } from '@/stores/agents';
 import { useThreadsStore } from '@/stores/threads';
 import { useGateway } from '@/composables/useGateway';
 import { importAgent, exportAgent } from '@/api/agents';
+import { useMessageStore } from '@/components/Message/store';
 
 interface CreateThreadResponse {
   id?: string;
@@ -21,6 +21,7 @@ const agentsStore = useAgentsStore();
 const threadsStore = useThreadsStore();
 const router = useRouter();
 const { request, connectionState } = useGateway();
+const messageStore = useMessageStore();
 
 /** 删除确认 */
 const confirmDeleteId = ref<string | null>(null);
@@ -75,7 +76,7 @@ async function startNewTask(agentId: string, event: MouseEvent): Promise<void> {
   if (creatingTask.value) return;
 
   if (!isGatewayReady.value) {
-    toast.info('服务连接中，请稍后再试');
+    messageStore.info('服务连接中，请稍后再试');
     return;
   }
 
@@ -91,7 +92,7 @@ async function startNewTask(agentId: string, event: MouseEvent): Promise<void> {
     }
   } catch (err) {
     console.error('Failed to create thread:', err);
-    toast.error('创建任务失败');
+    messageStore.error('创建任务失败');
   } finally {
     creatingTask.value = null;
   }
@@ -146,7 +147,7 @@ async function handleFileSelect(event: Event): Promise<void> {
 
   // 验证文件类型
   if (!file.name.endsWith('.zip')) {
-    toast.error('请选择 ZIP 文件');
+    messageStore.error('请选择 ZIP 文件');
     input.value = '';
     return;
   }
@@ -157,23 +158,23 @@ async function handleFileSelect(event: Event): Promise<void> {
     const result = await importAgent(file);
 
     if (result.success && result.data) {
-      toast.success(`成功导入智能体: ${result.data.agentName || result.data.agentId}`);
+      messageStore.success(`成功导入智能体: ${result.data.agentName || result.data.agentId}`);
 
       // 显示警告信息
       if (result.data.warnings && result.data.warnings.length > 0) {
         result.data.warnings.forEach((warning) => {
-          toast.warning(warning);
+          messageStore.warning(warning);
         });
       }
 
       // 刷新列表
       await agentsStore.fetchAgents();
     } else {
-      toast.error(result.error || '导入失败');
+      messageStore.error(result.error || '导入失败');
     }
   } catch (err) {
     console.error('[AgentView] Import error:', err);
-    toast.error(err instanceof Error ? err.message : '导入失败');
+    messageStore.error(err instanceof Error ? err.message : '导入失败');
   } finally {
     importing.value = false;
     input.value = '';
@@ -185,7 +186,7 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
   event.stopPropagation();
 
   try {
-    toast.loading('正在导出...');
+    messageStore.info('正在导出...');
     const blob = await exportAgent(agentId);
 
     // 创建下载链接
@@ -198,10 +199,10 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    toast.success('导出成功');
+    messageStore.success('导出成功');
   } catch (err) {
     console.error('[AgentView] Export error:', err);
-    toast.error(err instanceof Error ? err.message : '导出失败');
+    messageStore.error(err instanceof Error ? err.message : '导出失败');
   }
 }
 </script>

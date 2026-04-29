@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   openFile: vi.fn(),
   openUrl: vi.fn(),
-  toastInfo: vi.fn(),
-  toastSuccess: vi.fn(),
-  toastWarning: vi.fn(),
-  toastError: vi.fn()
+  messageInfo: vi.fn(),
+  messageSuccess: vi.fn(),
+  messageWarning: vi.fn(),
+  messageError: vi.fn()
 }));
 
 vi.mock('@/composables/useOpenFiles', () => ({
@@ -16,13 +16,13 @@ vi.mock('@/composables/useOpenFiles', () => ({
   })
 }));
 
-vi.mock('vue-sonner', () => ({
-  toast: {
-    info: mocks.toastInfo,
-    success: mocks.toastSuccess,
-    warning: mocks.toastWarning,
-    error: mocks.toastError
-  }
+vi.mock('@/components/Message/store', () => ({
+  useMessageStore: () => ({
+    info: mocks.messageInfo,
+    success: mocks.messageSuccess,
+    warning: mocks.messageWarning,
+    error: mocks.messageError
+  })
 }));
 
 import { AgentEventTypes, BuiltinAgentMessageActions } from '@shared/events/agent';
@@ -53,8 +53,8 @@ describe('agentEventsHandle', () => {
       createMessage(BuiltinAgentMessageActions.NOTIFY, { text: 'Done', data: { level: 'success' } })
     );
 
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Done');
-    expect(mocks.toastInfo).not.toHaveBeenCalled();
+    expect(mocks.messageSuccess).toHaveBeenCalledWith('Done');
+    expect(mocks.messageInfo).not.toHaveBeenCalled();
   });
 
   it('should open URL preview', () => {

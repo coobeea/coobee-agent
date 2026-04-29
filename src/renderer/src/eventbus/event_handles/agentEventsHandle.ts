@@ -4,9 +4,9 @@
  * Gateway 只负责把 agent:message 桥接到前端 EventBus；
  * 这里负责根据 action 调用具体 UI 能力。
  */
-import { toast } from 'vue-sonner';
 import { AgentEventTypes, BuiltinAgentMessageActions } from '@shared/events/agent';
 import type { AgentMessage, AgentMessageLevel } from '@shared/events/agent';
+import { useMessageStore } from '@/components/Message/store';
 import eventBus from '@/eventbus';
 import { useOpenFiles } from '@/composables/useOpenFiles';
 
@@ -24,19 +24,21 @@ function getLevel(data: Record<string, unknown> | undefined): AgentMessageLevel 
 }
 
 function notify(text: string, level: AgentMessageLevel): void {
+  const messageStore = useMessageStore();
+
   switch (level) {
     case 'success':
-      toast.success(text);
+      messageStore.success(text);
       return;
     case 'warning':
-      toast.warning(text);
+      messageStore.warning(text);
       return;
     case 'error':
-      toast.error(text);
+      messageStore.error(text);
       return;
     case 'info':
     default:
-      toast.info(text);
+      messageStore.info(text);
   }
 }
 
