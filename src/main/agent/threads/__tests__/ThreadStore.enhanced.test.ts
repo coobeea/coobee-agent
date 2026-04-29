@@ -79,13 +79,34 @@ describe('ThreadStore 增强字段', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('create 默认填充 sessionId = id, agentMode = agent, runStatus = idle', async () => {
+  it('create 默认填充 sessionId = id, agentMode = agent, runStatus = idle，运行配置默认继承 Agent', async () => {
     const store = new ThreadStore(tmpDir, workspacesDir);
     const thread = await store.create({ title: 'Test', agentId: 'default' });
 
     expect(thread.sessionId).toBe(thread.id);
     expect(thread.agentMode).toBe('agent');
     expect(thread.runStatus).toBe('idle');
+    expect(thread.runtimeType).toBeUndefined();
+    expect(thread.enableThinking).toBeUndefined();
+    expect(thread.asrEnabled).toBeUndefined();
+    expect(thread.ttsEnabled).toBeUndefined();
+  });
+
+  it('create 支持写入 Thread 级运行配置覆盖', async () => {
+    const store = new ThreadStore(tmpDir, workspacesDir);
+    const thread = await store.create({
+      title: 'Test',
+      agentId: 'default',
+      runtimeType: 'openai',
+      enableThinking: true,
+      asrEnabled: true,
+      ttsEnabled: true
+    });
+
+    expect(thread.runtimeType).toBe('openai');
+    expect(thread.enableThinking).toBe(true);
+    expect(thread.asrEnabled).toBe(true);
+    expect(thread.ttsEnabled).toBe(true);
   });
 
   it('create 支持自定义 agentMode', async () => {
@@ -110,6 +131,23 @@ describe('ThreadStore 增强字段', () => {
     expect(updated2!.runStatus).toBe('idle');
   });
 
+  it('update 可以修改 Thread 级运行配置', async () => {
+    const store = new ThreadStore(tmpDir, workspacesDir);
+    const thread = await store.create({ title: 'Task', agentId: 'a1' });
+
+    const updated = await store.update(thread.id, {
+      runtimeType: 'openai',
+      enableThinking: true,
+      asrEnabled: true,
+      ttsEnabled: true
+    });
+
+    expect(updated!.runtimeType).toBe('openai');
+    expect(updated!.enableThinking).toBe(true);
+    expect(updated!.asrEnabled).toBe(true);
+    expect(updated!.ttsEnabled).toBe(true);
+  });
+
   it('list 返回的索引条目包含 runStatus 和 workspacePath', async () => {
     const store = new ThreadStore(tmpDir, workspacesDir);
     await store.create({ title: 'A', agentId: 'a1', agentMode: 'chat' });
@@ -119,6 +157,10 @@ describe('ThreadStore 增强字段', () => {
     expect(list).toHaveLength(2);
     expect(list[0].runStatus).toBe('idle');
     expect(list[0].workspacePath).toBe(path.join(workspacesDir, list[0].id));
+    expect(list[0].runtimeType).toBeUndefined();
+    expect(list[0].enableThinking).toBeUndefined();
+    expect(list[0].asrEnabled).toBeUndefined();
+    expect(list[0].ttsEnabled).toBeUndefined();
     expect(list[1].runStatus).toBe('idle');
     expect(list[1].workspacePath).toBe(path.join(workspacesDir, list[1].id));
   });
@@ -146,6 +188,10 @@ describe('ThreadStore 增强字段', () => {
     expect(loaded!.sessionId).toBe(created.id);
     expect(loaded!.agentMode).toBe('chat');
     expect(loaded!.runStatus).toBe('idle');
+    expect(loaded!.runtimeType).toBeUndefined();
+    expect(loaded!.enableThinking).toBeUndefined();
+    expect(loaded!.asrEnabled).toBeUndefined();
+    expect(loaded!.ttsEnabled).toBeUndefined();
   });
 
   it('向后兼容：加载缺少新字段的旧 JSON 文件', async () => {

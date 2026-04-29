@@ -56,6 +56,24 @@ class ConfigManager {
   }
 
   /**
+   * 获取 Worker 代理 HTTP 地址。
+   *
+   * 前端只访问 Gateway，Gateway 再转发到本机 Worker。
+   */
+  public getWorkerProxyHttpUrl(workerName: string, path: string): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `http://${this.getHost()}:${this.port}/gateway/workers/${encodeURIComponent(workerName)}${normalizedPath}`;
+  }
+
+  /**
+   * 获取 Worker 代理 WebSocket 地址。
+   */
+  public getWorkerProxyWsUrl(workerName: string, path: string): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `ws://${this.getHost()}:${this.port}/gateway/workers/${encodeURIComponent(workerName)}${normalizedPath}`;
+  }
+
+  /**
    * 获取统一服务端口
    */
   public getPort(): string {

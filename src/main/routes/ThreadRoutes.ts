@@ -10,8 +10,59 @@ import { createLogger } from '@main/common/logger';
 import fs from 'fs-extra';
 import path from 'path';
 import { Env } from '@main/common/env';
+import type { UpdateThreadParams } from '@main/agent/threads/types';
+import type { ApiResponse, DeleteThreadRespVO, UpdateThreadReqVO, UpdateThreadRespVO } from '@shared/api/thread-types';
+import type { ThreadRuntimeType, ThreadStatus } from '@shared/events/thread';
 
 const log = createLogger('thread-routes');
+
+const THREAD_STATUSES = new Set<ThreadStatus>(['active', 'archived', 'deleted']);
+const THREAD_RUNTIME_TYPES = new Set<ThreadRuntimeType>(['pi-mono', 'openai', 'claude']);
+
+function isThreadStatus(value: unknown): value is ThreadStatus {
+  return typeof value === 'string' && THREAD_STATUSES.has(value as ThreadStatus);
+}
+
+function isThreadRuntimeType(value: unknown): value is ThreadRuntimeType {
+  return typeof value === 'string' && THREAD_RUNTIME_TYPES.has(value as ThreadRuntimeType);
+}
+
+function collectThreadUpdates(body: Record<string, unknown>): { updates?: UpdateThreadParams; error?: string } {
+  const updates: UpdateThreadParams = {};
+
+  if ('title' in body) {
+    if (typeof body.title !== 'string') return { error: 'title must be a string' };
+    updates.title = body.title;
+  }
+  if ('status' in body) {
+    if (!isThreadStatus(body.status)) return { error: 'status is invalid' };
+    updates.status = body.status;
+  }
+  if ('overrideModel' in body) {
+    if (body.overrideModel !== null && typeof body.overrideModel !== 'string') {
+      return { error: 'overrideModel must be a string or null' };
+    }
+    updates.overrideModel = body.overrideModel;
+  }
+  if ('runtimeType' in body) {
+    if (!isThreadRuntimeType(body.runtimeType)) return { error: 'runtimeType is invalid' };
+    updates.runtimeType = body.runtimeType;
+  }
+  if ('enableThinking' in body) {
+    if (typeof body.enableThinking !== 'boolean') return { error: 'enableThinking must be a boolean' };
+    updates.enableThinking = body.enableThinking;
+  }
+  if ('asrEnabled' in body) {
+    if (typeof body.asrEnabled !== 'boolean') return { error: 'asrEnabled must be a boolean' };
+    updates.asrEnabled = body.asrEnabled;
+  }
+  if ('ttsEnabled' in body) {
+    if (typeof body.ttsEnabled !== 'boolean') return { error: 'ttsEnabled must be a boolean' };
+    updates.ttsEnabled = body.ttsEnabled;
+  }
+
+  return { updates };
+}
 
 /**
  * 注册 Thread 路由
@@ -158,7 +209,7 @@ export function registerThreadRoutes(router: Router): void {
   router.patch('/threads/:id', async (ctx) => {
     try {
       const { id } = ctx.params;
-      const updates = ctx.request.body as Record<string, unknown>;
+      const updates = ctx.request.body as UpdateThreadReqVO & Record<string, unknown>;
 
       log.info(`[PATCH /threads/${id}] 更新 Thread:`, updates);
 
@@ -167,27 +218,31 @@ export function registerThreadRoutes(router: Router): void {
 
       if (!thread) {
         ctx.status = 404;
-        ctx.body = { error: 'Thread not found' };
+        ctx.body = { success: false, error: 'Thread not found' };
         return;
       }
 
-      // 只允许更新特定字段
-      const allowedFields = ['title', 'status', 'overrideModel', 'enableThinking'];
-      const filteredUpdates: Record<string, unknown> = {};
-
-      for (const key of allowedFields) {
-        if (key in updates) {
-          filteredUpdates[key] = updates[key];
-        }
+      const { updates: filteredUpdates, error } = collectThreadUpdates(updates);
+      if (error || !filteredUpdates) {
+        ctx.status = 400;
+        ctx.body = { success: false, error: error || 'Invalid request body' };
+        return;
       }
 
       // 更新 Thread
-      const updatedThread = await store.update(id, filteredUpdates);
+      await store.update(id, filteredUpdates);
+      const updatedThread = await store.getEntry(id);
+      if (!updatedThread) {
+        ctx.status = 404;
+        ctx.body = { success: false, error: 'Thread not found' };
+        return;
+      }
 
-      ctx.body = {
+      const response: ApiResponse<UpdateThreadRespVO> = {
         success: true,
         data: { thread: updatedThread }
       };
+      ctx.body = response;
       log.debug(`[PATCH /threads/${id}] 更新成功`);
     } catch (error) {
       log.error(`[PATCH /threads/:id] 更新失败:`, error);
@@ -196,6 +251,74 @@ export function registerThreadRoutes(router: Router): void {
         success: false,
         error: error instanceof Error ? error.message : 'Internal server error'
       };
+    }
+  });
+
+  /**
+   * DELETE /gateway/threads/:id - 删除 Thread
+   */
+  router.delete('/threads/:id', async (ctx) => {
+    const { id } = ctx.params;
+
+    if (!id) {
+      ctx.status = 400;
+      const response: ApiResponse = {
+        success: false,
+        error: 'thread id is required'
+      };
+      ctx.body = response;
+      return;
+    }
+
+    try {
+      const store = await ThreadStore.getInstance();
+      const thread = await store.get(id);
+
+      if (!thread) {
+        ctx.status = 404;
+        const response: ApiResponse = {
+          success: false,
+          error: 'Thread not found'
+        };
+        ctx.body = response;
+        return;
+      }
+
+      if (thread.runStatus === 'running') {
+        ctx.status = 409;
+        const response: ApiResponse = {
+          success: false,
+          error: 'Thread is running and cannot be deleted'
+        };
+        ctx.body = response;
+        return;
+      }
+
+      const deleted = await store.delete(id);
+      if (!deleted) {
+        ctx.status = 500;
+        const response: ApiResponse = {
+          success: false,
+          error: 'Failed to delete thread'
+        };
+        ctx.body = response;
+        return;
+      }
+
+      const response: ApiResponse<DeleteThreadRespVO> = {
+        success: true,
+        data: { threadId: id, deleted: true }
+      };
+      ctx.body = response;
+      log.info(`[DELETE /threads/${id}] 删除成功`);
+    } catch (error) {
+      log.error(`[DELETE /threads/:id] 删除失败:`, error);
+      ctx.status = 500;
+      const response: ApiResponse = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error'
+      };
+      ctx.body = response;
     }
   });
 

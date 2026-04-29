@@ -27,18 +27,26 @@ export class ThreadExecutor {
   static async *stream(
     threadId: string,
     message: string,
-    runtimeType: AgentRuntimeKind = 'pi-mono'
+    runtimeType?: AgentRuntimeKind
   ): AsyncGenerator<AgentStreamChunk, AgentExecutionResult, unknown> {
-    const request = await ThreadExecutionFactory.getInstance().createRequest({ threadId, message, runtimeType });
+    const params: ThreadMessageParams = { threadId, message };
+    if (runtimeType !== undefined) {
+      params.runtimeType = runtimeType;
+    }
+    const request = await ThreadExecutionFactory.getInstance().createRequest(params);
     return yield* agentExecutor.stream(request);
   }
 
   static async submit(
     threadId: string,
     message: string,
-    runtimeType: AgentRuntimeKind = 'pi-mono'
+    runtimeType?: AgentRuntimeKind
   ): Promise<{ status: 'accepted'; sessionId: string } | { status: 'busy'; sessionId: string }> {
-    const request = await ThreadExecutionFactory.getInstance().createRequest({ threadId, message, runtimeType });
+    const params: ThreadMessageParams = { threadId, message };
+    if (runtimeType !== undefined) {
+      params.runtimeType = runtimeType;
+    }
+    const request = await ThreadExecutionFactory.getInstance().createRequest(params);
     return agentExecutor.submit(request);
   }
 

@@ -49,7 +49,7 @@ export interface WorkerConfig {
 
   /**
    * 服务监听端口
-   * Worker 以 HTTP/WebSocket 服务形式运行，绑定 127.0.0.1
+   * Worker 以 HTTP/WebSocket 服务形式运行，默认绑定 127.0.0.1
    */
   port: number;
 

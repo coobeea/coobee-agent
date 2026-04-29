@@ -47,7 +47,7 @@ function formatCompactNumber(value: number): string {
 
 <template>
   <div class="context-usage" :class="[`context-usage--${level}`, { 'context-usage--empty': !hasUsage }]">
-    <button type="button" class="context-usage-button" :aria-label="ariaLabel">
+    <button type="button" class="context-usage-button" :title="ariaLabel" :aria-label="ariaLabel">
       <span class="context-usage-bars" aria-hidden="true">
         <span
           v-for="bar in 5"
@@ -91,10 +91,10 @@ function formatCompactNumber(value: number): string {
   align-items: center;
   justify-content: center;
   width: 28px;
-  height: 24px;
-  border: 1px solid hsl(var(--border) / 0.3);
+  height: 28px;
+  border: none;
   border-radius: 6px;
-  background: hsl(var(--background) / 0.72);
+  background: transparent;
   color: inherit;
   cursor: help;
   outline: none;
@@ -106,7 +106,6 @@ function formatCompactNumber(value: number): string {
 
 .context-usage:hover .context-usage-button,
 .context-usage-button:focus-visible {
-  border-color: hsl(var(--border) / 0.5);
   background: hsl(var(--muted) / 0.45);
   color: hsl(var(--foreground));
 }
@@ -148,7 +147,7 @@ function formatCompactNumber(value: number): string {
 }
 
 .context-usage-bar--active {
-  background: hsl(var(--success));
+  background: hsl(var(--primary));
 }
 
 .context-usage--warning {
@@ -156,7 +155,6 @@ function formatCompactNumber(value: number): string {
 }
 
 .context-usage--warning .context-usage-button {
-  border-color: hsl(var(--warning) / 0.35);
   background: hsl(var(--warning) / 0.08);
 }
 
@@ -169,7 +167,6 @@ function formatCompactNumber(value: number): string {
 }
 
 .context-usage--danger .context-usage-button {
-  border-color: hsl(var(--error) / 0.35);
   background: hsl(var(--error) / 0.08);
 }
 
@@ -182,8 +179,7 @@ function formatCompactNumber(value: number): string {
 }
 
 .context-usage--empty .context-usage-button {
-  border-color: hsl(var(--border) / 0.25);
-  background: hsl(var(--muted) / 0.18);
+  background: transparent;
 }
 
 .context-usage-popover {
@@ -266,7 +262,7 @@ function formatCompactNumber(value: number): string {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 5px 12px;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .context-usage-popover-grid span {
@@ -280,7 +276,7 @@ function formatCompactNumber(value: number): string {
 
 .context-usage-popover-empty {
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   color: hsl(var(--muted-foreground));
 }

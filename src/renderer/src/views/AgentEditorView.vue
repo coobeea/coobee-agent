@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
-import type { CreateAgentParams } from '@/api/agents';
+import type { AgentRuntimeType, CreateAgentParams } from '@/api/agents';
 import ModelSelector from '@/components/ModelSelector.vue';
 import MarkdownEditor from '@/components/MarkdownEditor.vue';
 import { useMessageStore } from '@/components/Message';
@@ -26,6 +26,10 @@ const form = ref<CreateAgentParams>({
   instructions: '', // 暂时保留，但实际会从 SOUL.md 读取
   skills: [],
   model: '',
+  runtimeType: 'pi-mono',
+  enableThinking: false,
+  asrEnabled: false,
+  ttsEnabled: false,
   metadata: {
     greeting: '',
     starterPrompts: []
@@ -39,6 +43,12 @@ const starterPromptsLoaded = ref(false);
 const starterPromptsSaving = ref(false);
 const starterPromptsDirty = ref(false);
 let starterPromptsSaveTimer: number | null = null;
+
+const runtimeOptions: Array<{ value: AgentRuntimeType; label: string; description: string }> = [
+  { value: 'pi-mono', label: 'Pi', description: '默认 Agent Runtime' },
+  { value: 'openai', label: 'OpenAI', description: 'OpenAI Agents Runtime' },
+  { value: 'claude', label: 'Claude', description: 'Claude Runtime' }
+];
 
 function syncStarterPromptsToMetadata(): void {
   form.value.metadata = {
@@ -137,7 +147,7 @@ async function saveStarterPrompts(): Promise<void> {
   }
 }
 
-const addStarterPrompt = () => {
+const addStarterPrompt = (): void => {
   const prompt = newPrompt.value.trim();
   if (prompt && !starterPrompts.value.includes(prompt)) {
     starterPrompts.value.push(prompt);
@@ -156,7 +166,7 @@ const addStarterPrompt = () => {
   }
 };
 
-const removeStarterPrompt = (index: number) => {
+const removeStarterPrompt = (index: number): void => {
   starterPrompts.value.splice(index, 1);
   syncStarterPromptsToMetadata();
   starterPromptsDirty.value = true;
@@ -243,7 +253,7 @@ const availableSkills = [
   { id: 'terminal', name: '终端访问', description: '允许智能体执行命令行指令', icon: 'i-carbon-terminal' }
 ];
 
-const toggleSkill = (skillId: string) => {
+const toggleSkill = (skillId: string): void => {
   const skills = form.value.skills || [];
   const index = skills.indexOf(skillId);
   if (index > -1) {
@@ -276,7 +286,7 @@ watch(
   }
 );
 
-const handleIdInput = () => {
+const handleIdInput = (): void => {
   idManuallyEdited.value = true;
 };
 
@@ -298,6 +308,10 @@ onMounted(async () => {
           instructions: res.instructions || '',
           skills: res.skills || [],
           model: res.model || '',
+          runtimeType: res.runtimeType || 'pi-mono',
+          enableThinking: res.enableThinking ?? false,
+          asrEnabled: res.asrEnabled ?? false,
+          ttsEnabled: res.ttsEnabled ?? false,
           metadata: {
             greeting: (res.metadata?.greeting as string) || '',
             starterPrompts: Array.isArray(res.metadata?.starterPrompts) ? res.metadata.starterPrompts : [],
@@ -322,6 +336,10 @@ onMounted(async () => {
           instructions: '',
           skills: agent.skills || [],
           model: agent.model || '',
+          runtimeType: agent.runtimeType || 'pi-mono',
+          enableThinking: agent.enableThinking ?? false,
+          asrEnabled: agent.asrEnabled ?? false,
+          ttsEnabled: agent.ttsEnabled ?? false,
           metadata: { greeting: '', starterPrompts: [], dataDirectory: '' }
         };
         starterPrompts.value = [];
@@ -352,7 +370,7 @@ onMounted(async () => {
   }
 });
 
-const nextStep = () => {
+const nextStep = (): void => {
   if (currentStep.value === 1) {
     if (!form.value.name) {
       messageStore.error('请输入智能体名称');
@@ -373,7 +391,7 @@ const nextStep = () => {
   }
 };
 
-const prevStep = () => {
+const prevStep = (): void => {
   if (currentStep.value > 1) {
     currentStep.value--;
   }
@@ -381,7 +399,7 @@ const prevStep = () => {
 
 const submitting = ref(false);
 
-const handleSubmit = async () => {
+const handleSubmit = async (): Promise<void> => {
   if (submitting.value) return;
   clearStarterPromptsSaveTimer();
 
@@ -414,7 +432,11 @@ const handleSubmit = async () => {
       {} as Record<string, number>
     ),
     skills: form.value.skills,
-    model: form.value.model
+    model: form.value.model,
+    runtimeType: form.value.runtimeType,
+    enableThinking: form.value.enableThinking,
+    asrEnabled: form.value.asrEnabled,
+    ttsEnabled: form.value.ttsEnabled
   });
 
   submitting.value = true;
@@ -428,6 +450,10 @@ const handleSubmit = async () => {
         instructions: personalityFiles.value['SOUL.md'] || '你是一个智能助手。', // 使用 SOUL.md 作为 instructions，如果为空则使用默认值
         skills: form.value.skills,
         model: form.value.model,
+        runtimeType: form.value.runtimeType,
+        enableThinking: form.value.enableThinking,
+        asrEnabled: form.value.asrEnabled,
+        ttsEnabled: form.value.ttsEnabled,
         metadata: {
           ...form.value.metadata,
           greeting: form.value.metadata?.greeting || '',
@@ -479,7 +505,7 @@ const handleSubmit = async () => {
   }
 };
 
-const handleCancel = () => {
+const handleCancel = (): void => {
   clearStarterPromptsSaveTimer();
   router.push('/agents');
 };
@@ -592,17 +618,94 @@ onUnmounted(() => {
               <p class="text-xs text-muted-foreground">留空则使用系统默认模型。</p>
             </div>
 
+            <div class="space-y-3 border-t border-border/40 pt-4">
+              <div>
+                <label class="text-sm font-medium">默认运行配置</label>
+                <p class="mt-1 text-xs text-muted-foreground">新会话默认继承这里的设置，会话内可单独覆盖。</p>
+              </div>
+
+              <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <div class="grid grid-cols-3 gap-2 rounded-lg bg-muted/35 p-1">
+                  <button
+                    v-for="item in runtimeOptions"
+                    :key="item.value"
+                    type="button"
+                    class="flex min-h-12 flex-col items-start justify-center rounded-md px-3 text-left transition-colors"
+                    :class="
+                      form.runtimeType === item.value
+                        ? 'bg-background text-primary shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    "
+                    @click="form.runtimeType = item.value">
+                    <span class="text-xs font-semibold">{{ item.label }}</span>
+                    <span class="mt-0.5 truncate text-[10px] opacity-75">{{ item.description }}</span>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    class="flex h-12 items-center justify-between gap-3 rounded-lg border px-3 text-left transition-colors"
+                    :class="
+                      form.enableThinking
+                        ? 'border-primary/35 bg-primary/10 text-primary'
+                        : 'border-border/45 bg-background text-muted-foreground hover:bg-muted/35 hover:text-foreground'
+                    "
+                    @click="form.enableThinking = !form.enableThinking">
+                    <span class="flex min-w-0 items-center gap-2">
+                      <span class="i-carbon-phrase-sentiment h-3.5 w-3.5 shrink-0"></span>
+                      <span class="truncate text-xs font-medium">思维链</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="flex h-12 items-center justify-between gap-3 rounded-lg border px-3 text-left transition-colors"
+                    :class="
+                      form.asrEnabled
+                        ? 'border-primary/35 bg-primary/10 text-primary'
+                        : 'border-border/45 bg-background text-muted-foreground hover:bg-muted/35 hover:text-foreground'
+                    "
+                    @click="form.asrEnabled = !form.asrEnabled">
+                    <span class="flex min-w-0 items-center gap-2">
+                      <span class="i-carbon-microphone h-3.5 w-3.5 shrink-0"></span>
+                      <span class="truncate text-xs font-medium">ASR</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="flex h-12 items-center justify-between gap-3 rounded-lg border px-3 text-left transition-colors"
+                    :class="
+                      form.ttsEnabled
+                        ? 'border-primary/35 bg-primary/10 text-primary'
+                        : 'border-border/45 bg-background text-muted-foreground hover:bg-muted/35 hover:text-foreground'
+                    "
+                    @click="form.ttsEnabled = !form.ttsEnabled">
+                    <span class="flex min-w-0 items-center gap-2">
+                      <span class="i-carbon-volume-up h-3.5 w-3.5 shrink-0"></span>
+                      <span class="truncate text-xs font-medium">TTS</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div class="border-t border-border/40 pt-4 mt-2"></div>
 
             <div class="space-y-2">
               <label class="text-sm font-medium">开场白 (Greeting)</label>
               <textarea
                 v-if="form.metadata"
-                :value="(form.metadata.greeting as string) || ''"
-                @input="(e) => { if (form.metadata) form.metadata.greeting = (e.target as HTMLTextAreaElement).value }"
                 rows="2"
                 placeholder="例如：你好！我是你的专属助手，今天想聊点什么？"
-                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"></textarea>
+                class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                :value="(form.metadata.greeting as string) || ''"
+                @input="
+                  (e) => {
+                    if (form.metadata) form.metadata.greeting = (e.target as HTMLTextAreaElement).value;
+                  }
+                "></textarea>
               <p class="text-xs text-muted-foreground">智能体在新对话开始时发送的第一句话。</p>
             </div>
 
@@ -666,7 +769,8 @@ onUnmounted(() => {
                 <h3 class="text-base font-semibold text-foreground">为什么需要数据目录？</h3>
                 <div class="text-sm text-foreground/85 leading-relaxed space-y-2">
                   <p>
-                    数据目录是智能体的<strong class="text-primary">固定工作区</strong>，用于存储所有任务产生的文件和中间结果。
+                    数据目录是智能体的<strong class="text-primary">固定工作区</strong
+                    >，用于存储所有任务产生的文件和中间结果。
                   </p>
                   <p class="flex items-start gap-2">
                     <span class="i-carbon-checkmark-filled text-primary shrink-0 mt-0.5"></span>
@@ -682,7 +786,11 @@ onUnmounted(() => {
                   </p>
                   <p class="flex items-start gap-2 mt-3 pt-2 border-t border-primary/20">
                     <span class="i-carbon-idea text-primary shrink-0 mt-0.5"></span>
-                    <span>系统会自动为每个智能体初始化数据目录（<code class="text-xs px-1 py-0.5 rounded bg-background/60">~/.coobee-agent/data/{'{agentId}'}</code>），您也可以自定义为其他位置</span>
+                    <span
+                      >系统会自动为每个智能体初始化数据目录（<code class="text-xs px-1 py-0.5 rounded bg-background/60"
+                        >~/.coobee-agent/data/{'{agentId}'}</code
+                      >），您也可以自定义为其他位置</span
+                    >
                   </p>
                 </div>
               </div>
@@ -700,11 +808,15 @@ onUnmounted(() => {
               <div class="flex gap-2">
                 <input
                   v-if="form.metadata"
-                  :value="(form.metadata.dataDirectory as string) || ''"
-                  @input="(e) => { if (form.metadata) form.metadata.dataDirectory = (e.target as HTMLInputElement).value }"
                   type="text"
                   placeholder="留空使用默认位置，或自定义路径，例如：/Users/you/Documents/进销存数据"
-                  class="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  class="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  :value="(form.metadata.dataDirectory as string) || ''"
+                  @input="
+                    (e) => {
+                      if (form.metadata) form.metadata.dataDirectory = (e.target as HTMLInputElement).value;
+                    }
+                  " />
                 <button
                   type="button"
                   class="shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -716,12 +828,15 @@ onUnmounted(() => {
             </div>
 
             <!-- 预览当前设置 -->
-            <div v-if="form.metadata?.dataDirectory" class="rounded-lg bg-primary/5 border border-primary/20 p-4 selectable">
+            <div
+              v-if="form.metadata?.dataDirectory"
+              class="rounded-lg bg-primary/5 border border-primary/20 p-4 selectable">
               <div class="flex items-center gap-2 text-sm">
                 <span class="i-carbon-folder-details text-primary"></span>
                 <span class="font-medium text-foreground">当前数据目录：</span>
               </div>
-              <code class="block mt-2 text-xs font-mono text-primary bg-background/60 px-3 py-2 rounded border border-primary/20">
+              <code
+                class="block mt-2 text-xs font-mono text-primary bg-background/60 px-3 py-2 rounded border border-primary/20">
                 {{ form.metadata.dataDirectory }}
               </code>
             </div>

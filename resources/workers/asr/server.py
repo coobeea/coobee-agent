@@ -20,6 +20,9 @@ FastAPI + WebSocket 服务，封装 FunASR-Nano 模型。
 
 import argparse
 import asyncio
+import base64
+import contextlib
+import json
 import logging
 import os
 import re
@@ -27,6 +30,8 @@ import struct
 import sys
 import tempfile
 import time
+import urllib.parse
+import uuid
 import wave
 
 os.environ["TQDM_DISABLE"] = "1"
@@ -55,10 +60,13 @@ except ImportError:
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "FunAudioLLM/Fun-ASR-Nano-2512"
+DEFAULT_ALIYUN_ASR_API_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
 
 # 默认路径
 DEFAULT_MODEL_DIR = os.path.join(os.environ.get("HOME", ""), ".cache", "modelscope", "hub")
 MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
+API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
+API_URL = DEFAULT_ALIYUN_ASR_API_URL
 
 # 尝试读取运行时配置覆盖 (WORKER_CONFIG_PATH)，local_config.json 仅作兼容兜底
 local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
@@ -77,6 +85,12 @@ if os.path.exists(local_config_path):
 
             if "model_name" in config and isinstance(config["model_name"], str) and config["model_name"].strip():
                 MODEL_NAME = config["model_name"].strip()
+
+            if "api_key" in config and isinstance(config["api_key"], str) and config["api_key"].strip():
+                API_KEY = config["api_key"].strip()
+
+            if "api_url" in config and isinstance(config["api_url"], str) and config["api_url"].strip():
+                API_URL = config["api_url"].strip()
     except Exception:
         pass
 
@@ -97,6 +111,8 @@ log.setLevel(logging.WARNING)
 
 # 模型类型检测：SenseVoice 系列需要不同的参数和后处理
 _is_sensevoice = "sensevoice" in MODEL_NAME.lower().replace("-", "").replace("_", "")
+USE_ALIYUN_QWEN_ASR = MODEL_NAME.lower().startswith("aliyun/")
+ALIYUN_MODEL_NAME = MODEL_NAME.split("/", 1)[1] if USE_ALIYUN_QWEN_ASR and "/" in MODEL_NAME else MODEL_NAME
 
 app = FastAPI(title="ASR Worker", version="0.3.0")
 
@@ -169,6 +185,15 @@ def load_asr_model():
 @app.on_event("startup")
 async def startup_event():
     """应用启动时加载模型（在线程池中执行，不阻塞事件循环）"""
+    global model_loaded
+    if USE_ALIYUN_QWEN_ASR:
+        model_loaded = True
+        log.info(
+            f"使用阿里云实时语音识别: model={ALIYUN_MODEL_NAME}, "
+            f"api_url={API_URL}, api_key={'已配置' if API_KEY else '未配置'}"
+        )
+        return
+
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, load_asr_model)
 
@@ -178,11 +203,62 @@ async def startup_event():
 @app.get("/health")
 async def health():
     """健康检查"""
-    return JSONResponse({
+    resp = {
         "status": "ok",
         "model_loaded": model_loaded,
+        "provider": "aliyun" if USE_ALIYUN_QWEN_ASR else "local",
+        "model_name": ALIYUN_MODEL_NAME if USE_ALIYUN_QWEN_ASR else MODEL_NAME,
         "model_dir": MODEL_DIR,
-    })
+    }
+    if USE_ALIYUN_QWEN_ASR:
+        resp["api_key_configured"] = bool(API_KEY)
+        resp["api_url"] = API_URL
+    return JSONResponse(resp)
+
+
+@app.post("/api/test")
+async def test_asr(request: dict = None):
+    """
+    实际测试 ASR Worker。
+
+    - 本地模型：执行一次短静音推理，验证模型与推理链路可用。
+    - 阿里云模型：真实建立 WebSocket 会话，发送 session.update / 音频 / session.finish。
+    """
+    started_at = time.time()
+
+    try:
+        if USE_ALIYUN_QWEN_ASR:
+            result = await test_aliyun_asr_session()
+        else:
+            if not model_loaded:
+                raise RuntimeError("ASR 模型尚未加载完成")
+
+            seconds = 0.8
+            pcm_bytes = bytes(int(BYTES_PER_SEC * seconds))
+            transcribe_result = await transcribe_async(pcm_bytes)
+            result = {
+                "provider": "local",
+                "model_name": MODEL_NAME,
+                "sample_seconds": seconds,
+                "text": transcribe_result.get("text", ""),
+                "inference_latency_ms": transcribe_result.get("latency_ms", 0),
+                "message": "本地 ASR 推理链路测试完成",
+            }
+
+        result["ok"] = True
+        result["latency_ms"] = int((time.time() - started_at) * 1000)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse(
+            {
+                "ok": False,
+                "provider": "aliyun" if USE_ALIYUN_QWEN_ASR else "local",
+                "model_name": ALIYUN_MODEL_NAME if USE_ALIYUN_QWEN_ASR else MODEL_NAME,
+                "latency_ms": int((time.time() - started_at) * 1000),
+                "error": str(e),
+            },
+            status_code=500,
+        )
 
 
 # ==================== 音频处理 ====================
@@ -358,6 +434,319 @@ async def transcribe_async(pcm_bytes: bytes) -> dict:
     return await loop.run_in_executor(None, do_transcribe, pcm_bytes)
 
 
+# ==================== 阿里云 Qwen-ASR-Realtime 适配 ====================
+
+def build_aliyun_realtime_url() -> str:
+    """构建百炼实时语音识别 WebSocket 地址。"""
+    base_url = (API_URL or DEFAULT_ALIYUN_ASR_API_URL).strip()
+    parsed = urllib.parse.urlsplit(base_url)
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+
+    if not any(key == "model" for key, _ in query):
+        query.append(("model", ALIYUN_MODEL_NAME))
+
+    return urllib.parse.urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            urllib.parse.urlencode(query),
+            parsed.fragment,
+        )
+    )
+
+
+async def connect_aliyun_ws(url: str):
+    """兼容 websockets 14+ 的 additional_headers 与旧版 extra_headers。"""
+    import websockets
+
+    headers = {"Authorization": f"bearer {API_KEY}"}
+    kwargs = {
+        "ping_interval": 20,
+        "ping_timeout": 20,
+        "max_size": 16 * 1024 * 1024,
+    }
+
+    try:
+        return await websockets.connect(url, additional_headers=headers, **kwargs)
+    except TypeError:
+        return await websockets.connect(url, extra_headers=headers, **kwargs)
+
+
+def extract_aliyun_text(event: dict) -> str:
+    """从百炼实时识别事件中提取文本，兼容 delta/completed 的不同字段形态。"""
+    for key in ("transcript", "text", "delta"):
+        value = event.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    item = event.get("item")
+    if isinstance(item, dict):
+        for key in ("transcript", "text", "delta"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        content = item.get("content")
+        if isinstance(content, list):
+            texts = []
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                for key in ("transcript", "text"):
+                    value = part.get(key)
+                    if isinstance(value, str) and value.strip():
+                        texts.append(value.strip())
+            if texts:
+                return "".join(texts).strip()
+
+    output = event.get("output")
+    if isinstance(output, dict):
+        for key in ("transcript", "text"):
+            value = output.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    return ""
+
+
+def build_aliyun_session_update() -> dict:
+    """构建百炼实时识别 session 配置。前端仍然固定发送 16k PCM。"""
+    return {
+        "event_id": str(uuid.uuid4()),
+        "type": "session.update",
+        "session": {
+            "input_audio_format": "pcm",
+            "sample_rate": SAMPLE_RATE,
+            "input_audio_transcription": {
+                "language": "zh",
+            },
+            "turn_detection": {
+                "type": "server_vad",
+                "threshold": 0.0,
+                "silence_duration_ms": 400,
+            },
+        },
+    }
+
+
+async def safe_send_json(ws: WebSocket, payload: dict) -> bool:
+    try:
+        await ws.send_json(payload)
+        return True
+    except Exception:
+        return False
+
+
+async def test_aliyun_asr_session() -> dict:
+    """真实建立一次百炼 Qwen-ASR-Realtime 会话，验证配置和协议链路。"""
+    if not API_KEY:
+        raise RuntimeError("未配置阿里云 DashScope API Key")
+
+    target_url = build_aliyun_realtime_url()
+    aliyun_ws = await connect_aliyun_ws(target_url)
+    event_types = []
+
+    async def read_event(timeout: float = 8.0) -> dict:
+        raw = await asyncio.wait_for(aliyun_ws.recv(), timeout=timeout)
+        if not isinstance(raw, str):
+            return {"type": "binary"}
+        try:
+            event = json.loads(raw)
+        except json.JSONDecodeError:
+            return {"type": "unknown", "raw": raw[:120]}
+
+        event_type = str(event.get("type", ""))
+        if event_type:
+            event_types.append(event_type)
+
+        if event_type.endswith(".failed") or event_type in {"error", "session.failed"}:
+            error = event.get("error")
+            if isinstance(error, dict):
+                message = error.get("message") or error.get("code")
+            else:
+                message = event.get("message") or error
+            raise RuntimeError(str(message or "阿里云实时 ASR 测试失败"))
+
+        return event
+
+    try:
+        await aliyun_ws.send(json.dumps(build_aliyun_session_update(), ensure_ascii=False))
+
+        for _ in range(4):
+            event = await read_event()
+            if event.get("type") == "session.updated":
+                break
+
+        silence = bytes(int(BYTES_PER_SEC * 0.8))
+        await aliyun_ws.send(
+            json.dumps(
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(silence).decode("ascii"),
+                },
+                ensure_ascii=False,
+            )
+        )
+        await aliyun_ws.send(
+            json.dumps(
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "type": "session.finish",
+                },
+                ensure_ascii=False,
+            )
+        )
+
+        for _ in range(8):
+            event = await read_event(timeout=12.0)
+            if event.get("type") == "session.finished":
+                break
+        else:
+            raise RuntimeError("等待 session.finished 超时")
+
+        return {
+            "provider": "aliyun",
+            "model_name": ALIYUN_MODEL_NAME,
+            "api_url": API_URL or DEFAULT_ALIYUN_ASR_API_URL,
+            "events": event_types,
+            "message": "阿里云 ASR WebSocket 会话测试完成",
+        }
+    finally:
+        with contextlib.suppress(Exception):
+            await aliyun_ws.close()
+
+
+async def aliyun_asr_stream(ws: WebSocket):
+    """
+    阿里云 Qwen-ASR-Realtime 适配。
+
+    对外保持 coobee worker 协议：
+      - 客户端继续发送 PCM Int16 LE 16kHz 二进制流
+      - 服务端继续返回 {"partial": "..."} / {"final": "..."}
+    对内转换为百炼 realtime 事件协议。
+    """
+    await ws.accept()
+
+    if not API_KEY:
+        await safe_send_json(ws, {"error": "未配置阿里云 DashScope API Key"})
+        await ws.close(code=1008)
+        return
+
+    try:
+        aliyun_ws = await connect_aliyun_ws(build_aliyun_realtime_url())
+    except Exception as e:
+        log.warning(f"连接阿里云实时 ASR 失败: {e}")
+        await safe_send_json(ws, {"error": f"连接阿里云实时 ASR 失败: {e}"})
+        await ws.close(code=1011)
+        return
+
+    last_partial = ""
+
+    async def forward_audio():
+        try:
+            while True:
+                message = await ws.receive()
+                if message.get("type") == "websocket.disconnect":
+                    break
+
+                audio = message.get("bytes")
+                if not audio:
+                    continue
+
+                await aliyun_ws.send(
+                    json.dumps(
+                        {
+                            "event_id": str(uuid.uuid4()),
+                            "type": "input_audio_buffer.append",
+                            "audio": base64.b64encode(audio).decode("ascii"),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+        except Exception:
+            pass
+        finally:
+            with contextlib.suppress(Exception):
+                await aliyun_ws.send(
+                    json.dumps(
+                        {
+                            "event_id": str(uuid.uuid4()),
+                            "type": "session.finish",
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+
+    async def forward_events():
+        nonlocal last_partial
+        try:
+            async for raw in aliyun_ws:
+                if not isinstance(raw, str):
+                    continue
+
+                try:
+                    event = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = str(event.get("type", ""))
+                if event_type.endswith(".failed") or event_type in {"error", "session.failed"}:
+                    error = event.get("error")
+                    if isinstance(error, dict):
+                        message = error.get("message") or error.get("code")
+                    else:
+                        message = event.get("message") or error
+                    message = message or "阿里云实时 ASR 识别失败"
+                    await safe_send_json(ws, {"error": str(message)})
+                    continue
+
+                if "input_audio_transcription" not in event_type:
+                    if event_type == "session.finished":
+                        break
+                    continue
+
+                text = extract_aliyun_text(event)
+                if not text:
+                    continue
+
+                if event_type.endswith(".completed"):
+                    last_partial = ""
+                    if not await safe_send_json(ws, {"final": text}):
+                        break
+                elif text != last_partial:
+                    last_partial = text
+                    if not await safe_send_json(ws, {"partial": text}):
+                        break
+        except Exception as e:
+            log.debug(f"阿里云实时 ASR 事件转发结束: {type(e).__name__}: {e}")
+
+    try:
+        await aliyun_ws.send(json.dumps(build_aliyun_session_update(), ensure_ascii=False))
+
+        audio_task = asyncio.create_task(forward_audio())
+        event_task = asyncio.create_task(forward_events())
+        done, pending = await asyncio.wait(
+            {audio_task, event_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for task in pending:
+            task.cancel()
+        for task in pending:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        for task in done:
+            with contextlib.suppress(Exception):
+                await task
+    finally:
+        with contextlib.suppress(Exception):
+            await aliyun_ws.close()
+        with contextlib.suppress(Exception):
+            await ws.close()
+
+
 # ==================== WebSocket 流式 ASR ====================
 
 # 预计算常量
@@ -368,6 +757,13 @@ SILENCE_BYTES = int(SILENCE_DURATION_SEC * BYTES_PER_SEC)
 
 @app.websocket("/ws/asr")
 async def asr_stream(ws: WebSocket):
+    if USE_ALIYUN_QWEN_ASR:
+        await aliyun_asr_stream(ws)
+    else:
+        await local_asr_stream(ws)
+
+
+async def local_asr_stream(ws: WebSocket):
     """
     流式 ASR — VAD 触发识别
     

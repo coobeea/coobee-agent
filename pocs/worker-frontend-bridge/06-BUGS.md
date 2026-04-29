@@ -8,8 +8,8 @@
 
 - **现象**：前端外部浏览器访问时会使用 `location.hostname` 构造 Worker URL，但 Worker 默认可能只绑定 `127.0.0.1`。
 - **影响**：外部浏览器无法连接 `ws://局域网IP:{workerPort}/ws/asr` 等端点。
-- **状态**：待产品决策。
-- **建议**：如果要支持局域网 Web 访问，优先评估 Gateway 代理或 Worker token。
+- **状态**：已通过 Gateway Worker Proxy 第一版缓解。
+- **建议**：数据通道统一走 `/gateway/workers/:name/*`；如果 Gateway 后续暴露到局域网，还需要补充 token 或同源校验策略。
 
 ### 2. OCR Worker 已有端点但前端没有统一消费入口
 
@@ -20,9 +20,9 @@
 
 ### 3. VoicePanel 仍直接拼 ASR/TTS WebSocket URL
 
-- **现象**：`VoicePanel.vue` 中仍直接出现 `/ws/asr` 和 `/ws/tts`。
-- **影响**：后续改代理、鉴权或路径时需要改组件。
-- **状态**：待重构。
+- **现象**：`VoicePanel.vue` 中仍直接持有 ASR/TTS WebSocket 生命周期和协议路径。
+- **影响**：后续改鉴权、重连或 Worker 协议时仍会改组件。
+- **状态**：已改为 Gateway Proxy URL，但尚未抽出 composable。
 - **建议**：迁到 `useAsrWorker` 和 `useTtsWorker`。
 
 ## 阻塞问题

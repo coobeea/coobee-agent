@@ -16,6 +16,21 @@
       "description": "百度 PaddleOCR，轻量高效",
       "configKey": "PaddleOCR-V5",
       "provider": "PaddlePaddle"
+    },
+    {
+      "id": "aistudio-layout-parsing",
+      "label": "AI Studio Layout Parsing OCR",
+      "type": "online",
+      "description": "在线文档版面解析 OCR，返回 Markdown，适合快速批量处理图片文档",
+      "configKey": "aistudio/layout-parsing",
+      "modelName": "layout-parsing",
+      "defaultApiUrl": "https://z7q16fz7o7o6jcpb.aistudio-app.com/layout-parsing",
+      "lockApiUrl": true,
+      "provider": "百度 AI Studio",
+      "pricing": "按服务配置",
+      "requiresApiKey": true,
+      "apiKeyLabel": "Access Token",
+      "apiKeyUrl": "https://aistudio.baidu.com/account/accessToken"
     }
   ]
 }

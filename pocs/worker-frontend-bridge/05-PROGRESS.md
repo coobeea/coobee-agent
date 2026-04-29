@@ -20,7 +20,14 @@
   - 当前 Gateway `/gateway/ws` 是 JSON RPC，不适合直接承载 ASR PCM。
   - 推荐新增 Gateway Worker 透明反向代理，而不是 JSON 多路复用。
   - 推荐调整为“Gateway 管理通道 + Gateway Worker Proxy 数据通道”。
+- 已实现 Gateway Worker 透明反向代理第一版：
+  - GatewayServer 支持 `/gateway/ws` 与额外 WebSocket upgrade 处理器共存。
+  - 新增 `/gateway/workers/:name/api/*` HTTP 代理。
+  - 新增 `/gateway/workers/:name/ws/*` WebSocket 代理。
+  - 代理只转发 `WorkerManager` 中 ready 且有端口的 Worker。
+  - 已拆分 `VITE_SERVER_HOST` 和 `VITE_WORKER_HOST`，局域网模式下也可以只暴露 Gateway。
+  - VoicePanel 的 ASR/TTS 数据通道已改为走 Gateway Proxy。
 
 ## 当前状态
 
-POC 文档已创建并补充 Gateway 代理模式，等待讨论后选择最终方案。
+Gateway 代理第一版已落地。下一步建议继续把 VoicePanel 内的 ASR/TTS 连接细节抽成 `useAsrWorker` / `useTtsWorker`，并补齐 OCR 前端 client。

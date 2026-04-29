@@ -48,6 +48,7 @@ class EnvClass {
     openDevTools: string | undefined;
     serverPort: string | undefined;
     serverHost: string;
+    workerHost: string;
     modelDir: string | undefined;
   } {
     return {
@@ -60,6 +61,8 @@ class EnvClass {
       serverPort: process.env.VITE_SERVER_PORT,
       /** 服务绑定地址，默认 127.0.0.1（设为 0.0.0.0 可开启局域网访问） */
       serverHost: process.env.VITE_SERVER_HOST || '127.0.0.1',
+      /** Worker 服务绑定地址，默认仅本机访问；代理模式下通常不需要暴露到局域网 */
+      workerHost: process.env.VITE_WORKER_HOST || process.env.WORKER_HOST || '127.0.0.1',
       /** 模型存储目录（环境变量优先，未设置则用默认路径） */
       modelDir: process.env.VITE_MODEL_DIR
     };

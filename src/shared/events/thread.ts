@@ -13,6 +13,8 @@ export type ThreadRunStatus = 'idle' | 'running' | 'completed' | 'error';
 
 export type ThreadStatus = 'active' | 'archived' | 'deleted';
 
+export type ThreadRuntimeType = 'pi-mono' | 'openai' | 'claude';
+
 /** Thread 索引条目（列表与事件共用的轻量形态） */
 export interface ThreadEntry {
   id: string;
@@ -26,7 +28,10 @@ export interface ThreadEntry {
   workspacePath: string;
   agentHomePath: string;
   overrideModel?: string | null;
+  runtimeType?: ThreadRuntimeType;
   enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
 }
 
 export type ThreadMessageAction = 'created' | 'updated' | 'deleted';

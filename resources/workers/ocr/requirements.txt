@@ -5,6 +5,7 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 websockets>=14.0
+requests>=2.28.0
 
 # OCR 模型（GLM-OCR / PaddleOCR-VL）
 torch>=2.0.0

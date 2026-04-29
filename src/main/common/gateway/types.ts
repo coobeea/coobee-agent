@@ -4,6 +4,9 @@
 
 import type { WebSocket } from 'ws';
 import type Router from '@koa/router';
+import type Koa from 'koa';
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
 import type { GatewayRequest, GatewayResponse, GatewayEvent } from '@shared/gateway-protocol';
 
 // 重新导出共享类型
@@ -81,6 +84,24 @@ export interface GatewayApi {
 }
 
 /**
+ * WebSocket Upgrade 处理函数。
+ *
+ * 返回 true 表示已处理该 upgrade；返回 false 表示继续尝试后续处理器。
+ */
+export type WebSocketUpgradeHandler = (req: IncomingMessage, socket: Duplex, head: Buffer, pathname: string) => boolean;
+
+/**
+ * Gateway 路由宿主能力。
+ *
+ * HTTP Routes 默认只需要 Router；少数路由（如 Worker 透明代理）需要挂载
+ * Koa middleware 或额外的 WebSocket upgrade 处理器。
+ */
+export interface GatewayRouteHost {
+  getApp(): Koa;
+  registerWebSocketUpgrade(prefix: string, handler: WebSocketUpgradeHandler): () => void;
+}
+
+/**
  * EventBridge 初始化函数签名
  *
  * @param gateway Gateway 实例
@@ -93,4 +114,4 @@ export type EventBridgeInit = (gateway: GatewayApi) => (() => void) | void;
  *
  * @param router Koa Router 实例
  */
-export type RouteRegistrar = (router: Router) => void;
+export type RouteRegistrar = (router: Router, host?: GatewayRouteHost) => void;

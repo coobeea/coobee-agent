@@ -6,6 +6,7 @@
 
 import { apiClient } from './client';
 import type { ApiResponse } from '@shared/api';
+import type { DeleteThreadRespVO, UpdateThreadReqVO, UpdateThreadRespVO } from '@shared/api/thread-types';
 import type { ThreadEntry } from '@shared/events/thread';
 
 export type { ThreadEntry };
@@ -42,12 +43,7 @@ export interface ThreadHistoryResponse {
 }
 
 /** 更新 Thread 参数 */
-export interface UpdateThreadParams {
-  title?: string;
-  status?: string;
-  overrideModel?: string | null;
-  enableThinking?: boolean;
-}
+export type UpdateThreadParams = UpdateThreadReqVO;
 
 // ==================== API 方法 ====================
 
@@ -83,8 +79,8 @@ export async function getThread(threadId: string): Promise<ApiResponse<{ thread:
 export async function updateThread(
   threadId: string,
   updates: UpdateThreadParams
-): Promise<ApiResponse<{ thread: ThreadEntry }>> {
-  return apiClient.patch<{ thread: ThreadEntry }>(`/gateway/threads/${threadId}`, updates);
+): Promise<ApiResponse<UpdateThreadRespVO>> {
+  return apiClient.patch<UpdateThreadRespVO>(`/gateway/threads/${threadId}`, updates);
 }
 
 /**
@@ -97,6 +93,6 @@ export async function getThreadHistory(threadId: string): Promise<ApiResponse<Th
 /**
  * 删除 Thread
  */
-export async function deleteThread(threadId: string): Promise<ApiResponse<{ deleted: boolean }>> {
-  return apiClient.delete<{ deleted: boolean }>(`/gateway/threads/${threadId}`);
+export async function deleteThread(threadId: string): Promise<ApiResponse<DeleteThreadRespVO>> {
+  return apiClient.delete<DeleteThreadRespVO>(`/gateway/threads/${threadId}`);
 }

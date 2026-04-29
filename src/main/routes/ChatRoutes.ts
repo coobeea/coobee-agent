@@ -27,8 +27,21 @@ import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { ThreadExecutor } from '@main/agent/ThreadExecutor';
 import type { ApiResponse } from '@shared/api';
 import type { ThreadIndexEntry, ThreadDefinition } from '@main/agent/threads/types';
+import type { ThreadRuntimeType } from '@shared/events/thread';
 
 const log = createLogger('chat-routes');
+
+const THREAD_RUNTIME_TYPES = new Set<ThreadRuntimeType>(['pi-mono', 'openai', 'claude']);
+
+function toRuntimeType(value: unknown): ThreadRuntimeType | undefined {
+  return typeof value === 'string' && THREAD_RUNTIME_TYPES.has(value as ThreadRuntimeType)
+    ? (value as ThreadRuntimeType)
+    : undefined;
+}
+
+function toBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
 
 export function registerChatRoutes(router: Router): void {
   // ==================== CREATE THREAD ====================
@@ -38,6 +51,10 @@ export function registerChatRoutes(router: Router): void {
         title?: string;
         agentId?: string;
         overrideModel?: string;
+        runtimeType?: unknown;
+        enableThinking?: unknown;
+        asrEnabled?: unknown;
+        ttsEnabled?: unknown;
       };
 
       // 如果未指定 agentId，默认使用内置的 app-copilot
@@ -47,7 +64,11 @@ export function registerChatRoutes(router: Router): void {
       const thread = await store.create({
         title: body.title || '新会话',
         agentId,
-        overrideModel: body.overrideModel
+        overrideModel: body.overrideModel,
+        runtimeType: toRuntimeType(body.runtimeType),
+        enableThinking: toBoolean(body.enableThinking),
+        asrEnabled: toBoolean(body.asrEnabled),
+        ttsEnabled: toBoolean(body.ttsEnabled)
       });
 
       const response: ApiResponse<ThreadDefinition> = {

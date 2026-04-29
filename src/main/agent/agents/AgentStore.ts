@@ -36,6 +36,10 @@ function toIndexEntry(def: AgentDefinition, homeManager: AgentHomeManager): Agen
     updatedAt: def.updatedAt,
     skills: def.skills,
     model: def.model,
+    runtimeType: def.runtimeType,
+    enableThinking: def.enableThinking,
+    asrEnabled: def.asrEnabled,
+    ttsEnabled: def.ttsEnabled,
     agentHomePath,
     workspacePath
   };
@@ -119,6 +123,10 @@ export class AgentStore {
         excludeTools: def.excludeTools,
         skills: def.skills,
         model: def.model,
+        runtimeType: def.runtimeType,
+        enableThinking: def.enableThinking,
+        asrEnabled: def.asrEnabled,
+        ttsEnabled: def.ttsEnabled,
         createdBy: 'system',
         metadata: def.metadata
       };
@@ -184,6 +192,10 @@ export class AgentStore {
       excludeTools: params.excludeTools,
       skills: params.skills,
       model: params.model,
+      runtimeType: params.runtimeType ?? 'pi-mono',
+      enableThinking: params.enableThinking ?? false,
+      asrEnabled: params.asrEnabled ?? false,
+      ttsEnabled: params.ttsEnabled ?? false,
       createdAt: now,
       updatedAt: now,
       createdBy: params.createdBy ?? 'user',
@@ -254,6 +266,10 @@ export class AgentStore {
       ...(params.excludeTools !== undefined && { excludeTools: params.excludeTools }),
       ...(params.skills !== undefined && { skills: params.skills }),
       ...(params.model !== undefined && { model: params.model }),
+      ...(params.runtimeType !== undefined && { runtimeType: params.runtimeType }),
+      ...(params.enableThinking !== undefined && { enableThinking: params.enableThinking }),
+      ...(params.asrEnabled !== undefined && { asrEnabled: params.asrEnabled }),
+      ...(params.ttsEnabled !== undefined && { ttsEnabled: params.ttsEnabled }),
       ...(params.metadata !== undefined && { metadata: params.metadata }),
       updatedAt: new Date().toISOString(),
       version: existing.version + 1

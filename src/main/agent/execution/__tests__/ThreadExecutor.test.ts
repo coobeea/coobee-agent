@@ -59,9 +59,30 @@ describe('ThreadExecutor', () => {
     expect(done.value).toMatchObject({ output: 'hi' });
     expect(mocks.createRequest).toHaveBeenCalledWith({
       threadId: 'thread-1',
-      message: 'hello',
-      runtimeType: 'pi-mono'
+      message: 'hello'
     });
     expect(mocks.stream).toHaveBeenCalledWith(request);
+  });
+
+  it('显式传入 runtimeType 时透传给请求工厂', async () => {
+    const request = makeRequest({ runtimeType: 'openai' });
+    mocks.createRequest.mockResolvedValue(request);
+    mocks.stream.mockImplementation(async function* (): AsyncGenerator<
+      AgentStreamChunk,
+      AgentExecutionResult,
+      unknown
+    > {
+      yield { type: 'text:delta', content: 'ok' };
+      return { output: 'ok' };
+    });
+
+    const gen = ThreadExecutor.stream('thread-1', 'hello', 'openai');
+    await gen.next();
+
+    expect(mocks.createRequest).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      message: 'hello',
+      runtimeType: 'openai'
+    });
   });
 });

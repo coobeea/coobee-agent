@@ -81,21 +81,34 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="relative z-50 min-w-0 shrink-0">
+  <div ref="rootRef" class="relative z-50 inline-flex shrink-0">
     <button
       type="button"
-      class="inline-flex h-6 max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-border/45 bg-background/80 px-2 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/25 hover:bg-muted/45 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      class="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/45 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      :class="selectedValue ? 'text-primary hover:bg-primary/10 hover:text-primary' : ''"
       :disabled="disabled"
+      :title="`模型：${displayLabel}`"
+      :aria-label="`模型：${displayLabel}`"
+      :aria-expanded="open"
+      aria-haspopup="listbox"
       @click="toggle">
-      <span class="min-w-0 truncate">{{ displayLabel }}</span>
+      <span class="i-carbon-machine-learning-model inline-block h-3.5 w-3.5" />
       <span
-        class="i-carbon-chevron-down inline-block h-2.5 w-2.5 shrink-0 opacity-60 transition"
-        :class="open ? 'rotate-180' : ''" />
+        class="absolute right-0.5 top-0.5 h-1 w-1 rounded-full bg-primary transition-opacity"
+        :class="selectedValue ? 'opacity-100' : 'opacity-0'" />
     </button>
 
     <div
       v-if="open"
-      class="absolute bottom-full left-0 z-[60] mb-1 max-h-80 min-w-[240px] max-w-[min(100vw-2rem,320px)] overflow-y-auto rounded-lg border border-border/70 bg-background outline-none">
+      class="absolute bottom-full left-0 z-[60] mb-1 max-h-80 w-[280px] max-w-[min(100vw-2rem,320px)] overflow-y-auto rounded-lg border border-border/70 bg-background shadow-lg outline-none">
+      <div class="border-b border-border/45 px-3 py-2">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-semibold text-foreground">模型</span>
+          <span class="i-carbon-machine-learning-model inline-block h-3.5 w-3.5 text-muted-foreground" />
+        </div>
+        <p class="mt-1 truncate text-xs text-muted-foreground">{{ displayLabel }}</p>
+      </div>
+
       <!-- 默认模型选项 -->
       <div class="p-1">
         <button
@@ -105,7 +118,7 @@ onUnmounted(() => {
           @click="pick('')">
           <div class="flex flex-col gap-0.5">
             <span class="font-medium">默认模型</span>
-            <span class="text-[10px] text-muted-foreground" :class="!selectedValue ? 'text-primary/70' : ''"
+            <span class="text-xs text-muted-foreground" :class="!selectedValue ? 'text-primary' : ''"
               >跟随 Agent 配置</span
             >
           </div>
@@ -117,8 +130,7 @@ onUnmounted(() => {
       <template v-for="(group, index) in groupedItems" :key="group.providerName">
         <div v-if="index > 0" class="h-px w-full bg-border/50" />
 
-        <div
-          class="sticky top-0 bg-muted/20 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 backdrop-blur-sm">
+        <div class="sticky top-0 bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground">
           {{ group.providerName }}
         </div>
 
@@ -131,7 +143,7 @@ onUnmounted(() => {
             :class="selectedValue === m.value ? 'bg-primary/10 text-primary' : 'text-foreground'"
             @click="pick(m.value)">
             <span class="min-w-0 truncate pr-2 font-medium">{{ m.label }}</span>
-            <span class="shrink-0 text-[10px] text-muted-foreground">{{ m.provider }}</span>
+            <span class="shrink-0 text-xs text-muted-foreground">{{ m.provider }}</span>
             <span
               v-if="selectedValue === m.value"
               class="i-carbon-checkmark inline-block h-3.5 w-3.5 shrink-0 text-primary" />

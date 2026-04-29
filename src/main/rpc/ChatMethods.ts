@@ -16,8 +16,21 @@ import { GatewayErrorCode, GatewayMethodError } from '@main/common/gateway/error
 import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { ThreadExecutor } from '@main/agent/ThreadExecutor';
 import { createLogger } from '@main/common/logger';
+import type { ThreadRuntimeType } from '@shared/events/thread';
 
 const log = createLogger('chat-methods');
+
+const THREAD_RUNTIME_TYPES = new Set<ThreadRuntimeType>(['pi-mono', 'openai', 'claude']);
+
+function toRuntimeType(value: unknown): ThreadRuntimeType | undefined {
+  return typeof value === 'string' && THREAD_RUNTIME_TYPES.has(value as ThreadRuntimeType)
+    ? (value as ThreadRuntimeType)
+    : undefined;
+}
+
+function toBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
 
 export const chatMethods: MethodGroup = {
   namespace: 'chat',
@@ -32,13 +45,25 @@ export const chatMethods: MethodGroup = {
      * @returns ThreadDefinition
      */
     createThread: async (params) => {
-      const { title, agentId = 'app-copilot', overrideModel } = params;
+      const {
+        title,
+        agentId = 'app-copilot',
+        overrideModel,
+        runtimeType,
+        enableThinking,
+        asrEnabled,
+        ttsEnabled
+      } = params;
 
       const store = await ThreadStore.getInstance();
       const thread = await store.create({
         title: (title as string) || '新会话',
         agentId: agentId as string,
-        overrideModel: overrideModel as string | undefined
+        overrideModel: typeof overrideModel === 'string' ? overrideModel : undefined,
+        runtimeType: toRuntimeType(runtimeType),
+        enableThinking: toBoolean(enableThinking),
+        asrEnabled: toBoolean(asrEnabled),
+        ttsEnabled: toBoolean(ttsEnabled)
       });
 
       log.info(`创建会话: ${thread.id}, agentId=${thread.agentId}`);

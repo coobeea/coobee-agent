@@ -19,14 +19,32 @@
       "free": true
     },
     {
+      "id": "aliyun-qwen3-tts-flash-realtime",
+      "label": "阿里云 Qwen3 TTS Flash Realtime",
+      "type": "online",
+      "description": "千问实时语音合成，支持流式文本输入和流式音频输出",
+      "configKey": "aliyun/qwen3-tts-flash-realtime",
+      "modelName": "qwen3-tts-flash-realtime",
+      "defaultApiUrl": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+      "lockApiUrl": true,
+      "provider": "阿里云百炼",
+      "pricing": "按量计费",
+      "requiresApiKey": true,
+      "apiKeyUrl": "https://bailian.console.aliyun.com/?apiKey=1"
+    },
+    {
       "id": "aliyun-cosyvoice-v3-flash",
       "label": "阿里云 CosyVoice v3 Flash",
       "type": "online",
       "description": "低成本实时合成，首包延迟 <150ms，支持 SSML 和情感表达",
       "configKey": "aliyun/cosyvoice-v3-flash",
+      "modelName": "cosyvoice-v3-flash",
+      "defaultApiUrl": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+      "lockApiUrl": true,
       "provider": "阿里云百炼",
       "pricing": "¥0.1/万字符",
-      "requiresApiKey": true
+      "requiresApiKey": true,
+      "apiKeyUrl": "https://bailian.console.aliyun.com/?apiKey=1"
     },
     {
       "id": "aliyun-cosyvoice-v3-plus",
@@ -34,9 +52,13 @@
       "type": "online",
       "description": "最强声音复刻，48kHz 高音质输出，支持 200+ 语言",
       "configKey": "aliyun/cosyvoice-v3-plus",
+      "modelName": "cosyvoice-v3-plus",
+      "defaultApiUrl": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+      "lockApiUrl": true,
       "provider": "阿里云百炼",
       "pricing": "¥0.2/万字符",
-      "requiresApiKey": true
+      "requiresApiKey": true,
+      "apiKeyUrl": "https://bailian.console.aliyun.com/?apiKey=1"
     },
     {
       "id": "aliyun-cosyvoice-v2",
@@ -44,9 +66,13 @@
       "type": "online",
       "description": "支持 SSML 和 LaTeX 公式转语音，稳定可靠",
       "configKey": "aliyun/cosyvoice-v2",
+      "modelName": "cosyvoice-v2",
+      "defaultApiUrl": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+      "lockApiUrl": true,
       "provider": "阿里云百炼",
       "pricing": "¥0.1/万字符",
-      "requiresApiKey": true
+      "requiresApiKey": true,
+      "apiKeyUrl": "https://bailian.console.aliyun.com/?apiKey=1"
     }
   ]
 }

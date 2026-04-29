@@ -46,6 +46,15 @@ interface ManagedWorker {
   consecutiveHealthCheckFailures: number;
 }
 
+function getWorkerBindHost(): string {
+  return Env.main.workerHost || '127.0.0.1';
+}
+
+function getWorkerConnectHost(): string {
+  const host = getWorkerBindHost();
+  return host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+}
+
 /**
  * WorkerManager 单例
  *
@@ -444,7 +453,7 @@ export class WorkerManager extends EventEmitter {
       throw new Error(`Worker 入口文件不存在: ${entryPath}`);
     }
 
-    const args = [entryPath, '--port', String(config.port), '--host', Env.main.serverHost, ...(config.args || [])];
+    const args = [entryPath, '--port', String(config.port), '--host', getWorkerBindHost(), ...(config.args || [])];
 
     const modelDir = config.modelDir || BusinessPaths.workers.models;
 
@@ -493,7 +502,7 @@ export class WorkerManager extends EventEmitter {
     const runtimeEnv = this.getWorkerRuntimeEnv(config.name);
 
     // 构建启动参数，替换 ${MODEL_DIR} 等变量
-    const rawArgs = [...(config.args || []), '--port', String(config.port), '--host', Env.main.serverHost];
+    const rawArgs = [...(config.args || []), '--port', String(config.port), '--host', getWorkerBindHost()];
     const args = rawArgs.map((arg) => arg.replace(/\$\{MODEL_DIR\}/g, modelDir));
 
     const env: Record<string, string> = {
@@ -634,7 +643,7 @@ export class WorkerManager extends EventEmitter {
    */
   private async waitForPortAvailable(port: number, timeout = 10000): Promise<void> {
     const startTime = Date.now();
-    const host = Env.main.serverHost || '0.0.0.0';
+    const host = getWorkerBindHost();
     while (Date.now() - startTime < timeout) {
       const available = await new Promise<boolean>((resolve) => {
         const server = net.createServer();
@@ -692,7 +701,7 @@ export class WorkerManager extends EventEmitter {
     const { config } = worker;
     const healthPath = config.healthCheckPath || '/health';
     const timeout = config.healthCheckTimeout || 60000;
-    const url = `http://127.0.0.1:${config.port}${healthPath}`;
+    const url = `http://${getWorkerConnectHost()}:${config.port}${healthPath}`;
 
     const startTime = Date.now();
     const pollInterval = 500;
@@ -749,7 +758,7 @@ export class WorkerManager extends EventEmitter {
 
       const { config } = worker;
       const healthPath = config.healthCheckPath || '/health';
-      const url = `http://127.0.0.1:${config.port}${healthPath}`;
+      const url = `http://${getWorkerConnectHost()}:${config.port}${healthPath}`;
 
       try {
         const checkStart = Date.now();

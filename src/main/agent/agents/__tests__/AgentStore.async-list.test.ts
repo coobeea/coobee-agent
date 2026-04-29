@@ -92,4 +92,46 @@ describe('AgentStore 异步列表', () => {
     expect(agents).toHaveLength(1);
     expect(agents[0].id).toBe('alpha');
   });
+
+  it('create/update 会保存 Agent 默认运行配置并同步到索引', async () => {
+    const store = new AgentStore(userDir, homesDir);
+
+    const created = await store.create({
+      id: 'runtime-agent',
+      name: 'Runtime Agent',
+      description: 'runtime defaults',
+      instructions: 'hello',
+      runtimeType: 'openai',
+      enableThinking: true,
+      asrEnabled: true,
+      ttsEnabled: false
+    });
+
+    expect(created.runtimeType).toBe('openai');
+    expect(created.enableThinking).toBe(true);
+    expect(created.asrEnabled).toBe(true);
+    expect(created.ttsEnabled).toBe(false);
+
+    const list = await store.listAsync();
+    expect(list.find((agent) => agent.id === 'runtime-agent')).toMatchObject({
+      runtimeType: 'openai',
+      enableThinking: true,
+      asrEnabled: true,
+      ttsEnabled: false
+    });
+
+    const updated = await store.update('runtime-agent', {
+      runtimeType: 'claude',
+      enableThinking: false,
+      asrEnabled: false,
+      ttsEnabled: true
+    });
+
+    expect(updated).toMatchObject({
+      runtimeType: 'claude',
+      enableThinking: false,
+      asrEnabled: false,
+      ttsEnabled: true
+    });
+  });
 });

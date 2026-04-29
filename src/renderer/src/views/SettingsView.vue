@@ -55,7 +55,7 @@ const menuGroups: MenuGroup[] = [
         id: 'workers',
         label: '内置服务',
         description: 'ASR、TTS、OCR',
-        icon: 'i-carbon-server',
+        icon: 'i-carbon-cloud-service-management',
         component: markRaw(WorkersSettings)
       }
     ]

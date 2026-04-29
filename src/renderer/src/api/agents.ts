@@ -11,6 +11,9 @@ import configManager from '@/config';
 /** Agent 创建来源 */
 export type AgentCreatedBy = 'user' | 'agent' | 'system';
 
+/** Agent 默认 Runtime 选择 */
+export type AgentRuntimeType = 'pi-mono' | 'openai' | 'claude';
+
 /** Agent 索引条目（轻量版，用于列表展示） */
 export interface AgentEntry {
   id: string;
@@ -21,6 +24,10 @@ export interface AgentEntry {
   updatedAt: string;
   skills?: string[];
   model?: string;
+  runtimeType?: AgentRuntimeType;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
 }
 
 /** Agent 完整定义 */
@@ -32,6 +39,10 @@ export interface AgentDefinition {
   excludeTools?: string[];
   skills?: string[];
   model?: string;
+  runtimeType?: AgentRuntimeType;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy: AgentCreatedBy;
@@ -48,6 +59,10 @@ export interface CreateAgentParams {
   excludeTools?: string[];
   skills?: string[];
   model?: string;
+  runtimeType?: AgentRuntimeType;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   metadata?: Record<string, unknown>;
 }
 
@@ -59,6 +74,10 @@ export interface UpdateAgentParams {
   excludeTools?: string[];
   skills?: string[];
   model?: string;
+  runtimeType?: AgentRuntimeType;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   metadata?: Record<string, unknown>;
 }
 

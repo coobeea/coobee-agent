@@ -40,6 +40,7 @@ export type {
   ThreadMessageAction,
   ThreadMessageEventPayload,
   ThreadRunStatus,
+  ThreadRuntimeType,
   ThreadStatus
 } from './thread';
 export { WorkerEventTypes } from './worker';

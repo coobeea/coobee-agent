@@ -63,6 +63,89 @@ describe('ThreadExecutionFactory', () => {
     expect(threadUpdate).not.toHaveBeenCalled();
   });
 
+  it('从 Thread 属性读取 runtime/thinking/语音开关配置', async () => {
+    threadGet.mockResolvedValue({
+      id: 'thread-1',
+      title: '已有标题',
+      agentId: 'agent-1',
+      agentMode: 'agent',
+      runtimeType: 'openai',
+      enableThinking: true,
+      asrEnabled: true,
+      ttsEnabled: false
+    });
+    agentGet.mockResolvedValue({
+      id: 'agent-1',
+      instructions: 'system prompt',
+      model: 'provider/model-b'
+    });
+
+    const request = await new ThreadExecutionFactory().createRequest({
+      threadId: 'thread-1',
+      message: 'hello'
+    });
+
+    expect(request).toMatchObject({
+      runtimeType: 'openai',
+      enableThinking: true,
+      asrEnabled: true,
+      ttsEnabled: false
+    });
+  });
+
+  it('Thread 未覆盖时使用 Agent 默认运行配置', async () => {
+    threadGet.mockResolvedValue({
+      id: 'thread-1',
+      title: '已有标题',
+      agentId: 'agent-1',
+      agentMode: 'agent'
+    });
+    agentGet.mockResolvedValue({
+      id: 'agent-1',
+      instructions: 'system prompt',
+      model: 'provider/model-b',
+      runtimeType: 'claude',
+      enableThinking: true,
+      asrEnabled: false,
+      ttsEnabled: true
+    });
+
+    const request = await new ThreadExecutionFactory().createRequest({
+      threadId: 'thread-1',
+      message: 'hello'
+    });
+
+    expect(request).toMatchObject({
+      runtimeType: 'claude',
+      enableThinking: true,
+      asrEnabled: false,
+      ttsEnabled: true
+    });
+  });
+
+  it('显式 runtimeType 参数优先于 Thread 保存值', async () => {
+    threadGet.mockResolvedValue({
+      id: 'thread-1',
+      title: '已有标题',
+      agentId: 'agent-1',
+      agentMode: 'agent',
+      runtimeType: 'openai'
+    });
+    agentGet.mockResolvedValue({
+      id: 'agent-1',
+      instructions: 'system prompt',
+      model: 'provider/model-b'
+    });
+
+    const request = await new ThreadExecutionFactory().createRequest({
+      threadId: 'thread-1',
+      message: 'hello',
+      runtimeType: 'claude'
+    });
+
+    expect(request.runtimeType).toBe('claude');
+  });
+
   it('默认标题会在组装请求前按消息内容自动命名', async () => {
     threadGet.mockResolvedValue({
       id: 'thread-1',

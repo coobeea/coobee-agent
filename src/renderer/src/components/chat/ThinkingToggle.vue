@@ -30,64 +30,12 @@ function toggle(): void {
 <template>
   <button
     type="button"
-    class="thinking-toggle"
-    :class="{ 'thinking-toggle--active': isEnabled }"
+    class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/45 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+    :class="isEnabled ? 'text-primary hover:bg-primary/10 hover:text-primary' : ''"
     :disabled="disabled"
     :title="isEnabled ? '思维链已启用' : '思维链已关闭'"
+    :aria-label="isEnabled ? '思维链已启用' : '思维链已关闭'"
     @click="toggle">
-    <span class="thinking-toggle-icon" :class="isEnabled ? 'i-carbon-phrase-sentiment' : 'i-carbon-tools'" />
-    <span class="thinking-toggle-label">思维链</span>
+    <span class="inline-block h-3.5 w-3.5" :class="isEnabled ? 'i-carbon-phrase-sentiment' : 'i-carbon-idea'" />
   </button>
 </template>
-
-<style scoped>
-.thinking-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  border: 1px solid hsl(var(--border) / 0.25);
-  background: transparent;
-  color: hsl(var(--muted-foreground) / 0.85);
-  transition: all 0.15s ease;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.thinking-toggle:hover:not(:disabled) {
-  background: hsl(var(--muted) / 0.5);
-  border-color: hsl(var(--border) / 0.5);
-  color: hsl(var(--foreground));
-}
-
-.thinking-toggle--active {
-  background: hsl(var(--primary) / 0.1);
-  border-color: hsl(var(--primary) / 0.3);
-  color: hsl(var(--primary));
-}
-
-.thinking-toggle--active:hover:not(:disabled) {
-  background: hsl(var(--primary) / 0.15);
-  border-color: hsl(var(--primary) / 0.4);
-}
-
-.thinking-toggle:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.thinking-toggle-icon {
-  display: inline-block;
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-.thinking-toggle-label {
-  line-height: 1;
-}
-</style>

@@ -104,6 +104,10 @@ export class ThreadStore {
       createdAt: now,
       updatedAt: now,
       overrideModel: params.overrideModel,
+      runtimeType: params.runtimeType,
+      enableThinking: params.enableThinking,
+      asrEnabled: params.asrEnabled,
+      ttsEnabled: params.ttsEnabled,
       metadata: params.metadata
     };
 
@@ -158,6 +162,12 @@ export class ThreadStore {
       log.warn(`[ThreadStore] Failed to read thread ${threadId}:`, err);
       return null;
     }
+  }
+
+  /** 获取 Thread 列表条目形态（用于 API/事件返回给前端） */
+  async getEntry(threadId: string): Promise<ThreadIndexEntry | null> {
+    const thread = await this.get(threadId);
+    return thread ? toIndexEntry(thread, this.workspacesDir) : null;
   }
 
   /**
@@ -283,6 +293,10 @@ export class ThreadStore {
       ...(params.status !== undefined && { status: params.status }),
       ...(params.runStatus !== undefined && { runStatus: params.runStatus }),
       ...(params.overrideModel !== undefined && { overrideModel: params.overrideModel || undefined }),
+      ...(params.runtimeType !== undefined && { runtimeType: params.runtimeType }),
+      ...(params.enableThinking !== undefined && { enableThinking: params.enableThinking }),
+      ...(params.asrEnabled !== undefined && { asrEnabled: params.asrEnabled }),
+      ...(params.ttsEnabled !== undefined && { ttsEnabled: params.ttsEnabled }),
       ...(params.metadata !== undefined && { metadata: params.metadata }),
       updatedAt: new Date().toISOString()
     };
@@ -442,6 +456,10 @@ function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndex
     updatedAt: def.updatedAt,
     workspacePath: path.join(workspacesDir, def.id),
     agentHomePath,
-    overrideModel: def.overrideModel
+    overrideModel: def.overrideModel,
+    runtimeType: def.runtimeType,
+    enableThinking: def.enableThinking,
+    asrEnabled: def.asrEnabled,
+    ttsEnabled: def.ttsEnabled
   };
 }

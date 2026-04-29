@@ -11,9 +11,11 @@ import { useFlatConfigModels } from '@/composables/useFlatConfigModels';
 import ChatInput from '@/components/chat/ChatInput.vue';
 import ModelPickerDropdown from '@/components/chat/ModelPickerDropdown.vue';
 import ThinkingToggle from '@/components/chat/ThinkingToggle.vue';
+import ThreadRunSettings from '@/components/chat/ThreadRunSettings.vue';
 import ContextUsageIndicator from '@/components/chat/ContextUsageIndicator.vue';
 import { getDefaultModel } from '@/api/config';
 import type { ExecutionStats } from '@/types/chat';
+import type { ThreadRuntimeType } from '@shared/events/thread';
 
 const props = withDefaults(
   defineProps<{
@@ -57,7 +59,7 @@ const selectedModel = computed(() => {
 const enableThinking = computed({
   get: () => {
     const t = threadsStore.threads.find((x) => x.id === props.threadId);
-    return t?.enableThinking ?? false;
+    return t?.enableThinking ?? currentAgent.value?.enableThinking ?? false;
   },
   set: async (val: boolean) => {
     try {
@@ -66,6 +68,45 @@ const enableThinking = computed({
       });
     } catch (e) {
       console.error('[ChatComposer] updateThread enableThinking failed:', e);
+    }
+  }
+});
+
+const runtimeType = computed<ThreadRuntimeType>({
+  get: () => currentThread.value?.runtimeType ?? currentAgent.value?.runtimeType ?? 'pi-mono',
+  set: async (val: ThreadRuntimeType) => {
+    try {
+      await threadsStore.updateThread(props.threadId, {
+        runtimeType: val
+      });
+    } catch (e) {
+      console.error('[ChatComposer] updateThread runtimeType failed:', e);
+    }
+  }
+});
+
+const asrEnabled = computed({
+  get: () => currentThread.value?.asrEnabled ?? currentAgent.value?.asrEnabled ?? false,
+  set: async (val: boolean) => {
+    try {
+      await threadsStore.updateThread(props.threadId, {
+        asrEnabled: val
+      });
+    } catch (e) {
+      console.error('[ChatComposer] updateThread asrEnabled failed:', e);
+    }
+  }
+});
+
+const ttsEnabled = computed({
+  get: () => currentThread.value?.ttsEnabled ?? currentAgent.value?.ttsEnabled ?? false,
+  set: async (val: boolean) => {
+    try {
+      await threadsStore.updateThread(props.threadId, {
+        ttsEnabled: val
+      });
+    } catch (e) {
+      console.error('[ChatComposer] updateThread ttsEnabled failed:', e);
     }
   }
 });
@@ -137,6 +178,11 @@ defineExpose({
         :disabled="disabled"
         @select="onSelectModel" />
       <ThinkingToggle v-if="showModelPicker" v-model="enableThinking" :disabled="disabled" />
+      <ThreadRunSettings
+        v-model:runtime-type="runtimeType"
+        v-model:asr-enabled="asrEnabled"
+        v-model:tts-enabled="ttsEnabled"
+        :disabled="disabled" />
       <ContextUsageIndicator :stats="contextStats" />
     </template>
   </ChatInput>

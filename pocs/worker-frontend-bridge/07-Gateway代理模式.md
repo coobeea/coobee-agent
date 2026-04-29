@@ -187,8 +187,8 @@ Worker 端口不暴露给前端和外部浏览器。
 新增 Worker Proxy URL 构造：
 
 ```ts
-getWorkerProxyWsUrl('asr', '/ws/asr')
-getWorkerProxyHttpUrl('ocr', '/api/ocr')
+getWorkerProxyWsUrl('asr', '/ws/asr');
+getWorkerProxyHttpUrl('ocr', '/api/ocr');
 ```
 
 业务组件只使用：
@@ -235,3 +235,41 @@ Gateway 代理值得做，但第一版应做“透明反向代理”，不要做
 - LAN/Web 访问可行。
 - ASR/TTS 实时流性能相对可控。
 - 当前 Worker 服务端协议不用大改。
+
+## 第一版实施结果
+
+已按透明反向代理落地第一版：
+
+- Gateway JSON RPC 仍固定在 `/gateway/ws`。
+- Worker 数据通道新增 `/gateway/workers/:name/api/*` 和 `/gateway/workers/:name/ws/*`。
+- HTTP/WS 代理都只转发到 `WorkerManager` 中 `ready` 状态的本机 Worker。
+- 前端配置只需要 Gateway 地址，ASR/TTS 已切到 Gateway Worker Proxy。
+- OCR 已具备后端代理入口，前端 typed client 后续单独补齐。
+
+第一版刻意保持透明代理，不对 Worker 响应包 `ApiResponse`，避免破坏 ASR/TTS/OCR 已有协议。
+
+## 配置方式
+
+代理模式下，前端只需要配置 Gateway：
+
+```env
+VITE_SERVER_PORT=8765
+VITE_SERVER_HOST=127.0.0.1
+```
+
+如果要允许局域网浏览器访问应用，只开放 Gateway：
+
+```env
+VITE_SERVER_PORT=8765
+VITE_SERVER_HOST=0.0.0.0
+VITE_WORKER_HOST=127.0.0.1
+```
+
+含义：
+
+- `VITE_SERVER_HOST`：Gateway 绑定地址，前端 HTTP/RPC/Worker 数据通道都访问它。
+- `VITE_WORKER_HOST`：Worker 绑定地址，默认 `127.0.0.1`，通常不对外暴露。
+- `VITE_MODEL_DIR`：模型目录，仍按原有逻辑由 WorkerManager 注入给 Worker。
+- `WORKER_RUNTIME_HOME` / `VITE_WORKER_RUNTIME_HOME`：Worker venv、运行配置和缓存根目录。
+
+也就是说，外部使用时不需要知道 Worker 端口，只填 Gateway 的 host/port。

@@ -13,7 +13,7 @@
  *   - 文件存储，重启后保留
  */
 
-import type { AgentMode } from '../runtime/types';
+import type { AgentMode, AgentRuntimeKind } from '../runtime/types';
 
 // ==================== Thread 运行时状态 ====================
 
@@ -63,6 +63,18 @@ export interface ThreadDefinition {
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
   overrideModel?: string;
 
+  /** Thread 级 Runtime 选择 */
+  runtimeType?: AgentRuntimeKind;
+
+  /** 是否启用思维链 */
+  enableThinking?: boolean;
+
+  /** 是否启用语音输入（ASR） */
+  asrEnabled?: boolean;
+
+  /** 是否启用语音输出（TTS） */
+  ttsEnabled?: boolean;
+
   /** 扩展元数据（保留字段） */
   metadata?: Record<string, unknown>;
 }
@@ -85,6 +97,14 @@ export interface ThreadIndexEntry {
   agentHomePath: string;
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
   overrideModel?: string;
+  /** Thread 级 Runtime 选择 */
+  runtimeType?: AgentRuntimeKind;
+  /** 是否启用思维链 */
+  enableThinking?: boolean;
+  /** 是否启用语音输入（ASR） */
+  asrEnabled?: boolean;
+  /** 是否启用语音输出（TTS） */
+  ttsEnabled?: boolean;
 }
 
 // ==================== 创建 / 更新参数 ====================
@@ -99,6 +119,14 @@ export interface CreateThreadParams {
   agentMode?: AgentMode;
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */
   overrideModel?: string;
+  /** Thread 级 Runtime 选择 */
+  runtimeType?: AgentRuntimeKind;
+  /** 是否启用思维链 */
+  enableThinking?: boolean;
+  /** 是否启用语音输入（ASR） */
+  asrEnabled?: boolean;
+  /** 是否启用语音输出（TTS） */
+  ttsEnabled?: boolean;
   /** 扩展元数据（可选） */
   metadata?: Record<string, unknown>;
 }
@@ -108,6 +136,10 @@ export interface UpdateThreadParams {
   title?: string;
   status?: ThreadStatus;
   runStatus?: ThreadRunStatus;
-  overrideModel?: string;
+  overrideModel?: string | null;
+  runtimeType?: AgentRuntimeKind;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   metadata?: Record<string, unknown>;
 }

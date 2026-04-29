@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import { GatewayErrorCode, GatewayMethodError } from '@main/common/gateway/errors';
 import type { MethodGroup } from '@main/common/gateway/types';
+import { Env } from '@main/common/env';
 import { createLogger } from '@main/common/logger';
 import { WorkerManager } from '@main/common/worker';
 import type { WorkerInfo } from '@main/common/worker/types';
@@ -110,6 +111,29 @@ function hasMeaningfulConfigChange(existing: Record<string, unknown>, updates: R
 
 function isWorkerRunning(info: WorkerInfo | undefined): boolean {
   return !!info && ['initializing', 'starting', 'ready'].includes(info.status);
+}
+
+function getWorkerConnectHost(): string {
+  const host = Env.main.workerHost || '127.0.0.1';
+  return host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+}
+
+async function readWorkerResponse(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return response.text();
+}
+
+function getWorkerResponseError(body: unknown, fallback: string): string {
+  if (body && typeof body === 'object') {
+    const payload = body as { error?: unknown; message?: unknown };
+    if (typeof payload.error === 'string') return payload.error;
+    if (typeof payload.message === 'string') return payload.message;
+  }
+  if (typeof body === 'string' && body.trim()) return body.trim();
+  return fallback;
 }
 
 export const workerMethods: MethodGroup = {
@@ -245,6 +269,55 @@ export const workerMethods: MethodGroup = {
         const message = error instanceof Error ? error.message : String(error);
         log.error(`[worker.configUpdate] Failed to write config for ${name}:`, error);
         throw new GatewayMethodError(GatewayErrorCode.INTERNAL_ERROR, `Failed to save config: ${message}`);
+      }
+    },
+
+    /**
+     * 实际测试 Worker。
+     *
+     * 若 Worker 未启动，则先启动并等待健康检查通过；
+     * 随后调用 Worker 自己的 /api/test，让具体 Worker 执行真实 provider 测试。
+     */
+    test: async (params) => {
+      const { name } = params;
+      validateWorkerName(name);
+      ensureKnownWorker(name);
+
+      const manager = WorkerManager.getInstance();
+      let info = manager.getWorkerInfo(name);
+      let started = false;
+
+      try {
+        if (!info || info.status !== 'ready') {
+          log.info(`[worker.test] Worker ${name} is not ready, starting before test...`);
+          await manager.start(name);
+          started = true;
+          info = manager.getWorkerInfo(name);
+        }
+
+        if (!info || info.status !== 'ready' || !info.port) {
+          throw new Error(info?.error || `Worker "${name}" is not ready`);
+        }
+
+        const url = `http://${getWorkerConnectHost()}:${info.port}/api/test`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+          signal: AbortSignal.timeout(120000)
+        });
+        const body = await readWorkerResponse(response);
+
+        if (!response.ok) {
+          throw new Error(getWorkerResponseError(body, `Worker test failed: HTTP ${response.status}`));
+        }
+
+        log.info(`[worker.test] ${name}: ${JSON.stringify(redactConfig(body as Record<string, unknown>))}`);
+        return { name, started, result: body };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.error(`[worker.test] Failed: ${name}`, message);
+        throw new GatewayMethodError(GatewayErrorCode.INTERNAL_ERROR, message);
       }
     }
   }

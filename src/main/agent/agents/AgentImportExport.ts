@@ -54,6 +54,10 @@ interface AgentExportConfig {
   description: string;
   instructions: string;
   model?: string;
+  runtimeType?: CreateAgentParams['runtimeType'];
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   skills?: string[];
   excludeTools?: string[];
   createdBy: string;
@@ -104,6 +108,10 @@ export class AgentImportExport {
         description: agent.description,
         instructions: agent.instructions,
         model: agent.model,
+        runtimeType: agent.runtimeType,
+        enableThinking: agent.enableThinking,
+        asrEnabled: agent.asrEnabled,
+        ttsEnabled: agent.ttsEnabled,
         skills: agent.skills,
         excludeTools: agent.excludeTools,
         createdBy: agent.createdBy,
@@ -215,6 +223,10 @@ export class AgentImportExport {
         description: agentConfig.description,
         instructions: agentConfig.instructions || '你是一个智能助手。',
         model: agentConfig.model,
+        runtimeType: agentConfig.runtimeType,
+        enableThinking: agentConfig.enableThinking,
+        asrEnabled: agentConfig.asrEnabled,
+        ttsEnabled: agentConfig.ttsEnabled,
         skills: agentConfig.skills,
         excludeTools: agentConfig.excludeTools,
         createdBy: 'user', // 导入的智能体都标记为用户创建

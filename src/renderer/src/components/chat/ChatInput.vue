@@ -252,7 +252,7 @@ onUnmounted(() => {
   max-height: 220px;
   overflow-y: auto;
   padding: 11px 13px;
-  padding-bottom: 42px;
+  padding-bottom: 44px;
 }
 
 .chat-input-toolbar {
@@ -264,7 +264,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
+  padding: 5px 10px;
   background: transparent;
   border-top: 1px solid hsl(var(--border) / 0.14);
 }
@@ -272,7 +272,7 @@ onUnmounted(() => {
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
@@ -280,7 +280,7 @@ onUnmounted(() => {
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -288,9 +288,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
@@ -305,21 +305,21 @@ onUnmounted(() => {
 }
 
 .toolbar-btn-send {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: transparent;
+  color: hsl(var(--primary));
 }
 
 .toolbar-btn-send:hover:not(:disabled) {
-  background: hsl(var(--primary) / 0.9);
+  background: hsl(var(--primary) / 0.1);
 }
 
 .toolbar-btn-stop {
-  background: hsl(var(--error));
-  color: hsl(var(--primary-foreground));
+  background: transparent;
+  color: hsl(var(--error));
 }
 
 .toolbar-btn-stop:hover {
-  background: hsl(var(--error) / 0.9);
+  background: hsl(var(--error) / 0.1);
 }
 
 /* Tiptap 编辑器样式 */

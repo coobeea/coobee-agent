@@ -14,7 +14,8 @@ import {
   getPersonalityFiles as fetchPersonalityFiles,
   updatePersonalityFile as savePersonalityFile,
   type AgentEntry,
-  type CreateAgentParams
+  type CreateAgentParams,
+  type UpdateAgentParams
 } from '@/api/agents';
 
 // Re-export types for consumers
@@ -114,17 +115,7 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   /** 更新 Agent（部分更新） */
-  async function modifyAgent(
-    agentId: string,
-    params: {
-      skills?: string[];
-      model?: string;
-      name?: string;
-      description?: string;
-      instructions?: string;
-      metadata?: Record<string, unknown>;
-    }
-  ): Promise<boolean> {
+  async function modifyAgent(agentId: string, params: UpdateAgentParams): Promise<boolean> {
     try {
       const result = await updateAgent(agentId, params);
       if (result.success) {

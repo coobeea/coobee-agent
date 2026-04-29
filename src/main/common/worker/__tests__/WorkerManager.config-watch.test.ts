@@ -47,7 +47,8 @@ vi.mock('@main/common/env', () => {
         userData: path.join(tmpRuntimeDir, 'data')
       },
       main: {
-        serverHost: 'localhost'
+        serverHost: 'localhost',
+        workerHost: '127.0.0.1'
       },
       isDev: true,
       isWindows: process.platform === 'win32'

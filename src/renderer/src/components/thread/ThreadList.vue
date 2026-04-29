@@ -9,7 +9,9 @@
  * - 刷新功能
  */
 
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useMessageStore } from '@/components/Message';
 import { useThreadsStore } from '@/stores/threads';
 import type { ThreadEntry } from '@/stores/threads';
 
@@ -20,7 +22,7 @@ interface Props {
   activeThreadId?: string | null;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   activeThreadId: null
 });
 
@@ -32,6 +34,10 @@ const emit = defineEmits<{
 // ==================== Store ====================
 
 const threadsStore = useThreadsStore();
+const route = useRoute();
+const router = useRouter();
+const message = useMessageStore();
+const confirmDeleteThreadId = ref<string | null>(null);
 
 // ==================== 时间分组 ====================
 
@@ -93,7 +99,41 @@ function handleRefresh(): void {
 
 /** 点击任务 */
 function handleThreadClick(threadId: string): void {
+  confirmDeleteThreadId.value = null;
   emit('thread-click', threadId);
+}
+
+function cancelThreadDelete(event: MouseEvent): void {
+  event.stopPropagation();
+  confirmDeleteThreadId.value = null;
+}
+
+async function handleThreadDelete(thread: ThreadEntry, event: MouseEvent): Promise<void> {
+  event.stopPropagation();
+
+  if (isThreadStreaming(thread.id)) {
+    message.warning('会话正在执行中，暂时不能删除');
+    return;
+  }
+
+  if (confirmDeleteThreadId.value !== thread.id) {
+    confirmDeleteThreadId.value = thread.id;
+    return;
+  }
+
+  const shouldLeaveThread = props.activeThreadId === thread.id || route.path === `/thread/${thread.id}`;
+  const success = await threadsStore.deleteThread(thread.id);
+  confirmDeleteThreadId.value = null;
+
+  if (!success) {
+    message.error(threadsStore.error || '删除会话失败');
+    return;
+  }
+
+  message.success('会话已删除');
+  if (shouldLeaveThread) {
+    await router.push('/home');
+  }
 }
 
 function handleScroll(event: Event): void {
@@ -139,22 +179,25 @@ function handleScroll(event: Event): void {
         </div>
 
         <!-- 分组内的任务 -->
-        <button
+        <div
           v-for="thread in group.threads"
           :key="thread.id"
-          class="session-item relative mb-0.5 flex w-full cursor-pointer items-start rounded-xl border px-2.5 py-1.5 text-left text-sm transition"
+          class="session-item group relative mb-0.5 flex w-full cursor-pointer items-start rounded-xl border px-2.5 py-1.5 text-left text-sm transition"
           :class="
-            activeThreadId === thread.id
+            props.activeThreadId === thread.id
               ? 'active border-primary/25 bg-primary/10 text-primary'
               : 'border-transparent bg-transparent text-foreground hover:border-border/70 hover:bg-background/65'
           "
-          type="button"
-          @click="handleThreadClick(thread.id)">
+          role="button"
+          tabindex="0"
+          @click="handleThreadClick(thread.id)"
+          @keydown.enter.self="handleThreadClick(thread.id)"
+          @keydown.space.self.prevent="handleThreadClick(thread.id)">
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-1">
               <span
                 class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium leading-[18px] transition-colors"
-                :class="{ 'font-semibold': activeThreadId === thread.id }">
+                :class="{ 'font-semibold': props.activeThreadId === thread.id }">
                 {{ thread.title }}
               </span>
               <div
@@ -165,14 +208,46 @@ function handleScroll(event: Event): void {
                 <span class="wave-bar"></span>
                 <span class="wave-bar"></span>
               </div>
+
+              <div class="ml-1 flex shrink-0 items-center gap-1">
+                <template v-if="confirmDeleteThreadId === thread.id">
+                  <button
+                    class="h-5 rounded bg-error px-1.5 text-[10px] font-medium text-error-foreground transition-colors hover:bg-error/90"
+                    type="button"
+                    :disabled="threadsStore.deletingThreadId === thread.id"
+                    title="确认删除"
+                    @click="handleThreadDelete(thread, $event)">
+                    确认
+                  </button>
+                  <button
+                    class="h-5 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                    type="button"
+                    title="取消删除"
+                    @click="cancelThreadDelete($event)">
+                    取消
+                  </button>
+                </template>
+                <button
+                  v-else
+                  class="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition hover:bg-error/10 hover:text-error focus:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                  type="button"
+                  :disabled="isThreadStreaming(thread.id) || !!threadsStore.deletingThreadId"
+                  :title="isThreadStreaming(thread.id) ? '会话正在执行中' : '删除会话'"
+                  @click="handleThreadDelete(thread, $event)">
+                  <span
+                    v-if="threadsStore.deletingThreadId === thread.id"
+                    class="i-carbon-circle-dash h-3 w-3 animate-spin"></span>
+                  <span v-else class="i-carbon-trash-can h-3 w-3"></span>
+                </button>
+              </div>
             </div>
             <span
               class="mt-0.5 block min-w-0 truncate text-[11px] leading-[15px] transition-colors"
-              :class="activeThreadId === thread.id ? 'text-primary/75' : 'text-muted-foreground/70'">
+              :class="props.activeThreadId === thread.id ? 'text-primary/75' : 'text-muted-foreground/70'">
               {{ getThreadAgentLabel(thread) }}
             </span>
           </div>
-        </button>
+        </div>
       </template>
 
       <!-- 加载更多指示器 -->

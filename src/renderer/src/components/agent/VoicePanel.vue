@@ -183,8 +183,8 @@ function sendPcmBuffer(): void {
 function connectASRWebSocket(port: number): void {
   if (asrWs.value) return;
 
-  const url = `ws://${configManager.getHost()}:${port}/ws/asr`;
-  console.log(`[VoicePanel] 连接 ASR WebSocket: ${url}`);
+  const url = configManager.getWorkerProxyWsUrl(workerStore.asrWorkerName, '/ws/asr');
+  console.log(`[VoicePanel] 连接 ASR WebSocket: ${url} (worker port=${port})`);
 
   const ws = new WebSocket(url);
 
@@ -369,7 +369,8 @@ watch(
 
 function connectTTS(port: number): void {
   if (ttsWs.value) return;
-  const url = `ws://${configManager.getHost()}:${port}/ws/tts`;
+  const url = configManager.getWorkerProxyWsUrl('tts', '/ws/tts');
+  console.log(`[VoicePanel] 连接 TTS WebSocket: ${url} (worker port=${port})`);
   const ws = new WebSocket(url);
   ws.onopen = () => {
     ttsConnected.value = true;

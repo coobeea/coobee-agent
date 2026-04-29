@@ -48,7 +48,8 @@ vi.mock('@main/common/env', () => {
         userData: '/tmp/data'
       },
       main: {
-        serverHost: '127.0.0.1'
+        serverHost: '127.0.0.1',
+        workerHost: '127.0.0.1'
       },
       isWindows: false,
       getPlatformRuntimeDir: () => '/tmp/runtime'

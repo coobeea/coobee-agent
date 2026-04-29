@@ -62,6 +62,12 @@ export interface AgentExecuteRequest {
   // === 运行时控制 ===
   /** 模型覆盖（provider/model 或 model id） */
   modelOverride?: string;
+  /** 是否启用思维链；false 时显式关闭，true 时使用全局默认思考级别 */
+  enableThinking?: boolean;
+  /** 是否启用语音输入（ASR），当前先作为 Thread 运行配置透传 */
+  asrEnabled?: boolean;
+  /** 是否启用语音输出（TTS），当前先作为 Thread 运行配置透传 */
+  ttsEnabled?: boolean;
   /** 手动指定工作区 */
   workspaceRoot?: string;
   /** 最大执行轮次 */
@@ -601,6 +607,9 @@ class AgentExecutor {
     }
 
     this.providerInjector.apply(builder, request.modelOverride);
+    if (request.enableThinking === false) {
+      builder.thinkingLevel('off');
+    }
 
     if (request.workspaceRoot) {
       builder.workspaceRoot(request.workspaceRoot);

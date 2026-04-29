@@ -383,7 +383,7 @@ export class Gateway implements GatewayApi {
         // 查找所有以 'register' 开头的函数导出（约定：路由注册函数）
         if (typeof exportValue === 'function' && exportName.startsWith('register')) {
           try {
-            (exportValue as RouteRegistrar)(router);
+            (exportValue as RouteRegistrar)(router, this.server);
             log.debug(`[Gateway] 注册 HTTP 路由: ${exportName} (来自 ${filePath})`);
             registeredCount++;
           } catch (error) {

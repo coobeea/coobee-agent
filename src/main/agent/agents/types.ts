@@ -2,6 +2,8 @@
  * Agent 类型定义
  */
 
+import type { AgentRuntimeKind } from '../runtime/types';
+
 /** Agent 创建来源 */
 export type AgentCreatedBy = 'user' | 'agent' | 'system';
 
@@ -17,6 +19,14 @@ export interface AgentIndexEntry {
   skills?: string[];
   /** 使用的模型 ID 或模型组引用（@group:xxx） */
   model?: string;
+  /** 默认 Runtime 选择 */
+  runtimeType?: AgentRuntimeKind;
+  /** 默认是否启用思维链 */
+  enableThinking?: boolean;
+  /** 默认是否启用语音输入（ASR） */
+  asrEnabled?: boolean;
+  /** 默认是否启用语音输出（TTS） */
+  ttsEnabled?: boolean;
   /** Agent 家目录路径（包含人格文件、技能等） */
   agentHomePath?: string;
   /** Agent 工作空间路径（任务运行时产生的文件） */
@@ -36,6 +46,14 @@ export interface AgentDefinition {
   skills?: string[];
   /** 使用的模型 */
   model?: string;
+  /** 默认 Runtime 选择 */
+  runtimeType?: AgentRuntimeKind;
+  /** 默认是否启用思维链 */
+  enableThinking?: boolean;
+  /** 默认是否启用语音输入（ASR） */
+  asrEnabled?: boolean;
+  /** 默认是否启用语音输出（TTS） */
+  ttsEnabled?: boolean;
   /** 创建时间 */
   createdAt: string;
   /** 更新时间 */
@@ -57,6 +75,10 @@ export interface CreateAgentParams {
   excludeTools?: string[];
   skills?: string[];
   model?: string;
+  runtimeType?: AgentRuntimeKind;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   createdBy?: AgentCreatedBy;
   metadata?: Record<string, unknown>;
 }
@@ -69,5 +91,9 @@ export interface UpdateAgentParams {
   excludeTools?: string[];
   skills?: string[];
   model?: string;
+  runtimeType?: AgentRuntimeKind;
+  enableThinking?: boolean;
+  asrEnabled?: boolean;
+  ttsEnabled?: boolean;
   metadata?: Record<string, unknown>;
 }

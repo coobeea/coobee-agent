@@ -21,9 +21,42 @@ import { createLogger } from '@main/common/logger';
 import { AgentStore } from '@main/agent/agents/AgentStore';
 import { AgentImportExport } from '@main/agent/agents/AgentImportExport';
 import type { AgentDefinition, AgentIndexEntry, CreateAgentParams, UpdateAgentParams } from '@main/agent/agents/types';
+import type { AgentRuntimeKind } from '@main/agent/runtime/types';
 import type { ApiResponse } from '@shared/api';
 
 const log = createLogger('gateway-http-agents');
+
+const AGENT_RUNTIME_TYPES = new Set<AgentRuntimeKind>(['pi-mono', 'openai', 'claude']);
+
+function isAgentRuntimeKind(value: unknown): value is AgentRuntimeKind {
+  return typeof value === 'string' && AGENT_RUNTIME_TYPES.has(value as AgentRuntimeKind);
+}
+
+function collectAgentRunConfig(body: Record<string, unknown>): {
+  updates?: Pick<CreateAgentParams, 'runtimeType' | 'enableThinking' | 'asrEnabled' | 'ttsEnabled'>;
+  error?: string;
+} {
+  const updates: Pick<CreateAgentParams, 'runtimeType' | 'enableThinking' | 'asrEnabled' | 'ttsEnabled'> = {};
+
+  if ('runtimeType' in body) {
+    if (!isAgentRuntimeKind(body.runtimeType)) return { error: 'runtimeType is invalid' };
+    updates.runtimeType = body.runtimeType;
+  }
+  if ('enableThinking' in body) {
+    if (typeof body.enableThinking !== 'boolean') return { error: 'enableThinking must be a boolean' };
+    updates.enableThinking = body.enableThinking;
+  }
+  if ('asrEnabled' in body) {
+    if (typeof body.asrEnabled !== 'boolean') return { error: 'asrEnabled must be a boolean' };
+    updates.asrEnabled = body.asrEnabled;
+  }
+  if ('ttsEnabled' in body) {
+    if (typeof body.ttsEnabled !== 'boolean') return { error: 'ttsEnabled must be a boolean' };
+    updates.ttsEnabled = body.ttsEnabled;
+  }
+
+  return { updates };
+}
 
 /** 列表响应 */
 interface ListAgentsResponse {
@@ -137,10 +170,14 @@ export function registerAgentRoutes(router: Router): void {
       descriptionLength: params?.description?.length,
       instructionsLength: params?.instructions?.length,
       skills: params?.skills,
-      model: params?.model
+      model: params?.model,
+      runtimeType: params?.runtimeType,
+      enableThinking: params?.enableThinking,
+      asrEnabled: params?.asrEnabled,
+      ttsEnabled: params?.ttsEnabled
     });
 
-    if (!params?.id || !params?.name || !params?.description || !params?.instructions) {
+    if (!body || !params?.id || !params?.name || !params?.description || !params?.instructions) {
       log.warn('[agents.create] Validation failed:', {
         hasId: !!params?.id,
         hasName: !!params?.name,
@@ -156,10 +193,21 @@ export function registerAgentRoutes(router: Router): void {
       return;
     }
 
+    const { updates: runConfig, error: runConfigError } = collectAgentRunConfig(body);
+    if (runConfigError || !runConfig) {
+      ctx.status = 400;
+      const response: ApiResponse = {
+        success: false,
+        error: runConfigError || 'Invalid agent runtime config'
+      };
+      ctx.body = response;
+      return;
+    }
+
     try {
       const store = AgentStore.getInstance();
       log.debug('[agents.create] Creating agent:', params.id);
-      const agent = await store.create(params);
+      const agent = await store.create({ ...params, ...runConfig });
 
       ctx.status = 201;
       const response: ApiResponse<CreateAgentResponse> = {
@@ -206,8 +254,19 @@ export function registerAgentRoutes(router: Router): void {
     }
 
     try {
+      const { updates: runConfig, error: runConfigError } = collectAgentRunConfig(body);
+      if (runConfigError || !runConfig) {
+        ctx.status = 400;
+        const response: ApiResponse = {
+          success: false,
+          error: runConfigError || 'Invalid agent runtime config'
+        };
+        ctx.body = response;
+        return;
+      }
+
       const store = AgentStore.getInstance();
-      const agent = await store.update(agentId, body as UpdateAgentParams);
+      const agent = await store.update(agentId, { ...(body as UpdateAgentParams), ...runConfig });
       if (!agent) {
         ctx.status = 404;
         const response: ApiResponse = {

@@ -9,7 +9,13 @@
 
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { getThreads, updateThread as updateThreadApi, type ThreadEntry } from '@/api/threads';
+import {
+  deleteThread as deleteThreadApi,
+  getThreads,
+  updateThread as updateThreadApi,
+  type ThreadEntry,
+  type UpdateThreadParams
+} from '@/api/threads';
 import type { ThreadMessageEventPayload } from '@shared/events/thread';
 
 // Re-export types for consumers
@@ -20,6 +26,7 @@ export const useThreadsStore = defineStore('threads', () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const activeThreadId = ref<string | null>(null);
+  const deletingThreadId = ref<string | null>(null);
 
   // 分页状态
   const hasMore = ref(true);
@@ -162,15 +169,7 @@ export const useThreadsStore = defineStore('threads', () => {
   /**
    * 更新 Thread 属性
    */
-  async function updateThread(
-    threadId: string,
-    updates: {
-      title?: string;
-      status?: string;
-      overrideModel?: string | null;
-      enableThinking?: boolean;
-    }
-  ): Promise<boolean> {
+  async function updateThread(threadId: string, updates: UpdateThreadParams): Promise<boolean> {
     try {
       const result = await updateThreadApi(threadId, updates);
 
@@ -196,6 +195,36 @@ export const useThreadsStore = defineStore('threads', () => {
     }
   }
 
+  /**
+   * 删除 Thread
+   */
+  async function deleteThread(threadId: string): Promise<boolean> {
+    if (deletingThreadId.value) return false;
+
+    deletingThreadId.value = threadId;
+    error.value = null;
+
+    try {
+      const result = await deleteThreadApi(threadId);
+
+      if (result.success && result.data?.deleted) {
+        removeThread(result.data.threadId);
+        console.log(`[ThreadsStore] Thread ${threadId} 删除成功`);
+        return true;
+      }
+
+      error.value = result.error || '删除会话失败';
+      console.error('[ThreadsStore] 删除失败:', result.error);
+      return false;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '删除会话失败';
+      console.error('[ThreadsStore] 删除失败:', err);
+      return false;
+    } finally {
+      deletingThreadId.value = null;
+    }
+  }
+
   function applyThreadMessage(payload: ThreadMessageEventPayload): void {
     if (payload.action === 'deleted') {
       removeThread(payload.threadId);
@@ -212,6 +241,7 @@ export const useThreadsStore = defineStore('threads', () => {
     loading,
     error,
     activeThreadId,
+    deletingThreadId,
     threadCount,
     hasMore,
     total,
@@ -220,6 +250,7 @@ export const useThreadsStore = defineStore('threads', () => {
     selectThread,
     clearSelection,
     updateThread,
+    deleteThread,
     applyThreadMessage
   };
 });

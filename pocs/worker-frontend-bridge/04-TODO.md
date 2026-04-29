@@ -121,3 +121,36 @@
   - [ ] LAN/Web 访问是否支持 Worker 有明确结论。
   - [ ] 安全策略有文档，不再靠隐含默认值。
 - **状态**：[ ]
+
+## 7. 实现 Gateway Worker 透明反向代理第一版
+
+- **目标**：让前端数据通道也只访问 Gateway，由 Gateway 转发到本机 Worker。
+- **背景/原因**：直连 Worker 端口会让 Electron、本机浏览器、局域网浏览器三种访问模式出现不一致；同时 Worker 端口不应成为前端对外契约。
+- **涉及范围**：
+  - `src/main/common/gateway/GatewayServer.ts`
+  - `src/main/common/gateway/Gateway.ts`
+  - `src/main/common/gateway/types.ts`
+  - `src/main/common/env.ts`
+  - `src/main/common/worker/WorkerManager.ts`
+  - `src/main/routes/WorkerProxyRoutes.ts`
+  - `src/renderer/src/config.ts`
+  - `src/renderer/src/components/agent/VoicePanel.vue`
+- **具体动作**：
+  - 为 GatewayServer 增加 WebSocket upgrade 分发能力。
+  - 新增 `/gateway/workers/:name/api/*` HTTP 透明代理。
+  - 新增 `/gateway/workers/:name/ws/*` WebSocket 透明代理。
+  - 代理目标只允许来自 `WorkerManager` 中 `status === "ready"` 的 Worker。
+  - 拆分 Gateway 绑定地址和 Worker 绑定地址，避免局域网模式下 Worker 端口一起暴露。
+  - 前端新增 Worker Proxy URL 构造方法。
+  - VoicePanel 的 ASR/TTS WebSocket 先切到 Gateway Proxy。
+- **非目标**：
+  - 本项不重构 `useAsrWorker` / `useTtsWorker`。
+  - 本项不改变 Python Worker 的原有协议。
+  - 本项不实现新的 Gateway 鉴权策略。
+- **验收标准**：
+  - [x] `/gateway/ws` 原 JSON RPC 通道仍保留。
+  - [x] `ws://gateway/gateway/workers/asr/ws/asr` 可按 Worker ready 状态代理。
+  - [x] `ws://gateway/gateway/workers/tts/ws/tts` 可按 Worker ready 状态代理。
+  - [x] `http://gateway/gateway/workers/ocr/api/ocr` 有后端透明代理入口。
+  - [x] 前端不再根据 Worker 端口拼 ASR/TTS 数据通道地址。
+- **状态**：[x]

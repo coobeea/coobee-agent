@@ -10,8 +10,10 @@
  */
 
 import type { Server as NodeHttpServer } from 'node:http';
+import type { IncomingMessage } from 'node:http';
 import http from 'node:http';
 import path from 'node:path';
+import type { Duplex } from 'node:stream';
 import { is } from '@electron-toolkit/utils';
 import Koa from 'koa';
 import bodyParser from 'koa-bodyparser';
@@ -21,7 +23,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import Router from '@koa/router';
 import { log } from '@main/common/logger';
 import { Env } from '@main/common/env';
-import type { ClientMeta, GatewayOutMessage, ClientPredicate } from './types';
+import type { ClientMeta, GatewayOutMessage, ClientPredicate, WebSocketUpgradeHandler } from './types';
 
 let connectionIdCounter = 0;
 
@@ -44,6 +46,7 @@ export class GatewayServer {
   private wss!: WebSocketServer;
   private router: Router = new Router({ prefix: '/gateway' });
   private clients = new Map<WebSocket, ClientMeta>();
+  private wsUpgradeHandlers: Array<{ prefix: string; handler: WebSocketUpgradeHandler }> = [];
   private initialized = false;
   private heartbeatInterval = 30000; // 30秒
   private serverPort: number = Env.main.serverPort ? parseInt(Env.main.serverPort, 10) : 8765;
@@ -192,51 +195,10 @@ export class GatewayServer {
       }
     });
 
-    // 2. WebSocket 层：挂载到 http.Server，使用 /gateway/ws 路径
-    this.wss = new WebSocketServer({
-      server: this.nodeHttpServer,
-      path: '/gateway/ws'
-    });
-
-    this.wss.on('connection', (ws) => {
-      const meta: ClientMeta = {
-        connectionId: generateConnectionId(),
-        connectedAt: Date.now(),
-        isAlive: true,
-        heartbeatTimer: null
-      };
-      this.clients.set(ws, meta);
-      this.startHeartbeat(ws, meta);
-
-      log.info(`[GatewayServer] Client connected: ${meta.connectionId} (total: ${this.clients.size})`);
-
-      // 调用连接回调
-      this.onConnect?.(ws, meta);
-
-      ws.on('pong', () => {
-        meta.isAlive = true;
-      });
-
-      // 处理客户端消息
-      ws.on('message', (data: Buffer) => {
-        try {
-          this.onMessage?.(ws, data.toString(), meta);
-        } catch (error) {
-          log.error('[GatewayServer] Error handling message:', error);
-        }
-      });
-
-      ws.on('close', () => {
-        this.onDisconnect?.(ws, meta);
-        this.cleanupClient(ws);
-        log.info(`[GatewayServer] Client disconnected: ${meta.connectionId} (total: ${this.clients.size})`);
-      });
-
-      ws.on('error', (error) => {
-        log.error(`[GatewayServer] Client error (${meta.connectionId}):`, error);
-        this.onDisconnect?.(ws, meta);
-        this.cleanupClient(ws);
-      });
+    // 2. WebSocket 层：手动分发 upgrade，支持 /gateway/ws 和业务 WebSocket 代理共存
+    this.wss = new WebSocketServer({ noServer: true });
+    this.nodeHttpServer.on('upgrade', (req, socket, head) => {
+      this.handleUpgrade(req, socket, head);
     });
 
     // 3. HTTP 层：注册内置端点
@@ -395,7 +357,105 @@ export class GatewayServer {
     return this.router;
   }
 
+  /**
+   * 注册额外 WebSocket upgrade 处理器。
+   *
+   * prefix 使用完整路径，如 /gateway/workers/。
+   */
+  registerWebSocketUpgrade(prefix: string, handler: WebSocketUpgradeHandler): () => void {
+    const item = { prefix, handler };
+    this.wsUpgradeHandlers.push(item);
+
+    // 更长 prefix 优先，避免宽泛前缀抢先匹配
+    this.wsUpgradeHandlers.sort((a, b) => b.prefix.length - a.prefix.length);
+
+    return () => {
+      const index = this.wsUpgradeHandlers.indexOf(item);
+      if (index >= 0) {
+        this.wsUpgradeHandlers.splice(index, 1);
+      }
+    };
+  }
+
   // ==================== 私有方法 ====================
+
+  private handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    const pathname = this.getUpgradePathname(req);
+
+    if (pathname === '/gateway/ws') {
+      this.wss.handleUpgrade(req, socket, head, (ws) => {
+        this.attachGatewayClient(ws);
+      });
+      return;
+    }
+
+    for (const { prefix, handler } of this.wsUpgradeHandlers) {
+      if (!pathname.startsWith(prefix)) continue;
+      const handled = handler(req, socket, head, pathname);
+      if (handled) return;
+    }
+
+    this.rejectUpgrade(socket, 404, 'WebSocket route not found');
+  }
+
+  private getUpgradePathname(req: IncomingMessage): string {
+    try {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+      return url.pathname;
+    } catch {
+      return '/';
+    }
+  }
+
+  private rejectUpgrade(socket: Duplex, statusCode: number, reason: string): void {
+    try {
+      socket.write(`HTTP/1.1 ${statusCode} ${reason}\r\nConnection: close\r\n\r\n`);
+    } catch {
+      // ignore write error
+    }
+    socket.destroy();
+  }
+
+  private attachGatewayClient(ws: WebSocket): void {
+    const meta: ClientMeta = {
+      connectionId: generateConnectionId(),
+      connectedAt: Date.now(),
+      isAlive: true,
+      heartbeatTimer: null
+    };
+    this.clients.set(ws, meta);
+    this.startHeartbeat(ws, meta);
+
+    log.info(`[GatewayServer] Client connected: ${meta.connectionId} (total: ${this.clients.size})`);
+
+    // 调用连接回调
+    this.onConnect?.(ws, meta);
+
+    ws.on('pong', () => {
+      meta.isAlive = true;
+    });
+
+    // 处理客户端消息
+    ws.on('message', (data: Buffer) => {
+      try {
+        this.onMessage?.(ws, data.toString(), meta);
+      } catch (error) {
+        log.error('[GatewayServer] Error handling message:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      this.onDisconnect?.(ws, meta);
+      this.cleanupClient(ws);
+      log.info(`[GatewayServer] Client disconnected: ${meta.connectionId} (total: ${this.clients.size})`);
+    });
+
+    ws.on('error', (error) => {
+      log.error(`[GatewayServer] Client error (${meta.connectionId}):`, error);
+      this.onDisconnect?.(ws, meta);
+      this.cleanupClient(ws);
+    });
+  }
 
   /**
    * 注册内置 HTTP 端点

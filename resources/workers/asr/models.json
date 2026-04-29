@@ -23,9 +23,13 @@
       "type": "online",
       "description": "工业级实时语音识别，支持方言/情感识别，首包延迟极低",
       "configKey": "aliyun/qwen3-asr-flash-realtime",
+      "modelName": "qwen3-asr-flash-realtime",
+      "defaultApiUrl": "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
+      "lockApiUrl": true,
       "provider": "阿里云百炼",
       "pricing": "按量计费",
-      "requiresApiKey": true
+      "requiresApiKey": true,
+      "apiKeyUrl": "https://bailian.console.aliyun.com/?apiKey=1"
     }
   ]
 }
