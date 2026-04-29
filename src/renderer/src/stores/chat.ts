@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { StreamMessage } from '@shared/stream-protocol';
-import type { StreamChatMessage } from '@/types/chat';
+import type { ContentBlock, StreamChatMessage } from '@/types/chat';
 import { nanoid } from 'nanoid';
 
 /** Thread 消息状态 */
@@ -20,6 +20,67 @@ interface ThreadMessageState {
 }
 
 const MAX_MESSAGES_PER_THREAD = 50;
+
+type ToolBlock = Extract<ContentBlock, { type: 'tool' }>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getToolArguments(data?: Record<string, unknown>): unknown {
+  if (!data) return undefined;
+  if (data.arguments !== undefined) return data.arguments;
+  if (data.toolArgs !== undefined) return data.toolArgs;
+
+  const details = data.details;
+  if (isRecord(details) && details.args !== undefined) {
+    return details.args;
+  }
+  return undefined;
+}
+
+function getToolUpdateContent(msg: StreamMessage, data?: Record<string, unknown>): string {
+  if (typeof data?.delta === 'string') return data.delta;
+  if (msg.content) return msg.content;
+
+  const details = data?.details;
+  const partialResult = isRecord(details) ? details.partialResult : undefined;
+  if (isRecord(partialResult) && typeof partialResult.content === 'string') {
+    return partialResult.content;
+  }
+  if (typeof partialResult === 'string') return partialResult;
+  if (partialResult != null) {
+    try {
+      return JSON.stringify(partialResult);
+    } catch {
+      return String(partialResult);
+    }
+  }
+  return '';
+}
+
+function findToolBlock(message: StreamChatMessage, data?: Record<string, unknown>): ToolBlock | undefined {
+  const blocks = message.blocks;
+  const callId = typeof data?.callId === 'string' ? data.callId : undefined;
+  if (callId) {
+    const byCallId = [...blocks].reverse().find((block) => block.type === 'tool' && block.tool.callId === callId);
+    if (byCallId?.type === 'tool') return byCallId;
+  }
+
+  const toolName = typeof data?.toolName === 'string' ? data.toolName : undefined;
+  if (toolName) {
+    const byName = [...blocks]
+      .reverse()
+      .find((block) => block.type === 'tool' && block.tool.name === toolName && block.tool.status === 'calling');
+    if (byName?.type === 'tool') return byName;
+  }
+
+  const latestCalling = [...blocks].reverse().find((block) => block.type === 'tool' && block.tool.status === 'calling');
+  if (latestCalling?.type === 'tool') return latestCalling;
+
+  const latestTool = [...blocks].reverse().find((block) => block.type === 'tool');
+  return latestTool?.type === 'tool' ? latestTool : undefined;
+}
 
 export const useChatStore = defineStore(
   'chat',
@@ -128,11 +189,13 @@ export const useChatStore = defineStore(
           // 工具调用开始
           if (!threadState.currentAssistantMsg) break;
 
+          const data = msg.data as Record<string, unknown> | undefined;
           threadState.currentAssistantMsg.blocks.push({
             type: 'tool',
             tool: {
-              name: (msg.data?.toolName as string) || msg.content,
-              arguments: (msg.data?.arguments as string) || '',
+              name: (data?.toolName as string) || msg.content,
+              callId: data?.callId as string | undefined,
+              arguments: getToolArguments(data),
               status: 'calling'
             }
           });
@@ -143,11 +206,38 @@ export const useChatStore = defineStore(
           // 工具参数准备完成，回填到最近的 calling 工具块
           if (!threadState.currentAssistantMsg) break;
 
-          for (let i = threadState.currentAssistantMsg.blocks.length - 1; i >= 0; i--) {
-            const block = threadState.currentAssistantMsg.blocks[i];
-            if (block.type === 'tool' && block.tool.status === 'calling') {
-              block.tool.arguments = (msg.data?.arguments as string) || block.tool.arguments;
-              break;
+          const data = msg.data as Record<string, unknown> | undefined;
+          const block = findToolBlock(threadState.currentAssistantMsg, data);
+          if (block) {
+            const args = getToolArguments(data);
+            if (args !== undefined) {
+              block.tool.arguments = args;
+            }
+          }
+          break;
+        }
+
+        case 'tool:delta': {
+          // 工具执行过程输出，作为工具卡片的实时摘要素材
+          if (!threadState.currentAssistantMsg) break;
+
+          const data = msg.data as Record<string, unknown> | undefined;
+          const block = findToolBlock(threadState.currentAssistantMsg, data);
+          if (block) {
+            const args = getToolArguments(data);
+            if (args !== undefined && block.tool.arguments === undefined) {
+              block.tool.arguments = args;
+            }
+
+            const content = getToolUpdateContent(msg, data);
+            if (content) {
+              const updateType = (data?.updateType as string) === 'output' ? 'output' : 'progress';
+              block.tool.updates = block.tool.updates || [];
+              block.tool.updates.push({
+                type: updateType,
+                content,
+                timestamp: msg.timestamp || Date.now()
+              });
             }
           }
           break;
@@ -162,25 +252,17 @@ export const useChatStore = defineStore(
             threadState.currentAssistantMsg.stats.toolCalls++;
           }
 
-          const suspended = (msg.data as any)?.suspended === true;
-
-          // 从后往前找到最后一个 calling 状态的工具
-          for (let i = threadState.currentAssistantMsg.blocks.length - 1; i >= 0; i--) {
-            const block = threadState.currentAssistantMsg.blocks[i];
-            if (block.type === 'tool' && block.tool.status === 'calling') {
-              const toolArgs = msg.data?.toolArgs;
-              const doneArguments =
-                (msg.data?.arguments as string | undefined) ||
-                (typeof toolArgs === 'string'
-                  ? toolArgs
-                  : toolArgs && typeof toolArgs === 'object'
-                    ? JSON.stringify(toolArgs, null, 2)
-                    : undefined);
-              block.tool.arguments = doneArguments || block.tool.arguments;
-              block.tool.result = msg.content;
-              block.tool.status = suspended ? 'approval-pending' : 'done';
-              break;
+          const data = msg.data as Record<string, unknown> | undefined;
+          const suspended = data?.suspended === true;
+          const block = findToolBlock(threadState.currentAssistantMsg, data);
+          if (block) {
+            const doneArguments = getToolArguments(data);
+            if (doneArguments !== undefined) {
+              block.tool.arguments = doneArguments;
             }
+            block.tool.result =
+              data?.output ?? (msg.content && msg.content !== block.tool.name ? msg.content : undefined);
+            block.tool.status = suspended ? 'approval-pending' : 'done';
           }
           break;
         }

@@ -9,9 +9,11 @@ import type { HitlApprovalDecision } from '@shared/stream-protocol';
  */
 export interface ToolCallInfo {
   name: string;
-  arguments: string;
-  result?: string;
+  callId?: string;
+  arguments?: unknown;
+  result?: unknown;
   status: 'calling' | 'done' | 'error' | 'approval-pending';
+  updates?: ToolOutputEntry[];
 }
 
 /**
@@ -47,6 +49,15 @@ export interface ExecOutputEntry {
   timestamp: number;
   type: 'progress' | 'output' | 'result';
   toolName: string;
+  content: string;
+}
+
+/**
+ * 工具执行过程展示条目
+ */
+export interface ToolOutputEntry {
+  timestamp: number;
+  type: 'progress' | 'output' | 'result';
   content: string;
 }
 

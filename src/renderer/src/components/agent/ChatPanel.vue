@@ -279,6 +279,7 @@ async function loadThreadHistory(): Promise<void> {
               type: 'tool',
               tool: {
                 name: tool.name || 'unknown',
+                callId: tool.callId || undefined,
                 arguments: formatToolArguments(tool.arguments),
                 result: tool.result || '',
                 status: tool.status === 'calling' ? 'done' : tool.status
