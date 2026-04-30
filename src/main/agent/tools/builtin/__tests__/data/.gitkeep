@@ -1,0 +1,2 @@
+# Placeholder so the empty data/ dir is kept in git.
+# This directory is used as a sandboxed output target in exec-tool tests.
