@@ -345,24 +345,39 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
           class="group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-md cursor-pointer selectable"
           @click="handleCardClick(agent.id, $event)">
           <!-- 头部 -->
-          <div class="flex items-start justify-between mb-3">
-            <div class="flex items-center gap-3 min-w-0">
-              <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
-                <span class="i-carbon-bot text-xl"></span>
-              </div>
-              <div class="flex flex-col min-w-0">
-                <h3
-                  class="truncate text-base font-medium text-foreground group-hover:text-primary transition-colors"
-                  :title="agent.name">
-                  {{ agent.name }}
-                </h3>
-                <span class="text-xs text-muted-foreground">{{ formatTime(agent.updatedAt) }}</span>
+          <div class="flex items-center gap-3 min-w-0 mb-3">
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+              <span class="i-carbon-bot text-xl"></span>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <h3
+                class="truncate text-base font-medium text-foreground group-hover:text-primary transition-colors"
+                :title="agent.name">
+                {{ agent.name }}
+              </h3>
+              <div class="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+                <span class="shrink-0">{{ formatTime(agent.updatedAt) }}</span>
+                <template v-if="agent.model">
+                  <span class="shrink-0 text-border">·</span>
+                  <span class="i-carbon-machine-learning-model shrink-0"></span>
+                  <span class="truncate" :title="agent.model">{{
+                    agent.model.startsWith('@group:') ? agent.model.slice(7) : agent.model.split('/').pop()
+                  }}</span>
+                </template>
               </div>
             </div>
+          </div>
 
-            <!-- 快捷操作按钮 (Hover显示) -->
-            <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <!-- 描述 -->
+          <p class="mb-4 text-sm text-muted-foreground line-clamp-2 flex-1">
+            {{ agent.description || '暂无描述' }}
+          </p>
+
+          <!-- 底部：操作按钮组 + 对话 -->
+          <div class="flex items-center justify-end gap-2 mt-auto pt-4 border-t border-border/40">
+            <!-- 操作按钮组 + 对话按钮（并排） -->
+            <div class="shrink-0 flex items-center gap-1">
               <template v-if="confirmDeleteId !== agent.id">
                 <button
                   class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -382,12 +397,22 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
                   @click="handleDelete(agent.id, $event)">
                   <span class="i-carbon-trash-can"></span>
                 </button>
+                <div class="mx-1 h-4 w-px bg-border/60"></div>
+                <button
+                  class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="creatingTask === agent.id || !isGatewayReady"
+                  :title="isGatewayReady ? '开始对话' : '服务连接中'"
+                  @click="startNewTask(agent.id, $event)">
+                  <span v-if="creatingTask === agent.id" class="i-carbon-renew animate-spin"></span>
+                  <span v-else class="i-carbon-chat"></span>
+                  对话
+                </button>
               </template>
               <template v-else>
                 <button
                   class="rounded bg-destructive px-2 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
                   @click="handleDelete(agent.id, $event)"
-                  >确认</button
+                  >确认删除</button
                 >
                 <button
                   class="rounded bg-muted px-2 py-1 text-xs font-medium hover:bg-muted/80"
@@ -396,53 +421,6 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
                 >
               </template>
             </div>
-          </div>
-
-          <!-- 描述 -->
-          <p class="mb-4 text-sm text-muted-foreground line-clamp-2 flex-1">
-            {{ agent.description || '暂无描述' }}
-          </p>
-
-          <!-- 底部信息 -->
-          <div class="flex items-center justify-between mt-auto pt-4 border-t border-border/40">
-            <div class="flex flex-col gap-2 min-w-0">
-              <!-- 模型标签 -->
-              <div
-                v-if="agent.model"
-                class="flex items-center gap-1.5 text-xs text-muted-foreground truncate"
-                :title="agent.model">
-                <span class="i-carbon-machine-learning-model shrink-0"></span>
-                <span class="truncate">{{
-                  agent.model.startsWith('@group:') ? agent.model.slice(7) : agent.model.split('/').pop()
-                }}</span>
-              </div>
-
-              <!-- 技能标签 -->
-              <div
-                v-if="agent.skills && agent.skills.length > 0"
-                class="flex max-h-24 items-start gap-1 overflow-y-auto">
-                <span class="i-carbon-tool text-xs text-muted-foreground shrink-0"></span>
-                <div class="flex flex-1 flex-wrap gap-1">
-                  <span
-                    v-for="skill in agent.skills"
-                    :key="skill"
-                    class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                    {{ skill }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 开始任务按钮 -->
-            <button
-              class="shrink-0 flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="creatingTask === agent.id || !isGatewayReady"
-              :title="isGatewayReady ? '开始对话' : '服务连接中'"
-              @click="startNewTask(agent.id, $event)">
-              <span v-if="creatingTask === agent.id" class="i-carbon-renew animate-spin"></span>
-              <span v-else class="i-carbon-chat"></span>
-              对话
-            </button>
           </div>
         </div>
       </div>

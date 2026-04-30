@@ -29,8 +29,8 @@ const toggleDirectoryMode = inject<() => void>('toggleDirectoryMode', () => {});
 
 const DIRECTORY_META: Record<DirectoryMode, { title: string; icon: string }> = {
   'agent-home': { title: '智能体', icon: 'i-carbon-user-avatar' },
-  workspace: { title: '业务工作区', icon: 'i-carbon-folder-shared' },
-  project: { title: '业务数据', icon: 'i-carbon-folder-details' }
+  workspace: { title: '任务目录', icon: 'i-carbon-folder-shared' },
+  project: { title: '项目目录', icon: 'i-carbon-folder-details' }
 };
 
 const props = withDefaults(

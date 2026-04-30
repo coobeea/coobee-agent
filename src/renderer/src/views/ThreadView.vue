@@ -54,19 +54,17 @@ provide('directoryMode', directoryMode);
 provide('toggleDirectoryMode', toggleDirectoryMode);
 
 // 根据当前模式更新显示的目录路径
-function getAgentWorkspacePath(thread: { agentWorkspacePath?: string; workspacePath?: string }): string {
-  return thread.agentWorkspacePath || thread.workspacePath || '';
+function getTaskWorkspacePath(thread: { sessionPath?: string }): string {
+  // 任务空间：当前 Thread 的会话产物目录
+  // = .home/agents/{agentId}/sessions/{threadId}
+  return thread.sessionPath || '';
 }
 
-function updateProjectPathForMode(thread: {
-  agentHomePath?: string;
-  agentWorkspacePath?: string;
-  workspacePath?: string;
-}): void {
+function updateProjectPathForMode(thread: { agentHomePath?: string; sessionPath?: string }): void {
   if (directoryMode.value === 'agent-home') {
     projectPath.value = thread.agentHomePath || '';
   } else {
-    projectPath.value = getAgentWorkspacePath(thread);
+    projectPath.value = getTaskWorkspacePath(thread);
   }
 }
 

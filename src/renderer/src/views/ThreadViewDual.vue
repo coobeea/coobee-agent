@@ -80,12 +80,17 @@ async function updateProjectPathForMode(thread: {
   agentHomePath?: string;
   agentWorkspacePath?: string;
   workspacePath?: string;
+  sessionPath?: string;
 }): Promise<void> {
   if (rightTab.value === 'agent-home') {
     projectPath.value = thread.agentHomePath || '';
   } else if (rightTab.value === 'workspace') {
-    projectPath.value = thread.agentWorkspacePath || thread.workspacePath || '';
+    // 任务目录：当前 Thread 的会话产物目录
+    // = .home/agents/{agentId}/sessions/{threadId}
+    projectPath.value = thread.sessionPath || '';
   } else if (rightTab.value === 'project') {
+    // 项目目录：Agent 级跨任务共享的业务工作区
+    // = .home/agents/{agentId}/workspace
     projectPath.value = thread.agentWorkspacePath || thread.workspacePath || '';
   }
 }
@@ -195,14 +200,14 @@ watch(
         </button>
         <button
           type="button"
-          title="任务空间"
+          title="任务目录"
           class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('workspace')">
           <span class="i-carbon-folder-shared inline-block h-4 w-4" />
         </button>
         <button
           type="button"
-          title="工程目录"
+          title="项目目录"
           class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('project')">
           <span class="i-carbon-folder-details inline-block h-4 w-4" />
@@ -246,7 +251,7 @@ watch(
               "
               @click="openRightPanel('workspace')">
               <span class="i-carbon-folder-shared mr-1 inline-block h-3.5 w-3.5 align-middle" />
-              任务空间
+              任务目录
             </button>
             <button
               type="button"
@@ -258,7 +263,7 @@ watch(
               "
               @click="openRightPanel('project')">
               <span class="i-carbon-folder-details mr-1 inline-block h-3.5 w-3.5 align-middle" />
-              数据目录
+              项目目录
             </button>
             <button
               type="button"
