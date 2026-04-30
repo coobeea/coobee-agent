@@ -6,6 +6,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AgentContextResolver, type ResolveParams } from '../AgentContextResolver';
 import type { AgentDefinition } from '../../agents/types';
 
+const fsMocks = vi.hoisted(() => ({
+  mkdir: vi.fn(async () => undefined)
+}));
+
 type MockAgentStore = {
   _setMockAgent(agent: AgentDefinition): void;
   _clearMockAgents(): void;
@@ -24,6 +28,14 @@ vi.mock('@main/common/logger', () => ({
     warn: vi.fn(),
     error: vi.fn()
   })
+}));
+
+vi.mock('node:fs', () => ({
+  default: {
+    promises: {
+      mkdir: fsMocks.mkdir
+    }
+  }
 }));
 
 vi.mock('@main/agent/agents/AgentStore', () => {
@@ -50,7 +62,7 @@ vi.mock('@main/common/env', () => ({
   Env: {
     paths: {
       userHome: '/mock/home',
-      homesDir: '/mock/home/agents',
+      userAgentsDir: '/mock/home/agents',
       home: '/mock/system/home',
       temp: '/tmp'
     }
@@ -69,6 +81,9 @@ describe('AgentContextResolver', () => {
     // 清理 mock agents
     const store = await getMockAgentStore();
     store._clearMockAgents();
+
+    fsMocks.mkdir.mockClear();
+    fsMocks.mkdir.mockResolvedValue(undefined);
   });
 
   describe('参数验证', () => {
@@ -145,6 +160,7 @@ describe('AgentContextResolver', () => {
       expect(context.effectiveModel).toBe('openai/gpt-4');
       expect(context.sessionId).toBe('session-456');
       expect(context.sessionDir).toBe('/custom/data/dir/sessions/session-456');
+      expect(fsMocks.mkdir).toHaveBeenCalledWith('/custom/data/dir', { recursive: true });
     });
 
     it('应该使用默认 dataDirectory', async () => {
@@ -171,6 +187,31 @@ describe('AgentContextResolver', () => {
       const context = await resolver.resolve(params);
 
       expect(context.dataDirectory).toBe('/mock/home/data/agent-789');
+      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/data/agent-789', { recursive: true });
+    });
+
+    it('创建 dataDirectory 失败时应该抛出错误', async () => {
+      const store = await getMockAgentStore();
+      const mockAgent: AgentDefinition = {
+        id: 'agent-mkdir-fail',
+        name: 'Test Agent',
+        description: 'Test',
+        instructions: '',
+        model: 'openai/gpt-4',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'user',
+        version: 1
+      };
+      store._setMockAgent(mockAgent);
+      fsMocks.mkdir.mockRejectedValueOnce(new Error('permission denied'));
+
+      await expect(
+        resolver.resolve({
+          agentId: 'agent-mkdir-fail',
+          sessionId: 'session-mkdir-fail'
+        })
+      ).rejects.toThrow('Failed to create dataDirectory');
     });
 
     it('应该使用 modelOverride', async () => {

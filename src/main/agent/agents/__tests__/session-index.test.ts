@@ -12,18 +12,18 @@ describe('Agent Home Sessions Index', () => {
   let tempDir: string;
   let threadsDir: string;
   let workspacesDir: string;
-  let homesDir: string;
+  let agentHomesDir: string;
 
   beforeEach(async () => {
     const os = await import('node:os');
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-session-index-test-'));
     threadsDir = path.join(tempDir, 'threads');
     workspacesDir = path.join(tempDir, 'workspaces');
-    homesDir = path.join(tempDir, 'homes');
+    agentHomesDir = path.join(tempDir, 'agents');
 
     fs.mkdirSync(threadsDir, { recursive: true });
     fs.mkdirSync(workspacesDir, { recursive: true });
-    fs.mkdirSync(homesDir, { recursive: true });
+    fs.mkdirSync(agentHomesDir, { recursive: true });
 
     ThreadStore.resetInstance();
     const { AgentStore } = await import('@main/agent/agents/AgentStore');
@@ -40,16 +40,15 @@ describe('Agent Home Sessions Index', () => {
     const store = new ThreadStore(threadsDir, workspacesDir);
     await store.init();
 
-    // 模拟 Env.paths.homesDir（通过设置环境变量）
+    // 模拟 Env.paths.userAgentsDir
     const originalEnvGetter = Object.getOwnPropertyDescriptor((await import('@main/common/env')).Env, 'paths');
 
     Object.defineProperty((await import('@main/common/env')).Env, 'paths', {
       get: () => ({
-        homesDir,
         threadsDir,
         workspacesDir,
         userHome: tempDir,
-        userAgentsDir: path.join(tempDir, 'agent-defs'),
+        userAgentsDir: agentHomesDir,
         builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
@@ -63,7 +62,7 @@ describe('Agent Home Sessions Index', () => {
       });
 
       // 验证 sessions.jsonl 被创建
-      const sessionsPath = path.join(homesDir, 'test-agent', 'sessions.jsonl');
+      const sessionsPath = path.join(agentHomesDir, 'test-agent', 'sessions.jsonl');
       expect(fs.existsSync(sessionsPath)).toBe(true);
 
       // 读取内容
@@ -90,11 +89,10 @@ describe('Agent Home Sessions Index', () => {
 
     Object.defineProperty((await import('@main/common/env')).Env, 'paths', {
       get: () => ({
-        homesDir,
         threadsDir,
         workspacesDir,
         userHome: tempDir,
-        userAgentsDir: path.join(tempDir, 'agent-defs'),
+        userAgentsDir: agentHomesDir,
         builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
@@ -107,7 +105,7 @@ describe('Agent Home Sessions Index', () => {
       const thread3 = await store.create({ title: 'Thread 3', agentId: 'test-agent' });
 
       // 验证内容
-      const sessionsPath = path.join(homesDir, 'test-agent', 'sessions.jsonl');
+      const sessionsPath = path.join(agentHomesDir, 'test-agent', 'sessions.jsonl');
       const content = fs.readFileSync(sessionsPath, 'utf-8');
       const lines = content.trim().split('\n');
 
@@ -132,11 +130,10 @@ describe('Agent Home Sessions Index', () => {
 
     Object.defineProperty((await import('@main/common/env')).Env, 'paths', {
       get: () => ({
-        homesDir,
         threadsDir,
         workspacesDir,
         userHome: tempDir,
-        userAgentsDir: path.join(tempDir, 'agent-defs'),
+        userAgentsDir: agentHomesDir,
         builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
@@ -149,13 +146,13 @@ describe('Agent Home Sessions Index', () => {
       await store.create({ title: 'Thread B1', agentId: 'agent-b' });
 
       // 验证 agent-a 的索引
-      const sessionsPathA = path.join(homesDir, 'agent-a', 'sessions.jsonl');
+      const sessionsPathA = path.join(agentHomesDir, 'agent-a', 'sessions.jsonl');
       const contentA = fs.readFileSync(sessionsPathA, 'utf-8');
       const linesA = contentA.trim().split('\n');
       expect(linesA.length).toBe(2);
 
       // 验证 agent-b 的索引
-      const sessionsPathB = path.join(homesDir, 'agent-b', 'sessions.jsonl');
+      const sessionsPathB = path.join(agentHomesDir, 'agent-b', 'sessions.jsonl');
       const contentB = fs.readFileSync(sessionsPathB, 'utf-8');
       const linesB = contentB.trim().split('\n');
       expect(linesB.length).toBe(1);
@@ -169,7 +166,7 @@ describe('Agent Home Sessions Index', () => {
   it('AgentHomeManager 应能正确读取 sessions 索引', async () => {
     // 手动创建 sessions.jsonl
     const agentId = 'test-agent';
-    const homeDir = path.join(homesDir, agentId);
+    const homeDir = path.join(agentHomesDir, agentId);
     fs.mkdirSync(homeDir, { recursive: true });
 
     const sessionsPath = path.join(homeDir, 'sessions.jsonl');
@@ -182,7 +179,7 @@ describe('Agent Home Sessions Index', () => {
     fs.writeFileSync(sessionsPath, content, 'utf-8');
 
     // 使用 AgentHomeManager 读取
-    const manager = new AgentHomeManager(homesDir);
+    const manager = new AgentHomeManager(agentHomesDir);
     const result = manager.readSessionIndex(agentId);
 
     expect(result.length).toBe(2);
@@ -191,7 +188,7 @@ describe('Agent Home Sessions Index', () => {
   });
 
   it('读取不存在的 agent 应返回空数组', () => {
-    const manager = new AgentHomeManager(homesDir);
+    const manager = new AgentHomeManager(agentHomesDir);
     const result = manager.readSessionIndex('non-existent-agent');
 
     expect(result).toEqual([]);
@@ -199,13 +196,13 @@ describe('Agent Home Sessions Index', () => {
 
   it('sessions.jsonl 为空时应返回空数组', () => {
     const agentId = 'test-agent';
-    const homeDir = path.join(homesDir, agentId);
+    const homeDir = path.join(agentHomesDir, agentId);
     fs.mkdirSync(homeDir, { recursive: true });
 
     const sessionsPath = path.join(homeDir, 'sessions.jsonl');
     fs.writeFileSync(sessionsPath, '', 'utf-8');
 
-    const manager = new AgentHomeManager(homesDir);
+    const manager = new AgentHomeManager(agentHomesDir);
     const result = manager.readSessionIndex(agentId);
 
     expect(result).toEqual([]);

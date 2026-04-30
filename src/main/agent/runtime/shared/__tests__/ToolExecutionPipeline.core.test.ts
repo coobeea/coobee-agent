@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { executeToolPipeline, createFallbackToolContext } from '../ToolExecutionPipeline';
+import { executeToolPipeline } from '../ToolExecutionPipeline';
+import { createTestToolContext } from '../../../testing/TestToolContext';
 import type { ToolDefinition } from '../../../tools/types';
 import { ToolCategory } from '../../../tools/types';
 import { z } from 'zod';
@@ -33,12 +34,12 @@ vi.mock('../../sandbox', () => ({
 
 describe('ToolExecutionPipeline Core', () => {
   let mockTool: ToolDefinition;
-  let context: ReturnType<typeof createFallbackToolContext>;
+  let context: ReturnType<typeof createTestToolContext>;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    context = createFallbackToolContext({ workspaceRoot: '/mock/workspace', sessionId: 'test-session' });
+    context = createTestToolContext({ workspaceRoot: '/mock/workspace', sessionId: 'test-session' });
     context.toolPolicy = { allow: [], deny: [], confirm: [] };
 
     mockIsToolAllowed.mockReturnValue(true);

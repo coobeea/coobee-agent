@@ -2,15 +2,15 @@
  * Skill 管理器 — 文件驱动的 Skill 生命周期管理
  *
  * 职责：
+ *   - 管理 Skill 搜索路径来源（系统内置、扩展、市场/用户、Agent 私有等）
  *   - 扫描目录下所有 SKILL.md 文件并解析 frontmatter
- *   - 支持多级搜索路径（内置 → Extension → 用户 → 工作空间），后到覆盖（高优先级覆盖低优先级）
+ *   - 支持多级搜索路径（系统内置 → Extension → 市场/用户 → Agent → Workspace），后到覆盖
  *   - 动态注册/注销（Extension 贡献）
  *   - 动态添加搜索路径
  *   - 查询（按名称、全量）
  *   - 格式化输出（生成 <skill> XML 块供提示词注入）
  *
  * 不负责：
- *   - 路径的定义和存储（由 Env 提供）
  *   - 环境信息的构建（由 AgentEnv 负责）
  */
 
@@ -32,6 +32,30 @@ export interface SkillCacheStats {
 export interface InvalidateCacheOptions {
   /** 立即清理缓存，跳过防抖 */
   immediate?: boolean;
+}
+
+export type SkillSearchPathKind = 'system' | 'extension' | 'marketplace' | 'agent' | 'workspace';
+
+export interface SkillSearchPathSource {
+  /** 来源类型，用于运行时环境展示和诊断 */
+  kind: SkillSearchPathKind;
+  /** 人类可读标签 */
+  label: string;
+  /** Skill 搜索目录绝对路径 */
+  path: string;
+  /** 优先级，低优先级先扫描，高优先级后扫描并覆盖同名 Skill */
+  priority: number;
+  /** 是否只读；只读来源不会由 SkillManager 主动创建 */
+  readonly?: boolean;
+  /** 扩展贡献目录所属 extensionId */
+  extensionId?: string;
+}
+
+export interface BuildSkillSearchPathSourcesOptions {
+  /** 当前工作空间路径（可选） */
+  workspace?: string;
+  /** Agent Home 路径（可选，用于 Agent 私有 Skill） */
+  agentHome?: string;
 }
 
 // ==================== Skill 文件解析 ====================
@@ -272,11 +296,98 @@ export class SkillManager {
     );
   }
 
+  /**
+   * 构建默认 Skill 搜索路径来源。
+   *
+   * 优先级从低到高：
+   *   1. system        — 系统内置 Skill
+   *   2. extension     — Extension 注册贡献的 Skill
+   *   3. marketplace   — 用户/市场安装的 Skill（.home/skills）
+   *   4. agent         — Agent 私有 Skill（.home/agents/{agentId}/skills）
+   *   5. workspace     — 当前工作空间临时 Skill
+   */
+  static async buildDefaultSearchPathSources(
+    options: BuildSkillSearchPathSourcesOptions = {}
+  ): Promise<SkillSearchPathSource[]> {
+    const { Env } = await import('@main/common/env');
+    const sources: SkillSearchPathSource[] = [
+      {
+        kind: 'system',
+        label: 'system_builtin',
+        path: Env.paths.builtinSkillsDir,
+        priority: 10,
+        readonly: true
+      }
+    ];
+
+    try {
+      const { ExtensionManager } = await import('@main/extension');
+      const registry = ExtensionManager.getRegistry();
+      if (registry) {
+        for (const item of registry.getSkillDirs()) {
+          sources.push({
+            kind: 'extension',
+            label: `extension:${item.extensionId}`,
+            path: item.dir,
+            priority: 20,
+            readonly: true,
+            extensionId: item.extensionId
+          });
+        }
+      }
+    } catch {
+      // Extension 系统未初始化时跳过扩展来源。
+    }
+
+    sources.push({
+      kind: 'marketplace',
+      label: 'marketplace',
+      path: Env.paths.userSkillsDir,
+      priority: 30
+    });
+
+    if (options.agentHome) {
+      sources.push({
+        kind: 'agent',
+        label: 'agent_private',
+        path: path.join(options.agentHome, 'skills'),
+        priority: 40
+      });
+    }
+
+    if (options.workspace) {
+      sources.push({
+        kind: 'workspace',
+        label: 'workspace',
+        path: path.join(options.workspace, 'skills'),
+        priority: 50
+      });
+    }
+
+    return SkillManager.sortSearchPathSources(sources);
+  }
+
+  static searchPathsFromSources(sources: SkillSearchPathSource[]): string[] {
+    return SkillManager.sortSearchPathSources(sources).map((source) => source.path);
+  }
+
+  private static sortSearchPathSources(sources: SkillSearchPathSource[]): SkillSearchPathSource[] {
+    return [...sources]
+      .map((source) => ({
+        ...source,
+        path: path.resolve(source.path)
+      }))
+      .sort((a, b) => a.priority - b.priority);
+  }
+
   /** 已加载的 Skill（name → SkillDefinition） */
   private skills = new Map<string, SkillDefinition>();
 
   /** 目录名 → Skill name 的映射（用于后到覆盖时移除旧版本） */
   private dirNameToSkillName = new Map<string, string>();
+
+  /** 已注册的搜索路径来源 */
+  private searchPathSources: SkillSearchPathSource[] = [];
 
   /** 敏感信息目录路径（用于加载 skills.json5） */
   private secretsDir: string | undefined;
@@ -287,8 +398,8 @@ export class SkillManager {
    * 扫描多个搜索路径，加载所有 SKILL.md
    *
    * 按搜索路径顺序扫描，**后到覆盖**（同名目录后发现的覆盖先发现的）。
-   * 搜索路径顺序应为 低→高 优先级（内置 → Extension → 用户 → 工作空间）。
-   * 这样工作空间中的同名 Skill 会覆盖内置 Skill，实现用户定制。
+   * 搜索路径顺序应为低→高优先级。
+   * 例如：系统内置 → Extension → 市场/用户 → Agent → Workspace。
    *
    * @param searchPaths Skill 搜索路径数组（低 → 高优先级）
    * @param secretsDir 可选的敏感信息目录路径（用于加载 skills.json5 中的配置）
@@ -328,6 +439,35 @@ export class SkillManager {
 
     log.info(`[SkillManager] 扫描加载 ${this.skills.size} 个 Skill: ${[...this.skills.keys()].join(', ')}`);
     return this.getAll();
+  }
+
+  registerSearchPath(source: SkillSearchPathSource): void {
+    const normalized = SkillManager.sortSearchPathSources([source])[0];
+    const exists = this.searchPathSources.some(
+      (item) => item.kind === normalized.kind && item.label === normalized.label && item.path === normalized.path
+    );
+    if (!exists) {
+      this.searchPathSources.push(normalized);
+      this.searchPathSources = SkillManager.sortSearchPathSources(this.searchPathSources);
+    }
+  }
+
+  registerSearchPaths(sources: SkillSearchPathSource[]): void {
+    for (const source of sources) {
+      this.registerSearchPath(source);
+    }
+  }
+
+  getSearchPathSources(): SkillSearchPathSource[] {
+    return [...this.searchPathSources];
+  }
+
+  getSearchPaths(): string[] {
+    return SkillManager.searchPathsFromSources(this.searchPathSources);
+  }
+
+  scanRegisteredSkills(secretsDir?: string): SkillDefinition[] {
+    return this.scanSkills(this.getSearchPaths(), secretsDir);
   }
 
   /** 内部执行实际的文件系统扫描 */

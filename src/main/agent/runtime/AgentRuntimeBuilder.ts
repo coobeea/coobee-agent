@@ -282,6 +282,20 @@ export class AgentRuntimeBuilder {
       throw new Error('API Key 未配置');
     }
 
+    if (resolved.sessionMode === 'file' && !resolved.sessionDir) {
+      throw new Error(
+        `[AgentRuntimeBuilder] sessionDir is required for file session mode: ` +
+          `sessionId=${resolved.sessionId || '(unknown)'}`
+      );
+    }
+
+    if (!this._lightweight && !resolved.workspaceRoot) {
+      throw new Error(
+        `[AgentRuntimeBuilder] workspaceRoot is required for non-lightweight runtime: ` +
+          `sessionId=${resolved.sessionId || '(unknown)'}`
+      );
+    }
+
     let runtime: AgentRuntime;
     if (this.options.type === 'pi-mono') {
       runtime = new PiMonoAgentRuntime(resolved);

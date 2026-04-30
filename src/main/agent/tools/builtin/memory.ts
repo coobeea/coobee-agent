@@ -4,11 +4,11 @@
  * 让 Agent 搜索和管理自己的记忆（跨 Agent 级和会话级）。
  *
  * 存储结构：
- *   Agent 级（永久）：homes/{agentId}/memory/  — 由 memory-agent 扩展自动分类
+ *   Agent 级（永久）：agents/{agentId}/memory/  — 由 memory-agent 扩展自动分类
  *   Session 级（随会话）：{workspace}/memory/   — 由 memory-thread 扩展自动写入
  *
  * scope:
- *   - "agent"   — 操作 Agent 级记忆（homes/{agentId}/memory/）
+ *   - "agent"   — 操作 Agent 级记忆（agents/{agentId}/memory/）
  *   - "session" — 操作 Session 级记忆（{workspace}/memory/）
  *   - 不指定    — search/list 同时搜两层，write 默认写 session
  *
@@ -45,7 +45,7 @@ export const memoryTool: ToolDefinition = {
   description:
     'Search and manage Agent memory across two tiers.\n\n' +
     'Tiers:\n' +
-    '- agent: persistent memory in homes/{agentId}/memory/ (auto-classified by memory-agent extension)\n' +
+    '- agent: persistent memory in agents/{agentId}/memory/ (auto-classified by memory-agent extension)\n' +
     '- session: current session memory in {workspace}/memory/ (auto-written by memory-thread extension)\n\n' +
     'Actions:\n' +
     '- list: list memory files\n' +
@@ -323,7 +323,7 @@ function resolveMemoryRoots(context?: ToolExecutionContext): MemoryRoots {
   }
 
   if (context?.agentId && context?.userHome) {
-    const agentDir = path.join(context.userHome, 'homes', context.agentId, 'memory');
+    const agentDir = path.join(context.userHome, 'agents', context.agentId, 'memory');
     if (fs.existsSync(agentDir)) {
       roots.agentMemoryDir = agentDir;
     }

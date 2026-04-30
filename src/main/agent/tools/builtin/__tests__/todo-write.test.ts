@@ -41,12 +41,12 @@ vi.mock('electron', () => {
 
 import { todoWriteTool, getSessionTodos, clearSessionTodos } from '../todo-write';
 import type { ToolResult, ToolStreamUpdate, ToolExecutionContext } from '../../types';
-import { createFallbackToolContext } from '../../../runtime/shared/ToolExecutionPipeline';
+import { createTestToolContext } from '../../../testing/TestToolContext';
 
 // ===== 辅助函数 =====
 
 function makeContext(workspaceRoot: string): ToolExecutionContext {
-  return createFallbackToolContext({ workspaceRoot });
+  return createTestToolContext({ workspaceRoot });
 }
 
 async function consumeGenerator(

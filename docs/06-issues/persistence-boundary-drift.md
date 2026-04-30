@@ -1,9 +1,11 @@
 # Thread / Session / History / Events 持久化边界漂移
 
 ## 发现日期
+
 2026-04-23
 
 ## 问题概述
+
 当前的持久化拆分设计本身是合理的：
 
 - `threads/{id}.json` 负责 Thread 元数据
@@ -59,7 +61,7 @@
 其中最典型的是 `agentHomePath`：
 
 - `ThreadStore.create()` 会把它写进 ThreadDefinition
-- `toIndexEntry()` 又要兼容性地把旧路径中的 `/homes/` 替换成 `/agents/`
+- `toIndexEntry()` 曾经需要兼容性地修正旧版 Agent Home 路径
 
 这已经说明 Thread 元数据里保存了会随着目录迁移而陈旧的文件系统路径。
 
@@ -98,7 +100,7 @@ extractMessagesFromSession(...)
 但它真正读取的却是：
 
 ```typescript
-workspaces/{id}/history.jsonl
+workspaces / { id } / history.jsonl;
 ```
 
 这说明在接口语义上，已经把：
@@ -213,6 +215,7 @@ StreamEmitter -> EventBus -> streaming/consumers/EventWriter -> workspaces/{id}/
 4. `ThreadDefinition` 中的路径/名称快照随着迁移或配置变更逐渐陈旧
 
 ## 优先级
+
 高
 
 这是结构边界问题，不一定马上爆炸，但会持续放大理解成本和改造成本。

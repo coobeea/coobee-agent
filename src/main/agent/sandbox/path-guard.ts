@@ -44,11 +44,13 @@ export interface PathGuardError {
  */
 export function resolveSandboxPath(
   filePath: string,
-  context?: SandboxContext | { workspaceRoot: string; sandboxRoot?: string },
+  context?: SandboxContext | { workspaceRoot: string; sandboxRoot?: string; writableRoots?: string[] },
   options?: { readOnly?: boolean }
 ): PathResolveResult {
-  // 没有 context 时降级为 process.cwd()（兼容测试场景）
-  const root = context?.sandboxRoot || context?.workspaceRoot || process.cwd();
+  let root = context?.sandboxRoot || context?.workspaceRoot;
+  if (!root) {
+    throw new Error(`[PathGuard] workspaceRoot is required to resolve sandbox path: ${filePath}`);
+  }
 
   // 解析路径
   let absolutePath: string;
@@ -90,6 +92,12 @@ export function resolveSandboxPath(
   }
 
   // === 以下为写操作的严格检查 ===
+  const writableRoots = 'writableRoots' in (context || {}) ? context?.writableRoots || [] : [];
+  const boundaryRoots = [root, ...writableRoots].filter(Boolean).map((item) => resolve(item));
+  const matchedRoot = boundaryRoots.find((boundary) => isPathWithinBoundary(absolutePath, boundary));
+  if (matchedRoot) {
+    root = matchedRoot;
+  }
 
   // 1. 字符串级检查（resolve 后的路径）
   const rel = relative(root, absolutePath);
@@ -239,6 +247,11 @@ export function resolveSandboxPath(
   return { path: absolutePath };
 }
 
+function isPathWithinBoundary(absolutePath: string, boundaryRoot: string): boolean {
+  const rel = relative(boundaryRoot, absolutePath);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
 /**
  * 将 PathGuardError 转换为工具可以直接 return 的 ToolResult 格式
  *
@@ -274,7 +287,10 @@ export function resolveWorkingDirectory(context?: SandboxContext | { workspaceRo
   if (context && 'docker' in context && context.docker?.running) {
     return (context as SandboxContext).docker!.workdir;
   }
-  return context?.workspaceRoot || process.cwd();
+  if (!context?.workspaceRoot) {
+    throw new Error('[PathGuard] workspaceRoot is required to resolve working directory');
+  }
+  return context.workspaceRoot;
 }
 
 /**

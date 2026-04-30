@@ -55,10 +55,8 @@ export interface AgentEnv {
   // --- Skill 系统 ---
   /** Skill 搜索路径（按优先级从低到高） */
   skillPaths: string[];
-  /** 内置 Skill 目录 */
-  builtinSkillsDir: string;
-  /** 用户 Skill 目录 */
-  userSkillsDir: string;
+  /** Skill 搜索路径来源（按优先级从低到高） */
+  skillPathSources: import('./skills').SkillSearchPathSource[];
 
   // --- Extension 系统 ---
   /** Extension 搜索路径（按优先级从低到高） */
@@ -79,7 +77,7 @@ export interface AgentEnv {
   agentId?: string;
   /** Agent 名称 */
   agentName?: string;
-  /** Agent Home 目录（homes/{agentId}/，跨会话持久化空间） */
+  /** Agent Home 目录（agents/{agentId}/，跨会话持久化空间） */
   agentHome?: string;
 
   // --- 能力清单 ---
@@ -111,8 +109,10 @@ export interface AgentEnv {
 export async function buildAgentEnv(sessionId: string, workspace: string, agentHome?: string): Promise<AgentEnv> {
   // 延迟导入 Env，避免测试环境循环依赖
   const { Env } = await import('@main/common/env');
+  const { SkillManager } = await import('./skills');
 
-  const skillPaths = await Env.getSkillSearchPaths(workspace, agentHome);
+  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace, agentHome });
+  const skillPaths = SkillManager.searchPathsFromSources(skillPathSources);
   const extensionPaths = await Env.getExtensionSearchPaths(workspace);
 
   // Extension 系统信息
@@ -123,15 +123,6 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
     const { ExtensionManager } = await import('@main/extension');
     const registry = ExtensionManager.getRegistry();
     if (registry) {
-      // 合并扩展贡献的 Skill 目录
-      // 优先级：内置(1) → 扩展贡献(1.5) → 用户级(2) → 工作空间(3)
-      const extSkillDirs = registry.getSkillDirs().map((s) => s.dir);
-      if (extSkillDirs.length > 0) {
-        const builtinIdx = skillPaths.indexOf(Env.paths.builtinSkillsDir);
-        const insertIdx = builtinIdx >= 0 ? builtinIdx + 1 : 0;
-        skillPaths.splice(insertIdx, 0, ...extSkillDirs);
-      }
-
       // 已加载的 Extension ID 列表
       loadedExtensions = registry.getExtensionIds();
     }
@@ -192,8 +183,7 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
 
     // Skill 系统
     skillPaths,
-    builtinSkillsDir: Env.paths.builtinSkillsDir,
-    userSkillsDir: Env.paths.userSkillsDir,
+    skillPathSources,
 
     // Extension 系统
     extensionPaths,
@@ -228,6 +218,10 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
  */
 export function formatRuntimePaths(env: AgentEnv): string {
   const extensionsList = env.loadedExtensions.length > 0 ? env.loadedExtensions.join(', ') : 'none';
+  const skillPathsList =
+    env.skillPathSources.length > 0
+      ? '\n' + env.skillPathSources.map((source) => `  - ${source.label} (${source.kind}): ${source.path}`).join('\n')
+      : ' none';
 
   return `<runtime_environment>
 Agent:
@@ -244,7 +238,7 @@ ${env.dataDirectory ? `- data_directory: ${env.dataDirectory} (persistent busine
 ${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)` : ''}
 - workspace: ${env.workspace} (temporary files for the current task)
 - config: ${env.configDir}
-- skills: builtin=${env.builtinSkillsDir}, user=${env.userSkillsDir}
+- skill_search_paths:${skillPathsList}
 - agents_definitions: ${env.userAgentsDir}
 
 File usage:

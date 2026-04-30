@@ -402,9 +402,10 @@ class AgentExecutor {
           workspaceRoot: workspaceDir,
           agentId: request.agentId,
           agentName,
+          thinkingLevel: request.enableThinking === false ? 'off' : undefined,
           hasRequestTools: false
         });
-        workspaceDir = preparedEnv?.workspace ?? workspaceDir;
+        workspaceDir = preparedEnv.workspace;
 
         // 写入用户消息到 history.jsonl
         streamConsumersManager.writeUserMessage(sessionId, message);
@@ -613,6 +614,8 @@ class AgentExecutor {
 
     if (request.workspaceRoot) {
       builder.workspaceRoot(request.workspaceRoot);
+      builder.sessionDir(request.workspaceRoot);
+      builder.contextDir(request.workspaceRoot);
     }
     if (request.maxTurns !== undefined) {
       builder.maxTurns(request.maxTurns);

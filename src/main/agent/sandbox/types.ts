@@ -105,6 +105,13 @@ export interface SandboxConfig {
    * 未设置时以 workspaceRoot 为边界。
    */
   sandboxRoot?: string;
+  /**
+   * 额外可写根目录。
+   *
+   * 默认写操作只允许落在 workspaceRoot/sandboxRoot 内；Agent 的持久业务数据目录
+   * 不属于当前任务 workspace，需要显式加入这里。
+   */
+  writableRoots?: string[];
   /** 工具策略 */
   toolPolicy?: SandboxToolPolicy;
   /** Docker 配置（mode='docker' 时必须） */
@@ -138,6 +145,8 @@ export interface SandboxContext {
   workspaceRoot: string;
   /** 沙箱根目录（路径守卫使用） */
   sandboxRoot?: string;
+  /** 额外可写根目录（如 Agent dataDirectory） */
+  writableRoots?: string[];
   /** 已解析的工具策略 */
   toolPolicy: ResolvedToolPolicy;
   /** Docker 容器信息（mode='docker' 时存在） */

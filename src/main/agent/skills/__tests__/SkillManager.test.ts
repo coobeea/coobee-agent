@@ -266,6 +266,33 @@ Content.`;
       expect(skills[0].description).toBe('V3 workspace');
     });
 
+    it('通过来源注册表管理搜索路径并按优先级扫描', () => {
+      const system = path.join(tmpDir, 'system');
+      const marketplace = path.join(tmpDir, 'marketplace');
+      const agent = path.join(tmpDir, 'agent');
+      fs.mkdirSync(system, { recursive: true });
+      fs.mkdirSync(marketplace, { recursive: true });
+      fs.mkdirSync(agent, { recursive: true });
+
+      createSkill(system, 'shared-skill', 'System Skill', 'system');
+      createSkill(marketplace, 'shared-skill', 'Marketplace Skill', 'marketplace');
+      createSkill(agent, 'shared-skill', 'Agent Skill', 'agent');
+
+      manager.registerSearchPaths([
+        { kind: 'agent', label: 'agent_private', path: agent, priority: 40 },
+        { kind: 'system', label: 'system_builtin', path: system, priority: 10, readonly: true },
+        { kind: 'marketplace', label: 'marketplace', path: marketplace, priority: 30 }
+      ]);
+
+      expect(manager.getSearchPaths()).toEqual([system, marketplace, agent]);
+
+      const skills = manager.scanRegisteredSkills();
+
+      expect(skills).toHaveLength(1);
+      expect(skills[0].name).toBe('Agent Skill');
+      expect(skills[0].description).toBe('agent');
+    });
+
     it('跳过隐藏目录', () => {
       createSkill(tmpDir, '.hidden', 'Hidden', 'Should not load');
       createSkill(tmpDir, 'visible', 'Visible', 'Should load');

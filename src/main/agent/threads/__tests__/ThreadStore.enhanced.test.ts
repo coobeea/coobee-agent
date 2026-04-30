@@ -34,9 +34,8 @@ vi.mock('@main/common/env', () => ({
       paths: {
         threadsDir: tmpDir,
         workspacesDir,
-        homesDir: path.join(tmpDir, '..', 'agents'),
         userHome: tmpDir,
-        userAgentsDir: path.join(tmpDir, '..', 'agent-defs'),
+        userAgentsDir: path.join(tmpDir, '..', 'agents'),
         builtinAgentsDir: path.join(tmpDir, '..', 'builtin-agents')
       },
       getAgentHomeDir: async (agentId: string) => path.join(tmpDir, '..', 'agents', agentId),

@@ -41,27 +41,6 @@ class AgentsConfig {
   }
 
   /**
-   * Agent Home 总根目录
-   *
-   * 每个 Agent 拥有独立的持久化目录，跨会话保留身份、记忆、规则：
-   *   homes/{agentId}/
-   *   ├── SOUL.md          人格与价值观
-   *   ├── IDENTITY.md      身份名片
-   *   ├── USER.md          主人档案
-   *   ├── NOTES.md         环境工具备注
-   *   ├── AGENTS.md        Agent 级规则
-   *   ├── HEARTBEAT.md     心跳任务清单
-   *   ├── MEMORY.md        长期记忆精华
-   *   ├── BOOTSTRAP.md     首次引导脚本（完成后自删除）
-   *   └── memory/          每日对话日志
-   *
-   * @example 开发: <项目>/.home/homes | 生产: ~/.coobee-agent/homes
-   */
-  get homes(): string {
-    return path.join(this.userHome, 'homes');
-  }
-
-  /**
    * 获取指定 Agent 的 Home 目录，首次访问时自动初始化
    *
    * Agent Home 是 Agent 的持久化空间（跨会话保留），包含：
@@ -72,7 +51,7 @@ class AgentsConfig {
    * @returns Home 目录绝对路径
    */
   getHomeDir(agentId: string): string {
-    const homeDir = path.join(this.homes, agentId);
+    const homeDir = path.join(this.user, agentId);
     if (!fs.existsSync(homeDir)) {
       fs.mkdirSync(homeDir, { recursive: true });
     }

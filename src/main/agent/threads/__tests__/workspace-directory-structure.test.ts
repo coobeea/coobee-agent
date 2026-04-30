@@ -22,10 +22,9 @@ vi.mock('../../../common/env', () => ({
     paths: {
       logPath: '/tmp/test.log',
       userHome: '/tmp',
-      homesDir: '/tmp/coobee-agent-test-agents',
       workspacesDir: '/tmp/test-workspaces',
       threadsDir: '/tmp/test-threads',
-      userAgentsDir: '/tmp/test-agent-defs',
+      userAgentsDir: '/tmp/coobee-agent-test-agents',
       builtinAgentsDir: '/tmp/test-builtin-agents'
     }
   }

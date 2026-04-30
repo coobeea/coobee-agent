@@ -17,6 +17,7 @@
  */
 
 import path from 'node:path';
+import fs from 'node:fs';
 import { createLogger } from '@main/common/logger';
 import { normalizeModelSpec } from '../provider/ModelSpec';
 
@@ -36,7 +37,7 @@ export interface AgentContext {
   /** Agent 名称 */
   agentName: string;
 
-  /** Agent Home 路径（homes/{agentId}/，跨会话持久化空间） */
+  /** Agent Home 路径（agents/{agentId}/，跨会话持久化空间） */
   agentHomePath: string;
 
   /** Agent 专属的数据目录（持久化业务数据） */
@@ -156,12 +157,11 @@ export class AgentContextResolver {
     // 4.1 Agent Home 路径
     let agentHomePath: string;
     try {
-      const homeManager = new AgentHomeManager(Env.paths.homesDir);
+      const homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
       agentHomePath = homeManager.initHome(params.agentId);
     } catch (err) {
       log.warn(`[ContextResolver] Failed to initialize Agent Home for ${params.agentId}:`, err);
-      // 使用默认路径
-      agentHomePath = path.join(Env.paths.homesDir, params.agentId);
+      agentHomePath = path.join(Env.paths.userAgentsDir, params.agentId);
     }
 
     // 4.2 数据目录
@@ -171,6 +171,7 @@ export class AgentContextResolver {
       dataDirectory = path.join(Env.paths.userHome, 'data', params.agentId);
       log.debug(`[ContextResolver] Using default dataDirectory: ${dataDirectory}`);
     }
+    await this.ensureDirectory(dataDirectory, 'dataDirectory');
 
     // 4.3 工作空间路径（验证安全性）
     let workspacePath = params.workspace;
@@ -276,6 +277,27 @@ export class AgentContextResolver {
       return false;
     }
   }
+
+  /**
+   * 确保运行期目录存在。
+   *
+   * Resolver 会把 dataDirectory 暴露给 Agent；如果只返回路径但不创建，
+   * Agent 后续写业务数据时会遇到不必要的 ENOENT。
+   */
+  private async ensureDirectory(dirPath: string, label: string): Promise<void> {
+    try {
+      await fs.promises.mkdir(dirPath, { recursive: true });
+    } catch (error) {
+      throw new Error(`[ContextResolver] Failed to create ${label}: ${dirPath} (${formatUnknownError(error)})`);
+    }
+  }
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 // ==================== 导出单例工厂 ====================

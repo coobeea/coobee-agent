@@ -140,7 +140,10 @@ export class ClaudeAgentRuntime extends AbstractAgentRuntime {
     const options = this.options;
     const startTime = Date.now();
     const finalInstructions = buildInstructions(options.instructions, options.skills, options.appendInstructions);
-    const cwd = options.workspaceRoot || process.cwd();
+    if (!options.workspaceRoot) {
+      throw new Error(`[ClaudeAgentRuntime] workspaceRoot is required: sessionId=${options.sessionId || '(unknown)'}`);
+    }
+    const cwd = options.workspaceRoot;
     const sessionId = options.sessionId || `session-${Date.now()}`;
     const sdkSessionId = options.sessionMode === 'file' ? this.toStableUuid(sessionId) : undefined;
     const controller = new AbortController();

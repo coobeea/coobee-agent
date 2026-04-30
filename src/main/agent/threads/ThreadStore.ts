@@ -10,7 +10,7 @@
  *   - 内存索引（id → ThreadIndexEntry）加速 list 操作
  *   - list 默认按 ID 降序（= 最新在前）
  *   - 单例模式（通过 getInstance）
- *   - 创建 thread 时自动追加到 homes/{agentId}/sessions.jsonl
+ *   - 创建 thread 时自动追加到 agents/{agentId}/sessions.jsonl
  */
 
 import fs from 'node:fs';
@@ -403,7 +403,7 @@ export class ThreadStore {
   private async appendToAgentSessionIndex(agentId: string, entry: { id: string; createdAt: string }): Promise<void> {
     try {
       const { Env } = await import('@main/common/env');
-      const homeDir = path.join(Env.paths.homesDir, agentId);
+      const homeDir = path.join(Env.paths.userAgentsDir, agentId);
 
       // 确保 agent home 目录存在
       if (!fs.existsSync(homeDir)) {
@@ -450,12 +450,6 @@ export type ThreadMessageEvent = ThreadMessageEventPayload;
 
 /** 从完整定义提取索引条目 */
 function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndexEntry {
-  // 修正旧的 homes 路径到新的 agents 路径
-  let agentHomePath = def.agentHomePath;
-  if (agentHomePath && agentHomePath.includes('/homes/')) {
-    agentHomePath = agentHomePath.replace('/homes/', '/agents/');
-  }
-
   return {
     id: def.id,
     title: def.title,
@@ -466,7 +460,7 @@ function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndex
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
     workspacePath: path.join(workspacesDir, def.id),
-    agentHomePath,
+    agentHomePath: def.agentHomePath,
     overrideModel: def.overrideModel,
     runtimeType: def.runtimeType,
     enableThinking: def.enableThinking,

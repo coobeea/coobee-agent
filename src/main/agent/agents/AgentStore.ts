@@ -77,10 +77,9 @@ export class AgentStore {
   /** 是否已初始化 */
   private initialized = false;
 
-  constructor(userDir: string, homesDir?: string) {
+  constructor(userDir: string, agentHomesDir?: string) {
     this.userDir = userDir;
-    // 工作空间目录默认为 .home/agents/
-    const effectiveHomesDir = homesDir || path.join(Env.paths.userHome, 'agents');
+    const effectiveHomesDir = agentHomesDir || Env.paths.userAgentsDir;
     this.homeManager = new AgentHomeManager(effectiveHomesDir);
   }
 

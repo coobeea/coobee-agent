@@ -38,6 +38,7 @@ export async function resolveSandboxContext(config: SandboxConfig, sessionId?: s
       mode: 'off',
       workspaceRoot: config.workspaceRoot,
       sandboxRoot: config.sandboxRoot,
+      writableRoots: config.writableRoots,
       toolPolicy,
       sessionId
     };
@@ -49,6 +50,7 @@ export async function resolveSandboxContext(config: SandboxConfig, sessionId?: s
       mode: 'path-only',
       workspaceRoot: config.workspaceRoot,
       sandboxRoot: config.sandboxRoot,
+      writableRoots: config.writableRoots,
       toolPolicy,
       sessionId
     };
@@ -69,6 +71,7 @@ export async function resolveSandboxContext(config: SandboxConfig, sessionId?: s
         mode: 'path-only',
         workspaceRoot: config.workspaceRoot,
         sandboxRoot: config.sandboxRoot,
+        writableRoots: config.writableRoots,
         toolPolicy,
         sessionId
       };
@@ -87,6 +90,7 @@ export async function resolveSandboxContext(config: SandboxConfig, sessionId?: s
         mode: 'path-only',
         workspaceRoot: config.workspaceRoot,
         sandboxRoot: config.sandboxRoot,
+        writableRoots: config.writableRoots,
         toolPolicy,
         sessionId
       };
@@ -97,6 +101,7 @@ export async function resolveSandboxContext(config: SandboxConfig, sessionId?: s
     mode: 'docker',
     workspaceRoot: config.workspaceRoot,
     sandboxRoot: config.sandboxRoot,
+    writableRoots: config.writableRoots,
     toolPolicy,
     docker,
     sessionId
@@ -116,12 +121,14 @@ export function createPathOnlyContext(
     toolPolicy?: { allow?: string[]; deny?: string[] };
     sessionId?: string;
     envVars?: Record<string, string>;
+    writableRoots?: string[];
   }
 ): SandboxContext {
   return {
     mode: 'path-only',
     workspaceRoot,
     sandboxRoot: options?.sandboxRoot,
+    writableRoots: options?.writableRoots,
     toolPolicy: resolveToolPolicy(options?.toolPolicy),
     sessionId: options?.sessionId,
     envVars: options?.envVars

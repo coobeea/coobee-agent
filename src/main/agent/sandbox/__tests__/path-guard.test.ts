@@ -117,6 +117,15 @@ describe('resolveSandboxPath', () => {
       const result = resolveSandboxPath('/home/user/project/src', ctx);
       expect(result.error).toBeUndefined();
     });
+
+    it('额外 writableRoots 下的绝对写入路径允许', () => {
+      const result = resolveSandboxPath('/home/user/.coobee/data/agent-1/report.md', {
+        workspaceRoot: '/home/user/project',
+        writableRoots: ['/home/user/.coobee/data/agent-1']
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.path).toBe('/home/user/.coobee/data/agent-1/report.md');
+    });
   });
 
   // --- 路径穿越攻击 ---
@@ -206,10 +215,8 @@ describe('resolveSandboxPath', () => {
   // --- 边界情况 ---
 
   describe('边界情况', () => {
-    it('没有 context 时降级为 process.cwd()', () => {
-      const result = resolveSandboxPath('test.txt');
-      expect(result.error).toBeUndefined();
-      expect(result.path).toBe(resolve(process.cwd(), 'test.txt'));
+    it('没有 context 时直接抛出错误', () => {
+      expect(() => resolveSandboxPath('test.txt')).toThrow('workspaceRoot is required');
     });
 
     it('使用完整的 SandboxContext 对象', () => {
@@ -363,8 +370,8 @@ describe('resolveWorkingDirectory', () => {
     expect(resolveWorkingDirectory(ctx)).toBe('/home/user/project');
   });
 
-  it('无 context 时返回 process.cwd()', () => {
-    expect(resolveWorkingDirectory()).toBe(process.cwd());
+  it('无 context 时直接抛出错误', () => {
+    expect(() => resolveWorkingDirectory()).toThrow('workspaceRoot is required');
   });
 
   it('简单对象也可以使用', () => {

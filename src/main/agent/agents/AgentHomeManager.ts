@@ -2,7 +2,7 @@
  * Agent Home 目录管理器
  *
  * 负责 Agent 持久化 Home 目录的初始化和管理：
- *   - 创建 homes/{agentId}/ 及其子目录
+ *   - 创建 agents/{agentId}/ 及其子目录
  *   - 生成默认人格文件（IDENTITY.md / SOUL.md / USER.md 等）
  *   - 读取 Agent Home 中的文件供注入系统提示词
  *
@@ -164,10 +164,10 @@ const TEMPLATES: Record<string, (agentId?: string) => string> = {
 // ==================== AgentHomeManager ====================
 
 export class AgentHomeManager {
-  private readonly homesDir: string;
+  private readonly agentHomesDir: string;
 
-  constructor(homesDir: string) {
-    this.homesDir = homesDir;
+  constructor(agentHomesDir: string) {
+    this.agentHomesDir = agentHomesDir;
   }
 
   /**
@@ -179,7 +179,7 @@ export class AgentHomeManager {
    * BOOTSTRAP.md 只在首次初始化时创建（即其他标准文件都不存在时）。
    */
   initHome(agentId: string): string {
-    const homeDir = path.join(this.homesDir, agentId);
+    const homeDir = path.join(this.agentHomesDir, agentId);
     const memoryDir = path.join(homeDir, 'memory');
     const skillsDir = path.join(homeDir, 'skills');
 
@@ -216,7 +216,7 @@ export class AgentHomeManager {
    * 批量初始化多个 Agent 的 Home 目录
    */
   initHomes(agentIds: string[]): void {
-    fs.mkdirSync(this.homesDir, { recursive: true });
+    fs.mkdirSync(this.agentHomesDir, { recursive: true });
     for (const id of agentIds) {
       try {
         this.initHome(id);
@@ -230,14 +230,14 @@ export class AgentHomeManager {
    * 检查 Agent Home 是否存在
    */
   hasHome(agentId: string): boolean {
-    return fs.existsSync(path.join(this.homesDir, agentId));
+    return fs.existsSync(path.join(this.agentHomesDir, agentId));
   }
 
   /**
    * 获取 Agent Home 目录路径（不自动创建）
    */
   getHomePath(agentId: string): string {
-    return path.join(this.homesDir, agentId);
+    return path.join(this.agentHomesDir, agentId);
   }
 
   /**
@@ -247,7 +247,7 @@ export class AgentHomeManager {
    * @returns XML 包裹的文件内容块，或 undefined
    */
   readInjectableFiles(agentId: string): string | undefined {
-    const homeDir = path.join(this.homesDir, agentId);
+    const homeDir = path.join(this.agentHomesDir, agentId);
     if (!fs.existsSync(homeDir)) return undefined;
 
     const sections: string[] = [];
@@ -287,7 +287,7 @@ ${merged}
    * 读取 Agent 级 AGENTS.md
    */
   readAgentsMd(agentId: string): string | undefined {
-    const filePath = path.join(this.homesDir, agentId, 'AGENTS.md');
+    const filePath = path.join(this.agentHomesDir, agentId, 'AGENTS.md');
     try {
       const content = fs.readFileSync(filePath, 'utf-8').trim();
       if (content && !isTemplateOnly(content)) return content;
@@ -301,7 +301,7 @@ ${merged}
    * 读取指定人格文件
    */
   readFile(agentId: string, fileName: string): string | undefined {
-    const filePath = path.join(this.homesDir, agentId, fileName);
+    const filePath = path.join(this.agentHomesDir, agentId, fileName);
     try {
       return fs.readFileSync(filePath, 'utf-8');
     } catch {
@@ -313,7 +313,7 @@ ${merged}
    * 写入指定人格文件
    */
   writeFile(agentId: string, fileName: string, content: string): void {
-    const homeDir = path.join(this.homesDir, agentId);
+    const homeDir = path.join(this.agentHomesDir, agentId);
     if (!fs.existsSync(homeDir)) {
       this.initHome(agentId);
     }
@@ -340,7 +340,7 @@ ${merged}
    * 删除 Agent Home 目录
    */
   deleteHome(agentId: string): void {
-    const homeDir = path.join(this.homesDir, agentId);
+    const homeDir = path.join(this.agentHomesDir, agentId);
     if (fs.existsSync(homeDir)) {
       fs.rmSync(homeDir, { recursive: true, force: true });
       log.info(`[AgentHomeManager] Deleted home for agent: ${agentId}`);
@@ -354,7 +354,7 @@ ${merged}
    * @returns Session 索引列表（id + createdAt），按创建时间顺序
    */
   readSessionIndex(agentId: string): Array<{ id: string; createdAt: string }> {
-    const indexPath = path.join(this.homesDir, agentId, 'sessions.jsonl');
+    const indexPath = path.join(this.agentHomesDir, agentId, 'sessions.jsonl');
 
     if (!fs.existsSync(indexPath)) {
       return [];

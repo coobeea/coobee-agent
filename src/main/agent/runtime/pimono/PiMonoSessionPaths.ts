@@ -17,7 +17,14 @@ export interface SessionMigrationLogger {
  * 真正的 SDK 会话文件需要收纳到 workspace/sessions/，避免和 history/events/context 混在一起。
  */
 export function resolvePiMonoSessionRoot(cwd: string, options: SessionPathOptions): string {
-  const configuredSessionDir = options.sessionDir || path.join(cwd, '.coobee-test', 'sessions');
+  if (!options.sessionDir) {
+    throw new Error(
+      `[PiMonoSessionPaths] sessionDir is required for file-backed PiMono sessions: ` +
+        `sessionId=${options.sessionId || '(unknown)'}, cwd=${cwd}`
+    );
+  }
+
+  const configuredSessionDir = options.sessionDir;
 
   if (
     options.workspaceRoot &&

@@ -8,12 +8,13 @@ Skill 是场景化的操作手册 —— 一段自然语言指导文本，告诉
 
 ## Skill 来源（按优先级）
 
-| 优先级    | 来源     | 路径                  | 说明                      |
-| --------- | -------- | --------------------- | ------------------------- |
-| 1（最低） | 内置     | `builtinSkillsDir`    | 随系统分发，只读          |
-| 1.5       | 扩展贡献 | Extension 声明的目录  | Extension manifest 中声明 |
-| 2         | 用户     | `userSkillsDir`       | 用户安装/编写             |
-| 3（最高） | Agent    | `{workspace}/skills/` | 你自己生成的              |
+| 优先级    | 来源       | 路径                            | 说明                      |
+| --------- | ---------- | ------------------------------- | ------------------------- |
+| 1（最低） | 系统内置   | `resources/skills`              | 随系统分发，只读          |
+| 2         | 扩展贡献   | Extension 注册的目录            | Extension manifest 中声明 |
+| 3         | 市场/用户  | `{userHome}/skills`             | 技能市场安装或用户编写    |
+| 4         | Agent 私有 | `{userHome}/agents/{id}/skills` | Agent 绑定的专属技能      |
+| 5（最高） | Workspace  | `{workspace}/skills`            | 当前会话临时技能          |
 
 **同名 Skill 高优先级覆盖低优先级。**
 

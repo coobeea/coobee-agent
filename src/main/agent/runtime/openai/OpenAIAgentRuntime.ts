@@ -26,7 +26,6 @@ import {
   type AgentStreamChunk,
   type ToolDefinition
 } from '../types';
-import { createFallbackToolContext } from '../shared/ToolExecutionPipeline';
 
 const log = createRuntimeLogger('openai-runtime');
 
@@ -669,13 +668,14 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
   ): Tool[] {
     if (!defs.length) return [];
 
-    // 优先使用注入的工具执行上下文，否则降级为最小上下文
-    const sandboxContext =
-      options.sandboxContext ||
-      createFallbackToolContext({
-        workspaceRoot: options.workspaceRoot || process.cwd(),
-        sessionId: options.sessionId || 'session'
-      });
+    if (!options.sandboxContext) {
+      throw new Error(
+        `[OpenAIAgentRuntime] sandboxContext is required when tools are configured: ` +
+          `sessionId=${options.sessionId || 'session'}`
+      );
+    }
+
+    const sandboxContext = options.sandboxContext;
 
     return defs.map((def) =>
       tool({

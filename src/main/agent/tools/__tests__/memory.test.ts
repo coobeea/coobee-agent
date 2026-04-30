@@ -69,7 +69,7 @@ let agentMemDir: string;
 function setup(): void {
   workspace = path.join(TEST_BASE, 'workspace');
   sessionMemDir = path.join(workspace, 'memory');
-  agentMemDir = path.join(TEST_BASE, 'homes', 'test-bot', 'memory');
+  agentMemDir = path.join(TEST_BASE, 'agents', 'test-bot', 'memory');
   fs.mkdirSync(sessionMemDir, { recursive: true });
   fs.mkdirSync(agentMemDir, { recursive: true });
 }

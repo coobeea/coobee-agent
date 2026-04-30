@@ -55,7 +55,7 @@ Agent（智能体）是 coobee-agent 的核心概念。每个 Agent 定义了一
 
 每个 Agent 的 Home 目录下维护一个 `sessions.jsonl` 索引文件，记录该 Agent 的所有会话。
 
-**文件位置**: `{userHome}/homes/{agentId}/sessions.jsonl`
+**文件位置**: `{userHome}/agents/{agentId}/sessions.jsonl`
 
 **格式**（JSONL，每行一条记录）：
 
@@ -68,7 +68,7 @@ Agent（智能体）是 coobee-agent 的核心概念。每个 Agent 定义了一
 
 ```bash
 # 查看某个 agent 的所有 sessions
-cat {userHome}/homes/{agentId}/sessions.jsonl
+cat {userHome}/agents/{agentId}/sessions.jsonl
 
 # 或使用查询脚本
 node scripts/query-agent-sessions.js app-copilot

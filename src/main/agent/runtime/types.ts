@@ -284,7 +284,7 @@ export interface AgentRuntimeOptions {
    * Session 持久化模式
    *
    * - 'memory': 内存模式（默认，适合测试）
-   * - 'file': 文件模式（持久化到 cwd/.pi/sessions/）
+   * - 'file': 文件模式（必须由 Executor 显式注入 sessionDir）
    */
   sessionMode: 'memory' | 'file';
 
@@ -292,7 +292,7 @@ export interface AgentRuntimeOptions {
    * 会话存储根目录
    *
    * 各 Runtime 在此目录下以 sessionId 建立子目录存放会话文件。
-   * 不传则由 Executor 层注入 Electron userData 默认路径。
+   * 文件会话必须由 Executor 层显式注入，缺失时直接报错。
    *
    * 示例：
    *   sessionDir = '~/Library/Application Support/coobee-ai/sessions'
@@ -318,7 +318,7 @@ export interface AgentRuntimeOptions {
    *
    * 所有文件工具（read/write/edit）的路径边界，exec 命令的工作目录。
    * 由 AgentEnvInjector.prepareAgentEnv() 准备为 Agent 的 workspace 目录。
-   * 不传则降级为 process.cwd()。
+   * 必须由 Executor 层显式注入，缺失时直接报错。
    */
   workspaceRoot?: string;
   /**
@@ -333,7 +333,7 @@ export interface AgentRuntimeOptions {
    *
    * 由 AgentEnvInjector 通过 Builder 注入。
    * 包含沙箱信息（路径守卫、策略检查）+ Agent/Session 信息。
-   * 不传则降级为 path-only + workspaceRoot。
+   * 使用工具时必须由 AgentEnvInjector 显式注入，缺失时直接报错。
    */
   sandboxContext?: import('../tools/types').ToolExecutionContext;
 

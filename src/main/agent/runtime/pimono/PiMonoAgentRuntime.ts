@@ -171,7 +171,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     const modelName = options.model;
     const baseURL = options.baseURL;
     const thinkingLevel = options.thinkingLevel || 'medium';
-    const cwd = options.workspaceRoot || process.cwd();
+    const cwd = this.requireWorkspaceRoot(options);
 
     // 1. 构造 OpenAI 兼容的 Model 对象（从 coobee.json5 模型配置透传元数据）
     const model =
@@ -353,6 +353,13 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     return resolvePiMonoSessionRoot(cwd, options);
   }
 
+  private requireWorkspaceRoot(options: AgentRuntimeOptions): string {
+    if (!options.workspaceRoot) {
+      throw new Error(`[PiMonoAgentRuntime] workspaceRoot is required: sessionId=${options.sessionId || '(unknown)'}`);
+    }
+    return options.workspaceRoot;
+  }
+
   private createAuthStorage(options: AgentRuntimeOptions): AuthStorage {
     const authStorage = AuthStorage.inMemory();
     authStorage.setRuntimeApiKey(options.provider, options.apiKey);
@@ -438,16 +445,18 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   }
 
   private async createSdkTools(options: AgentRuntimeOptions): Promise<PiToolDefinition[]> {
-    const { createFallbackToolContext } = await import('../shared/ToolExecutionPipeline');
-    const sandboxContext =
-      options.sandboxContext ||
-      createFallbackToolContext({
-        workspaceRoot: options.workspaceRoot || process.cwd(),
-        sessionId: options.sessionId
-      });
+    const tools = options.tools || [];
+    if (tools.length === 0) return [];
 
-    return convertTools(options.tools || [], {
-      sandboxContext,
+    if (!options.sandboxContext) {
+      throw new Error(
+        `[PiMonoAgentRuntime] sandboxContext is required when tools are configured: ` +
+          `sessionId=${options.sessionId || '(unknown)'}`
+      );
+    }
+
+    return convertTools(tools, {
+      sandboxContext: options.sandboxContext,
       log,
       getSignal: () => options.signal
     });

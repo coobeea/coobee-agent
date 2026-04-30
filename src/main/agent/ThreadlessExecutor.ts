@@ -10,6 +10,8 @@ export interface ThreadlessExecutionOptions {
   lightweight?: boolean;
   maxTurns?: number;
   sessionId?: string;
+  /** 显式工作区；不传时按本次一次性 sessionId 创建标准 workspace。 */
+  workspaceRoot?: string;
   /**
    * 本次请求的附加系统约束，会被追加到 Agent 默认 instructions 之后。
    * 用于“一句话润色”等 preset 场景，不修改 Agent 配置本身。
@@ -92,14 +94,19 @@ export class ThreadlessExecutor {
 
     const modelOverride = normalizeModelSpec(params.modelOverride) || normalizeModelSpec(agentDef.model);
 
+    const sessionId = params.sessionId ?? `threadless-agent-${params.agentId}-${generateSnowflakeId()}`;
+    const { Env } = await import('@main/common/env');
+    const workspaceRoot = params.workspaceRoot ?? (await Env.getAgentWorkspaceDir(sessionId));
+
     return {
-      sessionId: params.sessionId ?? `threadless-agent-${params.agentId}-${generateSnowflakeId()}`,
+      sessionId,
       message: params.message,
       agentId: agentDef.id,
       lightweight: params.lightweight ?? true,
       mode: params.mode ?? 'chat',
       runtimeType: params.runtimeType ?? 'pi-mono',
       sessionMode: 'memory',
+      workspaceRoot,
       maxTurns: params.maxTurns ?? 1,
       instructions: mergedInstructions,
       modelOverride

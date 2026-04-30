@@ -57,10 +57,10 @@ vi.mock('node:fs/promises', () => ({
 import { readFile, writeFile, mkdir, stat, open } from 'node:fs/promises';
 import { readTool, writeTool, editTool, execTool, builtinTools } from '../builtin';
 import { resolveSandboxPath } from '../../sandbox';
-import { createFallbackToolContext } from '../../runtime/shared/ToolExecutionPipeline';
+import { createTestToolContext } from '../../testing/TestToolContext';
 
 /** 测试用 context：允许 /tmp 目录下的操作 */
-const tmpContext = createFallbackToolContext({ workspaceRoot: '/tmp' });
+const tmpContext = createTestToolContext({ workspaceRoot: '/tmp' });
 
 /**
  * 辅助函数：消费 AsyncGenerator，收集所有 yield 的更新和最终结果
@@ -965,7 +965,7 @@ describe('execTool', () => {
 
   describe('工作目录', () => {
     it('使用 context 的 workspaceRoot 作为 cwd', async () => {
-      const ctx = createFallbackToolContext({ workspaceRoot: '/tmp' });
+      const ctx = createTestToolContext({ workspaceRoot: '/tmp' });
       const { result } = await consumeGenerator(execTool.execute({ command: 'pwd' }, undefined, ctx));
 
       expect(result.success).toBe(true);
@@ -1213,7 +1213,7 @@ describe('文件工具沙箱集成', () => {
     vi.clearAllMocks();
   });
 
-  const sandboxContext = createFallbackToolContext({ workspaceRoot: '/home/user/project' });
+  const sandboxContext = createTestToolContext({ workspaceRoot: '/home/user/project' });
 
   it('readTool 读操作不受沙箱限制（readOnly=true），可读取 workspace 外路径', async () => {
     const { result } = await consumeGenerator(readTool.execute({ path: '/etc/passwd' }, undefined, sandboxContext));
@@ -1253,7 +1253,7 @@ describe('文件工具沙箱集成', () => {
 
   it('sandboxRoot 对写操作生效（writeTool 拒绝 sandboxRoot 外路径）', async () => {
     const strictContext = {
-      ...createFallbackToolContext({ workspaceRoot: '/home/user/project' }),
+      ...createTestToolContext({ workspaceRoot: '/home/user/project' }),
       sandboxRoot: '/home/user/project/src'
     };
 

@@ -28,7 +28,7 @@ import { AgentHomeManager } from './agents/AgentHomeManager';
 import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
-import type { AgentMode, SkillDefinition, ToolDefinition } from './runtime/types';
+import type { AgentMode, SkillDefinition, ThinkingLevel, ToolDefinition } from './runtime/types';
 import { AgentContextResolver } from './context/AgentContextResolver';
 import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 
@@ -40,6 +40,7 @@ export interface PrepareAgentEnvOptions {
   workspaceRoot?: string;
   agentId?: string;
   agentName?: string;
+  thinkingLevel?: ThinkingLevel;
   hasRequestTools?: boolean;
 }
 
@@ -59,7 +60,7 @@ export interface PreparedAgentEnv {
  *
  * 注意：这里不再接收/修改 Builder。调用方拿到返回值后，统一在最后创建 Builder 并 build Runtime。
  */
-export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<PreparedAgentEnv | undefined> {
+export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<PreparedAgentEnv> {
   try {
     const { Env } = await import('@main/common/env');
     const { sessionId, mode, agentId, agentName } = options;
@@ -71,12 +72,15 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     let agentHome: string | undefined;
     let homeManager: AgentHomeManager | undefined;
     if (agentId) {
-      homeManager = new AgentHomeManager(Env.paths.homesDir);
+      homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
       agentHome = homeManager.initHome(agentId);
     }
 
     // 3. 构建 AgentEnv（传入 agentHome 用于加载 Agent 级 Skill）
     const agentEnv = await buildAgentEnv(sessionId, workspace, agentHome);
+    if (options.thinkingLevel) {
+      agentEnv.thinkingLevel = options.thinkingLevel;
+    }
 
     // 4. 设置 AgentEnv 的 agentId、agentName 和 agentHome
     if (agentId && agentHome) {
@@ -130,10 +134,11 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     // ====== Agent 模式独有：Skill + 执行协议 + 运行时路径 ======
     if (mode === 'agent') {
       // 7. 扫描 Skill 并存储到 SkillManager（供 skill_list 工具按需查询）
-      //    使用 agentEnv.skillPaths（已包含 Agent Home skills + Extension 贡献的 Skill 目录）
+      //    使用 agentEnv.skillPathSources（由 SkillManager 统一管理来源与优先级）
       //    传入 configDir 以加载 skills.json5 中的 Skill 配置
       const skillManager = new SkillManager();
-      skillManager.scanSkills(agentEnv.skillPaths, Env.paths.secretsDir);
+      skillManager.registerSearchPaths(agentEnv.skillPathSources);
+      skillManager.scanRegisteredSkills(Env.paths.secretsDir);
       SkillManager.setCurrent(skillManager, sessionId);
 
       // 8. 注入核心执行协议 + 运行时环境 + Skill 发现提示 + Agent 发现提示到 appendInstructions
@@ -172,7 +177,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       if (agentDefinedSkills && agentDefinedSkills.length > 0) {
         const skillDefs = agentDefinedSkills
           .map((name) => skillManager.getByName(name))
-          .filter((s): s is NonNullable<typeof s> => s !== null);
+          .filter((s): s is NonNullable<typeof s> => s !== undefined);
 
         if (skillDefs.length > 0) {
           prepared.skills.push(...skillDefs);
@@ -224,7 +229,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       const toolCtx = await buildToolExecutionContext(effectiveCwd, sessionId, envVars, {
         agentId: agentId || undefined,
         agentName,
-        agentMode: mode
+        agentMode: mode,
+        dataDirectory: agentEnv.dataDirectory
       });
       prepared.sandboxContext = toolCtx;
     }
@@ -232,8 +238,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     log.info(`[EnvInjector] Prepared: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}`);
     return prepared;
   } catch (error) {
-    log.warn(`[EnvInjector] Failed, continuing without env:`, error);
-    return undefined;
+    log.error(`[EnvInjector] Failed to prepare runtime env: ${formatUnknownError(error)}`);
+    throw error;
   }
 }
 
@@ -247,6 +253,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
  *   - COOBEE_WORKSPACE      — 工作空间目录
  *   - COOBEE_SESSION_ID     — 当前会话 ID
  *   - COOBEE_USER_HOME      — 应用主目录
+ *   - COOBEE_DATA_DIRECTORY — Agent 持久业务数据目录（如果存在）
  */
 function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
   const vars: Record<string, string> = {
@@ -255,6 +262,9 @@ function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
     COOBEE_SESSION_ID: env.sessionId,
     COOBEE_USER_HOME: env.userHome
   };
+  if (env.dataDirectory) {
+    vars.COOBEE_DATA_DIRECTORY = env.dataDirectory;
+  }
   return vars;
 }
 
@@ -266,6 +276,7 @@ interface AgentContextInfo {
   agentName?: string;
   agentMode?: import('./runtime/types').AgentMode;
   parentSessionId?: string;
+  dataDirectory?: string;
 }
 
 /**
@@ -312,13 +323,20 @@ async function buildToolExecutionContext(
       envVars
     };
   } else if (sandboxMode === 'docker') {
-    baseCtx = await resolveSandboxContext({ mode: 'docker', workspaceRoot: workspace }, sessionId);
+    baseCtx = await resolveSandboxContext(
+      { mode: 'docker', workspaceRoot: workspace, writableRoots: compactPaths([agentInfo?.dataDirectory]) },
+      sessionId
+    );
     baseCtx.envVars = envVars;
   } else {
-    baseCtx = createPathOnlyContext(workspace, { sessionId, envVars });
+    baseCtx = createPathOnlyContext(workspace, {
+      sessionId,
+      envVars,
+      writableRoots: compactPaths([agentInfo?.dataDirectory])
+    });
   }
 
-  // 系统路径（从 Env 读取，失败时用合理默认值）
+  // 系统路径必须来自 Env；这里不能使用测试目录兜底，否则工具和会话路径会漂移。
   let userHome = '';
   let configDir = '';
   let tempDir = '';
@@ -327,12 +345,10 @@ async function buildToolExecutionContext(
     userHome = Env.paths.userHome;
     configDir = Env.paths.configDir;
     tempDir = Env.paths.temp;
-  } catch {
-    // 测试环境 fallback
-    const os = await import('node:os');
-    userHome = path.join(os.homedir(), '.coobee-test');
-    configDir = path.join(userHome, 'config');
-    tempDir = os.tmpdir();
+  } catch (error) {
+    throw new Error(
+      `[EnvInjector] Env paths are required to build tool execution context: ${formatUnknownError(error)}`
+    );
   }
 
   // threadId：顶层 sessionId 即为 threadId，子 Agent 的 sessionId 含 `:` 分隔符
@@ -364,6 +380,7 @@ async function buildToolExecutionContext(
     userHome,
     configDir,
     tempDir,
+    dataDirectory: agentInfo?.dataDirectory,
 
     // Agent 信息（必填）
     agentName: agentInfo?.agentName || 'agent',
@@ -399,4 +416,15 @@ function collectExtensionInstructions(): string[] {
     // Extension 系统未初始化时忽略
   }
   return [];
+}
+
+function compactPaths(paths: Array<string | undefined>): string[] {
+  return paths.filter((item): item is string => typeof item === 'string' && item.length > 0);
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack || error.message;
+  }
+  return String(error);
 }

@@ -128,7 +128,7 @@ import type { AgentMode } from '../runtime/types';
  *   - Agent 信息：agentName, agentMode, agentId
  *   - 当前工作目录：cwd（exec / file 工具的默认基准）
  *   - 工作空间路径：sessionsDir, contextsDir, eventsDir
- *   - 系统路径：userHome, configDir, tempDir
+ *   - 系统路径：userHome, configDir, tempDir, dataDirectory
  *
  * 由 AgentEnvInjector 构建，通过 Builder → Runtime → ToolExecutionPipeline 注入。
  * 大模型不感知此上下文，仅工具执行函数内部使用。
@@ -178,6 +178,9 @@ export interface ToolExecutionContext extends SandboxContext {
 
   /** 系统临时目录 */
   tempDir: string;
+
+  /** Agent 专属持久业务数据目录 */
+  dataDirectory?: string;
 
   // === Agent 信息（核心字段必填） ===
 

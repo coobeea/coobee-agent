@@ -35,7 +35,7 @@ vi.mock('@main/common/env', () => ({
 import { searchTool } from '../builtin/search';
 import { globTool } from '../builtin/glob';
 import { execTool } from '../builtin/exec';
-import { createFallbackToolContext } from '../../runtime/shared/ToolExecutionPipeline';
+import { createTestToolContext } from '../../testing/TestToolContext';
 
 // ========== 辅助函数 ==========
 
@@ -52,7 +52,7 @@ async function consumeGenerator(
 }
 
 function makeContext(workspaceRoot: string): import('../types').ToolExecutionContext {
-  return createFallbackToolContext({ workspaceRoot });
+  return createTestToolContext({ workspaceRoot });
 }
 
 // ========== 测试 ==========

@@ -20,13 +20,13 @@ vi.mock('@main/common/logger', () => ({
 }));
 
 let tmpDir: string;
-let homesDir: string;
+let agentHomesDir: string;
 let manager: AgentHomeManager;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-home-test-'));
-  homesDir = path.join(tmpDir, 'homes');
-  manager = new AgentHomeManager(homesDir);
+  agentHomesDir = path.join(tmpDir, 'agents');
+  manager = new AgentHomeManager(agentHomesDir);
 });
 
 afterEach(() => {
@@ -75,7 +75,7 @@ describe('AgentHomeManager', () => {
     });
 
     it('should not create BOOTSTRAP.md if standard files already exist', () => {
-      const homeDir = path.join(homesDir, 'existing-agent');
+      const homeDir = path.join(agentHomesDir, 'existing-agent');
       fs.mkdirSync(homeDir, { recursive: true });
       fs.writeFileSync(path.join(homeDir, 'SOUL.md'), '# My Soul', 'utf-8');
 
@@ -86,12 +86,12 @@ describe('AgentHomeManager', () => {
   });
 
   describe('initHomes', () => {
-    it('should batch initialize homes for multiple agents', () => {
+    it('should batch initialize agent homes for multiple agents', () => {
       manager.initHomes(['agent-a', 'agent-b', 'agent-c']);
 
-      expect(fs.existsSync(path.join(homesDir, 'agent-a'))).toBe(true);
-      expect(fs.existsSync(path.join(homesDir, 'agent-b'))).toBe(true);
-      expect(fs.existsSync(path.join(homesDir, 'agent-c'))).toBe(true);
+      expect(fs.existsSync(path.join(agentHomesDir, 'agent-a'))).toBe(true);
+      expect(fs.existsSync(path.join(agentHomesDir, 'agent-b'))).toBe(true);
+      expect(fs.existsSync(path.join(agentHomesDir, 'agent-c'))).toBe(true);
     });
   });
 

@@ -83,7 +83,6 @@ vi.mock('@main/common/env', () => ({
       sessionsDir: '/mock/sessions',
       sandboxDir: '/mock/sandbox',
       resourcesDir: '/mock/resources',
-      homesDir: '/mock/home/agents',
       workspacesDir: '/mock/home/workspaces',
       threadsDir: '/mock/home/threads',
       userAgentsDir: '/mock/home/agents',

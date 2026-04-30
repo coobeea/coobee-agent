@@ -41,6 +41,16 @@ describe('PiMonoSessionPaths', () => {
     ).toBe(sessionDir);
   });
 
+  it('缺少 sessionDir 时直接报错，不再写入 .coobee-test', () => {
+    expect(() =>
+      resolvePiMonoSessionRoot('/tmp/cwd', {
+        sessionDir: '',
+        workspaceRoot: tmpDir,
+        sessionId: 'thread-1'
+      })
+    ).toThrow('sessionDir is required');
+  });
+
   it('只迁移 workspace 根目录下的旧 PiMono 会话文件', async () => {
     const sessionId = '307549385198301184';
     const sessionRoot = path.join(tmpDir, 'sessions');

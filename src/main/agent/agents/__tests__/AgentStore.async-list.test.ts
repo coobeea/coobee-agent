@@ -15,7 +15,7 @@ vi.mock('@main/common/logger', () => ({
 
 let tmpDir: string;
 let userDir: string;
-let homesDir: string;
+let agentHomesDir: string;
 let builtinAgentsDir: string;
 
 vi.mock('@main/common/env', () => ({
@@ -55,10 +55,10 @@ describe('AgentStore 异步列表', () => {
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentstore-async-list-'));
     userDir = path.join(tmpDir, 'agents');
-    homesDir = path.join(tmpDir, 'homes');
+    agentHomesDir = path.join(tmpDir, 'agents');
     builtinAgentsDir = path.join(tmpDir, 'builtin-agents');
     fs.mkdirSync(userDir, { recursive: true });
-    fs.mkdirSync(homesDir, { recursive: true });
+    fs.mkdirSync(agentHomesDir, { recursive: true });
     fs.mkdirSync(builtinAgentsDir, { recursive: true });
 
     vi.resetModules();
@@ -76,7 +76,7 @@ describe('AgentStore 异步列表', () => {
     writeAgent(userDir, createAgent('beta'));
     writeAgent(builtinAgentsDir, createAgent('builtin-helper', 'system'));
 
-    const store = new AgentStore(userDir, homesDir);
+    const store = new AgentStore(userDir, agentHomesDir);
     const agents = await store.listAsync();
 
     expect(agents.map((agent) => agent.id).sort()).toEqual(['alpha', 'beta', 'builtin-helper']);
@@ -86,7 +86,7 @@ describe('AgentStore 异步列表', () => {
   it('list 兼容入口仍返回异步索引结果', async () => {
     writeAgent(userDir, createAgent('alpha'));
 
-    const store = new AgentStore(userDir, homesDir);
+    const store = new AgentStore(userDir, agentHomesDir);
     const agents = await store.list();
 
     expect(agents).toHaveLength(1);
@@ -94,7 +94,7 @@ describe('AgentStore 异步列表', () => {
   });
 
   it('create/update 会保存 Agent 默认运行配置并同步到索引', async () => {
-    const store = new AgentStore(userDir, homesDir);
+    const store = new AgentStore(userDir, agentHomesDir);
 
     const created = await store.create({
       id: 'runtime-agent',
@@ -136,7 +136,7 @@ describe('AgentStore 异步列表', () => {
   });
 
   it('create/update 会清理旧版模型组配置', async () => {
-    const store = new AgentStore(userDir, homesDir);
+    const store = new AgentStore(userDir, agentHomesDir);
 
     const created = await store.create({
       id: 'legacy-model-agent',
@@ -161,7 +161,7 @@ describe('AgentStore 异步列表', () => {
   });
 
   it('update 会合并 metadata，避免快捷问题局部保存覆盖其他配置', async () => {
-    const store = new AgentStore(userDir, homesDir);
+    const store = new AgentStore(userDir, agentHomesDir);
 
     await store.create({
       id: 'metadata-agent',

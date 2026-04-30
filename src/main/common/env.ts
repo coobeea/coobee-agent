@@ -108,7 +108,6 @@ class EnvClass {
     builtinExtensionsDir: string;
     userExtensionsDir: string;
     builtinAgentsDir: string;
-    homesDir: string;
     agentsMdPath: string;
     workspacesDir: string;
     threadsDir: string;
@@ -148,7 +147,6 @@ class EnvClass {
       builtinExtensionsDir: path.join(app.getAppPath(), 'resources', 'extensions'),
       userExtensionsDir: path.join(_userHome, 'extensions'),
       builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
-      homesDir: path.join(_userHome, 'homes'),
       agentsMdPath: path.join(_userHome, 'agents.md'),
       workspacesDir: path.join(_userHome, 'workspaces'),
       threadsDir: path.join(_userHome, 'threads'),
@@ -210,15 +208,17 @@ class EnvClass {
   }
 
   async getAgentHomeDir(agentId: string): Promise<string> {
-    const dir = path.join(this.paths.homesDir, agentId);
+    const dir = path.join(this.paths.userAgentsDir, agentId);
     if (!fs.existsSync(dir)) {
       await mkdirp(dir);
     }
     return dir;
   }
 
-  getSkillSearchPaths(_workspace?: string, _agentHome?: string): string[] {
-    return [this.paths.userSkillsDir, this.paths.builtinSkillsDir];
+  async getSkillSearchPaths(workspace?: string, agentHome?: string): Promise<string[]> {
+    const { SkillManager } = await import('@main/agent/skills/SkillManager');
+    const sources = await SkillManager.buildDefaultSearchPathSources({ workspace, agentHome });
+    return SkillManager.searchPathsFromSources(sources);
   }
 
   getExtensionSearchPaths(_workspace?: string): string[] {

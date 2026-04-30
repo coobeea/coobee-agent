@@ -16,7 +16,6 @@ vi.mock('@main/common/env', () => {
         userHome: path.join(process.cwd(), '.test-home'),
         userData: path.join(process.cwd(), '.test-home/userData'),
         secretsDir: path.join(process.cwd(), '.test-home/secrets'),
-        homesDir: path.join(process.cwd(), '.test-home/agents'),
         threadsDir: path.join(process.cwd(), '.test-home/threads'),
         workspacesDir: path.join(process.cwd(), '.test-home/workspaces')
       },

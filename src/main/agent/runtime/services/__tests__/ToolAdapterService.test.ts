@@ -2,10 +2,28 @@ import { describe, it, expect, vi } from 'vitest';
 import { ToolAdapterService } from '../ToolAdapterService';
 import { z } from 'zod';
 import type { ToolDefinition } from '../../types';
+import type { ToolExecutionContext } from '../../../tools/types';
+
+const sandboxContext: ToolExecutionContext = {
+  mode: 'path-only',
+  workspaceRoot: '/tmp/workspace',
+  toolPolicy: { allow: [], deny: [], confirm: [] },
+  sessionId: 'test-session',
+  threadId: 'test-session',
+  cwd: '/tmp/workspace',
+  sessionsDir: '/tmp/workspace/sessions',
+  contextsDir: '/tmp/workspace/contexts',
+  eventsDir: '/tmp/workspace/events',
+  userHome: '/tmp/coobee-home',
+  configDir: '/tmp/coobee-home/config',
+  tempDir: '/tmp',
+  agentName: 'agent',
+  agentMode: 'agent'
+};
 
 describe('ToolAdapterService', () => {
   it('应该转换工具定义为 SDK Tools', () => {
-    const service = new ToolAdapterService();
+    const service = new ToolAdapterService(sandboxContext);
 
     const toolDefs: ToolDefinition[] = [
       {
@@ -27,7 +45,7 @@ describe('ToolAdapterService', () => {
   });
 
   it('应该合并 SDK Tools 和 ToolDefinition', () => {
-    const service = new ToolAdapterService();
+    const service = new ToolAdapterService(sandboxContext);
 
     const sdkTools = [] as never[]; // Mock SDK tools
     const toolDefs: ToolDefinition[] = [

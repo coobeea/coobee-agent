@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createTestToolContext } from '../../testing/TestToolContext';
 
 // Mock logger
 vi.mock('@main/common/logger', () => {
@@ -32,7 +33,13 @@ vi.mock('../../sandbox', () => ({
 }));
 
 import { AbstractAgentRuntime, generateRuntimeId } from '../AbstractAgentRuntime';
-import type { AgentRuntimeOptions, ExecutionConfig, AgentExecutionResult, AgentStreamChunk, SessionInfo } from '../types';
+import type {
+  AgentRuntimeOptions,
+  ExecutionConfig,
+  AgentExecutionResult,
+  AgentStreamChunk,
+  SessionInfo
+} from '../types';
 import { ToolCategory } from '../../tools/types';
 
 // ==================== S-2: ErrorRecovery runtime injection ====================
@@ -194,12 +201,10 @@ describe('S-2: ErrorRecoveryChain runtime injection', () => {
 describe('M-4: ToolExecutionPipeline', () => {
   // 延迟导入（在 mock 之后）
   let executeToolPipeline: typeof import('../shared/ToolExecutionPipeline').executeToolPipeline;
-  let createFallbackToolContext: typeof import('../shared/ToolExecutionPipeline').createFallbackToolContext;
 
   beforeEach(async () => {
     const mod = await import('../shared/ToolExecutionPipeline');
     executeToolPipeline = mod.executeToolPipeline;
-    createFallbackToolContext = mod.createFallbackToolContext;
   });
 
   it('正常执行工具并返回结果', async () => {
@@ -224,7 +229,7 @@ describe('M-4: ToolExecutionPipeline', () => {
       mockTool,
       {},
       {
-        sandboxContext: createFallbackToolContext({ workspaceRoot: '/tmp/test', sessionId: 's1' }),
+        sandboxContext: createTestToolContext({ workspaceRoot: '/tmp/test', sessionId: 's1' }),
         onUpdate: (u) => updates.push(u.content)
       }
     );
@@ -258,7 +263,7 @@ describe('M-4: ToolExecutionPipeline', () => {
       failTool,
       {},
       {
-        sandboxContext: createFallbackToolContext({ workspaceRoot: '/tmp/test' })
+        sandboxContext: createTestToolContext({ workspaceRoot: '/tmp/test' })
       }
     );
 
@@ -284,7 +289,7 @@ describe('M-4: ToolExecutionPipeline', () => {
       simpleTool,
       {},
       {
-        sandboxContext: createFallbackToolContext({ workspaceRoot: '/tmp/test' })
+        sandboxContext: createTestToolContext({ workspaceRoot: '/tmp/test' })
       }
     );
 

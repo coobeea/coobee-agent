@@ -14,8 +14,6 @@
  * @module runtime/shared/ToolExecutionPipeline
  */
 
-import path from 'node:path';
-import os from 'node:os';
 import { log } from '@main/common/logger';
 import type { ToolDefinition, ToolExecutionContext, ToolResult, ToolStreamUpdate } from '../../tools/types';
 
@@ -343,31 +341,10 @@ export async function executeToolPipeline(
   return await executeToolCore(def, typedParams, opts);
 }
 
-/**
- * 创建最小化 ToolExecutionContext（Runtime 降级用）
- *
- * 当 AgentEnvInjector 未注入完整上下文时（如测试、直接调用），
- * 用合理的默认值填充所有必填字段。
- */
+/** @deprecated Runtime 必须由 AgentEnvInjector 注入完整 ToolExecutionContext。 */
 export function createFallbackToolContext(opts: { workspaceRoot: string; sessionId?: string }): ToolExecutionContext {
-  const workspace = opts.workspaceRoot;
-  const sessionId = opts.sessionId || 'unknown';
-  // 测试环境 fallback
-  const userHome = path.join(os.homedir(), '.coobee-test');
-  return {
-    mode: 'path-only',
-    workspaceRoot: workspace,
-    toolPolicy: { allow: [], deny: [], confirm: [] },
-    sessionId,
-    threadId: sessionId,
-    cwd: workspace,
-    sessionsDir: path.join(workspace, 'sessions'),
-    contextsDir: path.join(workspace, 'contexts'),
-    eventsDir: path.join(workspace, 'events'),
-    userHome,
-    configDir: path.join(userHome, 'config'),
-    tempDir: os.tmpdir(),
-    agentName: 'agent',
-    agentMode: 'agent'
-  };
+  throw new Error(
+    `[ToolExecutionPipeline] ToolExecutionContext must be injected explicitly; ` +
+      `fallback context creation is disabled: sessionId=${opts.sessionId || '(unknown)'}`
+  );
 }

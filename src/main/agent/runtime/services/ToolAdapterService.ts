@@ -9,12 +9,14 @@
 import { tool } from '@openai/agents';
 import type { Tool } from '@openai/agents';
 import type { ToolDefinition } from '../types';
-import { createFallbackToolContext } from '../shared/ToolExecutionPipeline';
+import type { ToolExecutionContext } from '../../tools/types';
 
 /**
  * 工具适配服务
  */
 export class ToolAdapterService {
+  constructor(private readonly sandboxContext: ToolExecutionContext) {}
+
   /**
    * 将 ToolDefinition 转换为 SDK Tool
    */
@@ -35,13 +37,8 @@ export class ToolAdapterService {
         // 使用工具执行管线
         const { executeToolPipeline } = await import('../shared/ToolExecutionPipeline');
 
-        const ctx = createFallbackToolContext({
-          workspaceRoot: process.cwd(),
-          sessionId: 'unknown'
-        });
-
         const result = await executeToolPipeline(toolDef, args, {
-          sandboxContext: ctx,
+          sandboxContext: this.sandboxContext,
           onUpdate: () => {}
         });
 
