@@ -1,49 +1,108 @@
 # 输入框 Ctrl 长按 AI 润色 - TODO
 
-## 1. 新增后端 `ai.polishText` RPC
+## 1. 新增后端 `threadless.run` RPC
 
-- **目标**：提供一个不依赖 Chat Thread 的轻量文本润色入口。
-- **背景**：当前前端 `AIGenerate.vue` 中的 `quickChatStream` 未实现，不能直接调用模型；主进程已有 `ThreadlessExecutor` 可复用。
+- **目标**：提供一个不依赖持久化 Chat Thread 的轻量 Agent 调用入口，供前端通用 AI 能力复用。
+- **背景**：后端已有 `ThreadlessExecutor.runMessage`，但前端目前只能通过 Gateway/RPC 发起请求；如果继续做专用 `ai.polishText`，后续摘要、翻译、字段生成都会重复造接口。
 - **涉及范围**：
-  - `src/main/rpc/`
-  - `src/main/common/gateway/` 的方法注册点（如需要）
+  - `src/main/rpc/ThreadlessMethods.ts`
   - `src/main/agent/ThreadlessExecutor.ts`
+  - `src/main/agent/execution/__tests__/ThreadlessExecutor.test.ts`
+  - 可选：`src/shared/api/threadless-types.ts`
 - **具体动作**：
-  - 新增 `aiMethods` 方法组，暴露 `ai.polishText`。
-  - 入参支持 `text`、`agentId?`、`promptTemplate?`、`runtimeType?`、`maxTurns?`。
-  - 默认 `agentId = 'app-copilot'`，默认 `runtimeType` 先沿用当前 Threadless 默认。
-  - 使用默认 prompt 模板构造 message。
-  - 调用 `ThreadlessExecutor.run(agentId, message, { lightweight: true, mode: 'chat', maxTurns: 1 })`。
-  - 返回 `{ text: string }`。
+  - 新增 `threadlessMethods` 方法组，`namespace = 'threadless'`，暴露 `run` 方法；Gateway 会自动扫描 `src/main/rpc/*Methods.ts`。
+  - 入参支持 `agentId?`、`message`、`instructions?`、`runtimeType?`、`mode?`、`lightweight?`、`maxTurns?`、`sessionId?`、`modelOverride?`、`promptVars?`、`metadata?`。
+  - 默认 `agentId = 'app-copilot'`、`mode = 'chat'`、`lightweight = true`、`maxTurns = 1`。
+  - 校验 `message` 必须是非空字符串，`runtimeType` 只能是 `pi-mono | openai | claude`。
+  - 调用 `ThreadlessExecutor.runMessage(params)`，返回 `{ text: string, sessionId?: string }`。
+  - 扩展 `ThreadlessExecutionOptions`：允许 `instructions?` 作为本次请求的附加系统约束，允许 `modelOverride?` 覆盖 agent 默认模型。
+  - 在 `ThreadlessExecutor.createRequest` 中合成最终请求：保留 agent 自身 instructions，同时把本次 `instructions` 追加为一次性约束。
 - **非目标**：
-  - 本项不做流式返回。
   - 本项不创建持久化 Thread。
+  - 本项不写入 `chatStore`。
+  - 本项先不做流式返回。
 - **验收标准**：
-  - [ ] 空文本返回参数错误。
-  - [ ] 有文本时返回纯文本结果。
-  - [ ] 默认 agent 是 `app-copilot`。
-  - [ ] 单元测试覆盖 prompt 构造和默认参数。
+  - [ ] `threadless.run` 出现在 `system.methods` 返回的方法列表中。
+  - [ ] 空 `message` 返回参数错误。
+  - [ ] 未传 `agentId` 时默认使用 `app-copilot`。
+  - [ ] `instructions` 能影响本次执行请求，但不修改 Agent 配置。
+  - [ ] 单元测试覆盖默认参数、参数校验、`instructions` 合成。
 - **状态**：[ ]
 
-## 2. 新增前端 `useAITextPolish` 组合式 API
+## 2. 新增前端 `useThreadExecutor` 组合式 API
 
-- **目标**：把调用、状态、错误和取消逻辑从指令/UI 中抽离。
-- **背景**：旧项目的 AI 状态管理散落在组件和指令中，当前项目更适合先沉到 composable。
+- **目标**：把“已有会话”的 Agent 请求封装成类型化 composable，减少业务组件直接写 Gateway 方法名。
+- **背景**：当前 `HomeView`、`AgentView`、`ChatPanel` 等位置直接调用 `chat.createThread`、`chat.sendMessage`、`chat.abortMessage`，后续新增参数时容易散落。
+- **涉及范围**：
+  - `src/renderer/src/composables/useThreadExecutor.ts`
+  - `src/renderer/src/composables/README.md`
+  - 可选：`src/shared/api/thread-types.ts`
+- **具体动作**：
+  - 基于 `useGateway().request` 封装 `createThread(options)`、`sendMessage(options)`、`abortMessage(threadId)`。
+  - `createThread` 入参支持 `title?`、`agentId?`、`overrideModel?`、`runtimeType?`、`enableThinking?`、`asrEnabled?`、`ttsEnabled?`。
+  - `sendMessage` 入参支持 `threadId`、`message`、`runtimeType?`。
+  - `abortMessage` 入参使用 `threadId` 字符串，内部转换成 `{ threadId }`。
+  - 暴露 `connectionState`、`lastError`，方便调用方沿用 Gateway 状态。
+  - 文档中说明：流式消息仍走 `stream:*` 事件，不在该 composable 内拼接。
+- **非目标**：
+  - 本项不改现有聊天消息渲染。
+  - 本项不替换 `chatStore.handleStreamMessage`。
+- **验收标准**：
+  - [ ] `useThreadExecutor` 不直接导入 `gateway`，只通过 `useGateway`。
+  - [ ] 三个方法的 RPC 名称集中在该文件中。
+  - [ ] README 有基本调用示例。
+- **状态**：[ ]
+
+## 3. 新增前端 `useThreadlessExecutor` 组合式 API
+
+- **目标**：把“无会话轻量 Agent 请求”封装成通用 composable，为润色、摘要、翻译等功能提供统一入口。
+- **背景**：用户希望前端能定义与后端 `ThreadlessExecutor` 对应的方法，并能传递 `instructions` 等额外参数。
+- **涉及范围**：
+  - `src/renderer/src/composables/useThreadlessExecutor.ts`
+  - `src/renderer/src/composables/README.md`
+  - 可选：`src/shared/api/threadless-types.ts`
+- **具体动作**：
+  - 基于 `useGateway().request` 封装 `run(options)`。
+  - `run` 入参支持 `agentId?`、`message`、`instructions?`、`runtimeType?`、`mode?`、`lightweight?`、`maxTurns?`、`sessionId?`、`modelOverride?`、`promptVars?`、`metadata?`。
+  - 默认值在前端和后端保持一致：`agentId = 'app-copilot'`、`mode = 'chat'`、`lightweight = true`、`maxTurns = 1`。
+  - 返回值定义为 `{ text: string, sessionId?: string, usage?: unknown }`，即使初版后端只返回 `text`，前端类型也保留扩展口。
+  - 对空 `message` 在前端先做保护，避免无意义 RPC。
+  - 文档中说明：该 composable 不创建 Thread、不触碰 `chatStore`。
+- **非目标**：
+  - 本项先不实现 `stream`。
+  - 本项不提供具体业务 prompt。
+- **验收标准**：
+  - [ ] `run({ message })` 能调用 `threadless.run`。
+  - [ ] 支持传入 `instructions`、`agentId`、`runtimeType` 等参数。
+  - [ ] 空 `message` 不发起请求并返回明确错误。
+  - [ ] README 有“一句话润色”之外的通用调用示例。
+- **状态**：[ ]
+
+## 4. 新增前端 `useAITextPolish` 组合式 API
+
+- **目标**：把润色 prompt、状态、错误和防重复触发逻辑从指令/UI 中抽离。
+- **背景**：`useThreadlessExecutor` 只负责通用执行，不应该知道“一句话润色”这种业务 preset。
 - **涉及范围**：
   - `src/renderer/src/composables/useAITextPolish.ts`
-  - `src/renderer/src/composables/README.md`（可选）
+  - `src/renderer/src/composables/README.md`
 - **具体动作**：
-  - 使用 `useGateway().request` 调用 `ai.polishText`。
+  - 内部调用 `useThreadlessExecutor().run(...)`，不直接调用 `useGateway`。
   - 暴露 `status`、`isGenerating`、`result`、`error`、`polish(text, options)`、`reset()`。
-  - 防止重复并发触发。
-  - 允许传入 `promptTemplate` 和 `agentId`。
+  - `polish` options 支持 `agentId?`、`instructions?`、`promptTemplate?`、`runtimeType?`、`context?`、`label?`、`placeholder?`。
+  - 默认 `instructions` 强约束“只返回润色后的文本，不要解释，不要 Markdown”。
+  - 默认 message 使用模板变量 `text`、`label`、`placeholder`、`context`。
+  - 生成中重复触发时忽略并保留当前请求状态。
+- **非目标**：
+  - 本项不做 DOM 回填。
+  - 本项不做长按监听。
 - **验收标准**：
   - [ ] 调用成功后 `result` 为润色文本。
   - [ ] 调用失败后 `error` 有明确错误信息。
   - [ ] 生成中重复调用不会产生多次请求。
+  - [ ] `useAITextPolish` 的底层调用只依赖 `useThreadlessExecutor`。
 - **状态**：[ ]
 
-## 3. 新增 `v-ai-polish` 指令
+## 5. 新增 `v-ai-polish` 指令
 
 - **目标**：让任意输入框通过指令获得 Ctrl/Control 长按润色能力。
 - **背景**：用户希望这是一个通用能力，而不是只在某个输入框里硬编码。
@@ -52,11 +111,12 @@
   - `src/renderer/src/plugins/` 或应用入口的指令注册点
 - **具体动作**：
   - 支持绑定值：
-    - 字符串：作为 promptTemplate。
-    - 对象：`{ agentId?, promptTemplate?, duration?, autoApply?, disabled?, context? }`。
+    - 字符串：作为 `promptTemplate`。
+    - 对象：`{ agentId?, instructions?, promptTemplate?, duration?, autoApply?, disabled?, context? }`。
   - 聚焦输入元素后监听 `keydown`/`keyup`。
   - Ctrl/Control 按住超过 `duration` 后触发。
   - 支持 `input`、`textarea`、`contenteditable`。
+  - 调用 `useAITextPolish` 执行润色。
   - 生成完成后回填值，并派发 `input` 和 `change`。
   - 指令卸载时清理定时器和事件监听。
 - **验收标准**：
@@ -66,7 +126,7 @@
   - [ ] 回填后 `v-model` 正常更新。
 - **状态**：[ ]
 
-## 4. 新增轻量浮层反馈
+## 6. 新增轻量浮层反馈
 
 - **目标**：给用户明确的等待、生成中、完成、失败反馈。
 - **背景**：旧项目的浮层反馈是好点，应保留，但当前项目需要更轻、更适配现有设计。
@@ -84,7 +144,7 @@
   - [ ] 不引入页面布局抖动。
 - **状态**：[ ]
 
-## 5. 接入一个试点输入框
+## 7. 接入一个试点输入框
 
 - **目标**：用最小范围验证交互和调用链路。
 - **背景**：先不要全局铺开，避免影响所有输入框。
@@ -100,20 +160,20 @@
   - [ ] 未影响现有保存逻辑。
 - **状态**：[ ]
 
-## 6. 后续扩展到通用 `AIGenerate`
+## 8. 后续扩展到通用 `AIGenerate`
 
 - **目标**：把专用润色能力升级为通用 AI 生成底座。
 - **背景**：当前项目已有 `components/common/AIGenerate.vue`，但模型调用未接通。
 - **涉及范围**：
   - `src/renderer/src/components/common/AIGenerate.vue`
   - `src/renderer/src/composables/useAIGenerate.ts`
-  - `src/main/rpc/aiMethods.ts`
+  - `src/renderer/src/composables/useThreadlessExecutor.ts`
 - **具体动作**：
-  - 将 `ai.polishText` 泛化为 `ai.generate`。
-  - 让 `AIGenerate.vue` 复用 `useAIGenerate`。
+  - 让 `AIGenerate.vue` 复用 `useThreadlessExecutor` 或 `useAIGenerate`。
   - 保留 renderless slot API，避免强制 UI。
+  - 将润色、总结、翻译等 preset 统一收敛到底层 `threadless.run`。
+  - 旧占位 `quickChatStream` 移除或替换成真实调用。
 - **验收标准**：
   - [ ] 润色、总结、翻译等 preset 可共用同一底层能力。
   - [ ] 旧占位 `quickChatStream` 被移除或替换。
 - **状态**：[ ]
-
