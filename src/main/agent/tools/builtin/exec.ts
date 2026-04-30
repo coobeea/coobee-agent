@@ -22,14 +22,15 @@
  *
  * 分类：Execute | 风险：高（可执行任意系统命令）
  */
-import { spawn } from 'node:child_process';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import type { ToolDefinition, ToolStreamUpdate, ToolResult, ToolExecutionContext } from '../types';
 import { ToolCategory } from '../types';
 import { resolveWorkingDirectory } from '../../sandbox';
 
 import { checkExecPolicy } from '../../sandbox/exec-policy';
 import { scanCommand } from '../security/command-scanner';
+import { getProcessSupervisor, getShellConfig, getBackgroundStore } from '../../process';
 // import { getPtyManager } from '@main/terminal/PtyManager'; // 最小化模式下禁用
 
 /** 默认超时（ms）— 2 分钟，覆盖大部分构建/测试场景 */
@@ -123,120 +124,276 @@ export const execTool: ToolDefinition = {
     if (terminal) {
       yield { type: 'progress', content: `[terminal] $ ${command}`, percentage: 0 };
 
-      const llmContent = '[Terminal] Terminal mode is disabled in minimal mode. Use foreground mode instead.';
+      const termEnv = { ...process.env, ...context?.envVars };
+      const supervisor = getProcessSupervisor();
+      const sessionId = (context?.sessionId as string | undefined) ?? 'exec-tool';
+      const backendId = 'exec-tool-terminal';
 
-      yield {
-        type: 'output',
-        content: llmContent
+      let termStdout = '';
+      let termStdoutBytes = 0;
+      let termStdoutTruncated = false;
+
+      let run: Awaited<ReturnType<typeof supervisor.spawn>> | undefined;
+      const onAbort = (): void => {
+        run?.cancel('manual-cancel');
       };
+      if (signal) {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+      try {
+        run = await supervisor.spawn({
+          mode: 'pty',
+          sessionId,
+          backendId,
+          ptyCommand: command,
+          cwd,
+          env: termEnv,
+          timeoutMs: timeout,
+          captureOutput: false,
+          onStdout: (chunk) => {
+            if (termStdoutBytes < MAX_OUTPUT_BYTES) {
+              const remain = MAX_OUTPUT_BYTES - termStdoutBytes;
+              const bytes = Buffer.byteLength(chunk, 'utf-8');
+              if (bytes <= remain) {
+                termStdout += chunk;
+                termStdoutBytes += bytes;
+              } else {
+                termStdout += Buffer.from(chunk, 'utf-8').subarray(0, remain).toString('utf-8');
+                termStdoutBytes = MAX_OUTPUT_BYTES;
+                termStdoutTruncated = true;
+              }
+            } else {
+              termStdoutTruncated = true;
+            }
+          }
+        });
 
-      const duration = Date.now() - startTime;
-      return {
-        success: true,
-        llmContent,
-        userContent: llmContent,
-        metadata: {
-          startTime,
-          endTime: Date.now(),
-          duration,
-          cwd
+        const exit = await run.wait();
+        if (termStdoutTruncated) {
+          termStdout += `\n... [output truncated at ${MAX_OUTPUT_BYTES} bytes]`;
         }
-      };
+
+        const timedOut = exit.timedOut;
+        const parts: string[] = [];
+        if (timedOut) {
+          parts.push(`[Timed out after ${timeout}ms]`);
+        }
+        parts.push(`Exit code: ${exit.exitCode ?? 'null (killed)'}`);
+        if (termStdout.trim()) {
+          parts.push(`output:\n${termStdout.trim()}`);
+        }
+        const llmContent = parts.join('\n\n');
+        const success = exit.exitCode === 0 && !timedOut && exit.reason === 'exit';
+
+        yield {
+          type: 'output',
+          content: `Terminal command ${success ? 'completed' : 'failed'} in ${exit.durationMs}ms`
+        };
+
+        return {
+          success,
+          llmContent,
+          userContent: llmContent,
+          error: success
+            ? undefined
+            : {
+                code: timedOut ? 'TIMEOUT' : exit.reason === 'manual-cancel' ? 'ABORTED' : 'EXIT_CODE',
+                message: timedOut
+                  ? `Terminal command timed out after ${timeout}ms`
+                  : exit.reason === 'manual-cancel'
+                    ? 'Terminal command cancelled'
+                    : `Exit code: ${exit.exitCode}`
+              },
+          metadata: {
+            startTime,
+            endTime: Date.now(),
+            duration: exit.durationMs,
+            exitCode: exit.exitCode,
+            timedOut,
+            cwd,
+            runId: run.runId,
+            terminationReason: exit.reason,
+            mode: 'terminal'
+          }
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const isPtyMissing = /node-pty|PTY support is unavailable|Cannot find module/i.test(message);
+        const userMessage = isPtyMissing
+          ? '[Terminal] @lydell/node-pty is not installed. Install it via `pnpm add @lydell/node-pty` or use foreground mode.'
+          : `[Terminal] Error: ${message}`;
+        return {
+          success: false,
+          llmContent: userMessage,
+          error: { code: isPtyMissing ? 'PTY_UNAVAILABLE' : 'TERMINAL_ERROR', message },
+          metadata: { startTime, endTime: Date.now(), duration: Date.now() - startTime, cwd, mode: 'terminal' }
+        };
+      } finally {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        }
+      }
     }
 
     // ==================== 后台模式 ====================
     if (background) {
       yield { type: 'progress', content: `[background] $ ${command}`, percentage: 0 };
 
-      const llmContent = '[Background] Process started, but background process management is disabled in minimal mode.';
+      const bgEnv = { ...process.env, ...context?.envVars };
+      const { shell, args: shellArgs } = getShellConfig();
+      const supervisor = getProcessSupervisor();
+      const store = getBackgroundStore();
+      const sessionId = (context?.sessionId as string | undefined) ?? 'exec-tool';
+      const backendId = 'exec-tool-background';
+      const runId = crypto.randomUUID();
 
-      yield {
-        type: 'output',
-        content: llmContent
-      };
+      // 先 register，确保 onStdout/onStderr 回调能在 spawn 过程中的早期输出就找到 entry
+      store.register({ runId, sessionId, backendId, command, cwd });
 
-      return {
-        success: true,
-        llmContent,
-        userContent: llmContent,
-        metadata: {
-          startTime,
-          endTime: Date.now(),
-          duration: Date.now() - startTime,
-          background: true,
-          cwd
-        }
-      };
+      try {
+        const run = await supervisor.spawn({
+          mode: 'child',
+          runId,
+          sessionId,
+          backendId,
+          scopeKey: sessionId,
+          argv: [shell, ...shellArgs, command],
+          cwd,
+          env: bgEnv,
+          captureOutput: false,
+          stdinMode: 'pipe-open',
+          onStdout: (chunk) => store.appendStdout(runId, chunk),
+          onStderr: (chunk) => store.appendStderr(runId, chunk)
+        });
+        store.bindRun(runId, run);
+
+        // 异步等待退出，落 store state
+        void run
+          .wait()
+          .then((exit) => store.markExited(runId, exit))
+          .catch(() =>
+            store.markExited(runId, {
+              reason: 'spawn-error',
+              exitCode: null,
+              exitSignal: null,
+              durationMs: 0,
+              stdout: '',
+              stderr: '',
+              timedOut: false,
+              noOutputTimedOut: false
+            })
+          );
+
+        const llmContent =
+          `[Background] Process started.\n` +
+          `processId: ${runId}\n` +
+          `pid: ${run.pid ?? 'unknown'}\n` +
+          `Use the \`process\` tool (action=read/write/kill, processId="${runId}") to manage it.`;
+
+        yield { type: 'output', content: llmContent };
+
+        return {
+          success: true,
+          llmContent,
+          userContent: llmContent,
+          metadata: {
+            startTime,
+            endTime: Date.now(),
+            duration: Date.now() - startTime,
+            background: true,
+            cwd,
+            runId,
+            pid: run.pid,
+            sessionId,
+            mode: 'background'
+          }
+        };
+      } catch (err) {
+        store.remove(runId);
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          success: false,
+          llmContent: `[Background] Error starting process: ${message}`,
+          error: { code: 'BACKGROUND_SPAWN_ERROR', message },
+          metadata: { startTime, endTime: Date.now(), duration: Date.now() - startTime, cwd, mode: 'background' }
+        };
+      }
     }
 
     // ==================== 前台模式 ====================
     yield { type: 'progress', content: `$ ${command}`, percentage: 0 };
 
-    const result: ToolResult = await new Promise<ToolResult>((resolveResult) => {
-      const stdout: Buffer[] = [];
-      const stderr: Buffer[] = [];
-      let stdoutBytes = 0;
-      let stderrBytes = 0;
-      let stdoutTruncated = false;
-      let stderrTruncated = false;
-      let timedOut = false;
+    // 合并上下文环境变量（COOBEE_* 等），供 Skill 脚本读取配置
+    const fgEnv = { ...process.env, ...context?.envVars };
 
-      // 合并上下文环境变量（COOBEE_* 等），供 Skill 脚本读取配置
-      const fgEnv = { ...process.env, ...context?.envVars };
+    // 跨平台 shell：macOS/Linux → sh/bash/zsh -c，Windows → pwsh -Command
+    const { shell, args: shellArgs } = getShellConfig();
+    const supervisor = getProcessSupervisor();
+    const sessionId = (context?.sessionId as string | undefined) ?? 'exec-tool';
+    const backendId = 'exec-tool-foreground';
 
-      const child = spawn(command, {
-        shell: true,
-        timeout,
-        cwd,
-        env: fgEnv,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
+    // 自己做 100KB 截断，上报时在末尾追加提示，避免把大输出全积到 RunExit.stdout
+    let stdoutStr = '';
+    let stderrStr = '';
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
 
-      // 支持外部取消
-      const abortHandler = (): void => {
-        child.kill('SIGTERM');
+    const result: ToolResult = await (async (): Promise<ToolResult> => {
+      let run: Awaited<ReturnType<typeof supervisor.spawn>> | undefined;
+      const onAbort = (): void => {
+        run?.cancel('manual-cancel');
       };
       if (signal) {
-        signal.addEventListener('abort', abortHandler, { once: true });
+        signal.addEventListener('abort', onAbort, { once: true });
       }
-
-      child.stdout.on('data', (data: Buffer) => {
-        if (stdoutBytes < MAX_OUTPUT_BYTES) {
-          stdout.push(data);
-          stdoutBytes += data.length;
-        } else {
-          stdoutTruncated = true;
-        }
-      });
-
-      child.stderr.on('data', (data: Buffer) => {
-        if (stderrBytes < MAX_OUTPUT_BYTES) {
-          stderr.push(data);
-          stderrBytes += data.length;
-        } else {
-          stderrTruncated = true;
-        }
-      });
-
-      child.on('error', (err: Error) => {
-        signal?.removeEventListener('abort', abortHandler);
-        resolveResult({
-          success: false,
-          llmContent: `Error executing command: ${err.message}`,
-          error: { code: 'EXEC_ERROR', message: err.message },
-          metadata: { startTime, endTime: Date.now(), duration: Date.now() - startTime }
+      try {
+        run = await supervisor.spawn({
+          mode: 'child',
+          sessionId,
+          backendId,
+          argv: [shell, ...shellArgs, command],
+          cwd,
+          env: fgEnv,
+          timeoutMs: timeout,
+          captureOutput: false,
+          stdinMode: 'pipe-closed',
+          onStdout: (chunk) => {
+            if (stdoutBytes < MAX_OUTPUT_BYTES) {
+              const remain = MAX_OUTPUT_BYTES - stdoutBytes;
+              const bytes = Buffer.byteLength(chunk, 'utf-8');
+              if (bytes <= remain) {
+                stdoutStr += chunk;
+                stdoutBytes += bytes;
+              } else {
+                stdoutStr += Buffer.from(chunk, 'utf-8').subarray(0, remain).toString('utf-8');
+                stdoutBytes = MAX_OUTPUT_BYTES;
+                stdoutTruncated = true;
+              }
+            } else {
+              stdoutTruncated = true;
+            }
+          },
+          onStderr: (chunk) => {
+            if (stderrBytes < MAX_OUTPUT_BYTES) {
+              const remain = MAX_OUTPUT_BYTES - stderrBytes;
+              const bytes = Buffer.byteLength(chunk, 'utf-8');
+              if (bytes <= remain) {
+                stderrStr += chunk;
+                stderrBytes += bytes;
+              } else {
+                stderrStr += Buffer.from(chunk, 'utf-8').subarray(0, remain).toString('utf-8');
+                stderrBytes = MAX_OUTPUT_BYTES;
+                stderrTruncated = true;
+              }
+            } else {
+              stderrTruncated = true;
+            }
+          }
         });
-      });
 
-      child.on('close', (code: number | null, sig: string | null) => {
-        signal?.removeEventListener('abort', abortHandler);
-
-        if (sig === 'SIGTERM') {
-          timedOut = true;
-        }
-
-        let stdoutStr = Buffer.concat(stdout).toString('utf-8');
-        let stderrStr = Buffer.concat(stderr).toString('utf-8');
+        const exit = await run.wait();
 
         if (stdoutTruncated) {
           stdoutStr += `\n... [stdout truncated at ${MAX_OUTPUT_BYTES} bytes]`;
@@ -245,14 +402,12 @@ export const execTool: ToolDefinition = {
           stderrStr += `\n... [stderr truncated at ${MAX_OUTPUT_BYTES} bytes]`;
         }
 
+        const timedOut = exit.timedOut;
         const parts: string[] = [];
-
         if (timedOut) {
           parts.push(`[Timed out after ${timeout}ms]`);
         }
-
-        parts.push(`Exit code: ${code ?? 'null (killed)'}`);
-
+        parts.push(`Exit code: ${exit.exitCode ?? 'null (killed)'}`);
         if (stdoutStr.trim()) {
           parts.push(`stdout:\n${stdoutStr.trim()}`);
         }
@@ -261,32 +416,49 @@ export const execTool: ToolDefinition = {
         }
 
         const llmContent = parts.join('\n\n');
-        const duration = Date.now() - startTime;
-        const success = code === 0 && !timedOut;
+        const success = exit.exitCode === 0 && !timedOut && exit.reason === 'exit';
 
-        resolveResult({
+        return {
           success,
           llmContent,
           userContent: llmContent,
           error: success
             ? undefined
             : {
-                code: timedOut ? 'TIMEOUT' : 'EXIT_CODE',
-                message: timedOut ? `Command timed out after ${timeout}ms` : `Exit code: ${code}`
+                code: timedOut ? 'TIMEOUT' : exit.reason === 'manual-cancel' ? 'ABORTED' : 'EXIT_CODE',
+                message: timedOut
+                  ? `Command timed out after ${timeout}ms`
+                  : exit.reason === 'manual-cancel'
+                    ? 'Command cancelled'
+                    : `Exit code: ${exit.exitCode}`
               },
           metadata: {
             startTime,
             endTime: Date.now(),
-            duration,
-            exitCode: code,
+            duration: exit.durationMs,
+            exitCode: exit.exitCode,
             timedOut,
             stdoutBytes,
             stderrBytes,
-            cwd
+            cwd,
+            runId: run.runId,
+            terminationReason: exit.reason
           }
-        });
-      });
-    });
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          success: false,
+          llmContent: `Error executing command: ${message}`,
+          error: { code: 'EXEC_ERROR', message },
+          metadata: { startTime, endTime: Date.now(), duration: Date.now() - startTime, cwd }
+        };
+      } finally {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        }
+      }
+    })();
 
     // 输出最终结果摘要
     const exitInfo = result.metadata?.exitCode === 0 ? 'completed' : `failed (exit ${result.metadata?.exitCode})`;
