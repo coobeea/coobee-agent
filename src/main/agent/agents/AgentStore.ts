@@ -270,7 +270,7 @@ export class AgentStore {
       ...(params.enableThinking !== undefined && { enableThinking: params.enableThinking }),
       ...(params.asrEnabled !== undefined && { asrEnabled: params.asrEnabled }),
       ...(params.ttsEnabled !== undefined && { ttsEnabled: params.ttsEnabled }),
-      ...(params.metadata !== undefined && { metadata: params.metadata }),
+      ...(params.metadata !== undefined && { metadata: { ...(existing.metadata || {}), ...params.metadata } }),
       updatedAt: new Date().toISOString(),
       version: existing.version + 1
     };

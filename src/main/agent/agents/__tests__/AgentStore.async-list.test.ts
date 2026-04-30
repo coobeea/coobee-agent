@@ -134,4 +134,44 @@ describe('AgentStore 异步列表', () => {
       ttsEnabled: true
     });
   });
+
+  it('update 会合并 metadata，避免快捷问题局部保存覆盖其他配置', async () => {
+    const store = new AgentStore(userDir, homesDir);
+
+    await store.create({
+      id: 'metadata-agent',
+      name: 'Metadata Agent',
+      description: 'metadata patch',
+      instructions: 'hello',
+      metadata: {
+        greeting: '你好',
+        starterPrompts: ['第一个问题'],
+        dataDirectory: '/tmp/agent-data'
+      }
+    });
+
+    const updated = await store.update('metadata-agent', {
+      metadata: {
+        starterPrompts: ['第一个问题', '第二个问题']
+      }
+    });
+
+    expect(updated?.metadata).toMatchObject({
+      greeting: '你好',
+      starterPrompts: ['第一个问题', '第二个问题'],
+      dataDirectory: '/tmp/agent-data'
+    });
+
+    const cleared = await store.update('metadata-agent', {
+      metadata: {
+        starterPrompts: []
+      }
+    });
+
+    expect(cleared?.metadata).toMatchObject({
+      greeting: '你好',
+      starterPrompts: [],
+      dataDirectory: '/tmp/agent-data'
+    });
+  });
 });

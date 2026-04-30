@@ -11,15 +11,9 @@ import BlockAudio from '../blocks/BlockAudio.vue';
 import BlockStats from '../blocks/BlockStats.vue';
 import HitlApprovalCard from '../HitlApprovalCard.vue';
 
-withDefaults(
-  defineProps<{
-    message: ChatMessage;
-    assistantName?: string;
-  }>(),
-  {
-    assistantName: '智能体'
-  }
-);
+defineProps<{
+  message: ChatMessage;
+}>();
 
 const emit = defineEmits<{
   decide: [approval: PendingApproval, decision: HitlApprovalDecision];
@@ -28,13 +22,6 @@ const emit = defineEmits<{
 
 <template>
   <div class="msg-block" :class="{ 'msg-block--with-stats': message.status === 'done' && message.stats }">
-    <div class="msg-role-row">
-      <span class="msg-role-icon msg-role-assistant">
-        <span class="inline-block h-3 w-3 i-mdi-star-four-points" />
-      </span>
-      <span class="msg-role-name">{{ assistantName }}</span>
-    </div>
-
     <div class="msg-content">
       <template v-if="message.blocks && message.blocks.length > 0">
         <template v-for="(block, idx) in message.blocks" :key="idx">
@@ -89,33 +76,6 @@ const emit = defineEmits<{
 
 .msg-block--with-stats {
   padding-bottom: 30px;
-}
-
-.msg-role-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 3px;
-}
-
-.msg-role-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-}
-
-.msg-role-assistant {
-  background: hsl(var(--foreground) / 0.1);
-  color: hsl(var(--foreground) / 0.7);
-}
-
-.msg-role-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: hsl(var(--foreground));
 }
 
 .msg-content {

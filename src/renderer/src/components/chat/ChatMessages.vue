@@ -71,25 +71,31 @@ const elapsedLabel = computed(() => formatElapsed(elapsedSeconds.value));
 const messageContainer = ref<HTMLElement | null>(null);
 
 // ========== 智能滚动：用户往上浏览时不强制拉回底部 ==========
-const userScrolledUp = ref(false);
+const shouldAutoFollow = ref(true);
 
 function isNearBottom(): boolean {
   const el = messageContainer.value;
   if (!el) return true;
-  return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+}
+
+function handleUserScrollIntent(event: WheelEvent): void {
+  if (event.deltaY < 0) {
+    shouldAutoFollow.value = false;
+  }
 }
 
 function handleScroll(): void {
-  userScrolledUp.value = !isNearBottom();
+  shouldAutoFollow.value = isNearBottom();
 }
 
 function scrollToBottom(force = false): void {
-  if (!force && userScrolledUp.value) return;
+  if (!force && !shouldAutoFollow.value) return;
 
   const doScroll = (): void => {
     if (messageContainer.value) {
       messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
-      userScrolledUp.value = false;
+      shouldAutoFollow.value = true;
     }
   };
 
@@ -201,7 +207,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="messages-wrapper">
-    <div ref="messageContainer" class="panel-messages selectable" @scroll="handleScroll">
+    <div
+      ref="messageContainer"
+      class="panel-messages selectable"
+      @wheel.passive="handleUserScrollIntent"
+      @scroll="handleScroll">
       <!-- 空状态 -->
       <div v-if="messages.length === 0" class="panel-empty">
         <slot name="empty">
@@ -219,7 +229,6 @@ onBeforeUnmount(() => {
         <MessageItemAssistant
           v-else
           :message="msg"
-          :assistant-name="assistantName"
           @decide="(approval, decision) => emit('decide', approval, decision)" />
       </template>
 

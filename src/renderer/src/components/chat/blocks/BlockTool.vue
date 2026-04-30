@@ -8,30 +8,6 @@ const props = defineProps<{
 
 const expanded = ref(false);
 
-const statusIconClass = computed(() => {
-  const status = props.block.tool.status;
-  if (status === 'calling') return 'i-carbon-renew animate-spin';
-  if (status === 'approval-pending') return 'i-carbon-locked';
-  if (status === 'done') return 'i-carbon-checkmark-filled';
-  return 'i-carbon-warning-alt';
-});
-
-const statusColor = computed(() => {
-  const status = props.block.tool.status;
-  if (status === 'calling') return 'tool-status-icon--calling';
-  if (status === 'approval-pending') return 'tool-status-icon--approval-pending';
-  if (status === 'done') return 'tool-status-icon--done';
-  return 'tool-status-icon--error';
-});
-
-const statusText = computed(() => {
-  const status = props.block.tool.status;
-  if (status === 'calling') return '执行中';
-  if (status === 'approval-pending') return '等待审批';
-  if (status === 'done') return '完成';
-  return '失败';
-});
-
 const formattedArgs = computed(() => formatPayload(props.block.tool.arguments));
 const fullResult = computed(() => formatPayload(props.block.tool.result));
 const updates = computed(() => props.block.tool.updates || []);
@@ -161,17 +137,14 @@ function getUpdateLabel(type: string): string {
       :class="{ 'tool-header--clickable': canExpand }"
       @click="canExpand && (expanded = !expanded)">
       <div class="tool-header-left">
-        <span class="tool-status-icon" :class="[statusIconClass, statusColor]" />
         <span class="tool-name">{{ block.tool.name }}</span>
         <span v-if="previewText" class="tool-preview">{{ previewText }}</span>
-        <span class="tool-status-badge" :class="`tool-status-badge--${block.tool.status}`">
-          {{ statusText }}
-        </span>
+        <span v-if="block.tool.status === 'calling'" class="tool-status-badge">执行中</span>
       </div>
       <span
         v-if="canExpand"
         class="tool-expand-icon"
-        :class="expanded ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'" />
+        :class="expanded ? 'i-carbon-chevron-down' : 'i-carbon-chevron-right'" />
     </div>
 
     <div v-if="expanded && canExpand" class="tool-details">
@@ -206,12 +179,12 @@ function getUpdateLabel(type: string): string {
 .tool-wrapper {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   align-self: flex-start;
   width: min(100%, 680px);
-  border: 1px solid hsl(var(--border) / 0.5);
-  border-radius: 7px;
-  background: hsl(var(--muted) / 0.12);
+  overflow: visible;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .tool-header {
@@ -219,9 +192,9 @@ function getUpdateLabel(type: string): string {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  min-height: 32px;
-  padding: 6px 9px;
-  transition: background-color 0.15s;
+  min-height: 26px;
+  padding: 3px 0;
+  transition: color 0.15s;
 }
 
 .tool-header--clickable {
@@ -229,7 +202,7 @@ function getUpdateLabel(type: string): string {
 }
 
 .tool-header--clickable:hover {
-  background: hsl(var(--muted) / 0.24);
+  color: hsl(var(--foreground) / 0.72);
 }
 
 .tool-header-left {
@@ -240,39 +213,20 @@ function getUpdateLabel(type: string): string {
   gap: 7px;
 }
 
-.tool-status-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-
-.tool-status-icon--calling {
-  color: hsl(var(--primary));
-}
-
-.tool-status-icon--approval-pending {
-  color: hsl(var(--chart-4, var(--primary)));
-}
-
-.tool-status-icon--done {
-  color: hsl(var(--chart-2, var(--primary)));
-}
-
-.tool-status-icon--error {
-  color: hsl(var(--destructive));
-}
-
 .tool-name {
   flex-shrink: 0;
-  color: hsl(var(--foreground));
+  color: hsl(var(--muted-foreground) / 0.64);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .tool-status-badge {
   flex-shrink: 0;
   border-radius: 999px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
   padding: 1px 6px;
   font-size: 10px;
   font-weight: 600;
@@ -289,31 +243,11 @@ function getUpdateLabel(type: string): string {
   white-space: nowrap;
 }
 
-.tool-status-badge--calling {
-  background: hsl(var(--primary) / 0.1);
-  color: hsl(var(--primary));
-}
-
-.tool-status-badge--done {
-  background: hsl(var(--chart-2, var(--primary)) / 0.1);
-  color: hsl(var(--chart-2, var(--primary)));
-}
-
-.tool-status-badge--error {
-  background: hsl(var(--destructive) / 0.1);
-  color: hsl(var(--destructive));
-}
-
-.tool-status-badge--approval-pending {
-  background: hsl(var(--chart-4, var(--primary)) / 0.1);
-  color: hsl(var(--chart-4, var(--primary)));
-}
-
 .tool-expand-icon {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
-  color: hsl(var(--muted-foreground) / 0.75);
+  color: hsl(var(--muted-foreground) / 0.5);
   transition: transform 0.2s;
 }
 
@@ -321,9 +255,11 @@ function getUpdateLabel(type: string): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid hsl(var(--border) / 0.42);
-  background: hsl(var(--background) / 0.65);
-  padding: 9px;
+  margin: 4px -8px 0;
+  padding: 8px;
+  border: 1px solid hsl(var(--border) / 0.42);
+  border-radius: 7px;
+  background: hsl(var(--muted) / 0.1);
 }
 
 .tool-section {

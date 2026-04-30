@@ -22,7 +22,6 @@ function toggleCollapse(): void {
 <template>
   <div class="msg-thinking">
     <div class="thinking-row" @click="toggleCollapse">
-      <span class="i-carbon-idea inline-block h-3 w-3 shrink-0" />
       <span class="thinking-label">思考</span>
       <span v-if="collapsed" class="thinking-preview">{{ previewText }}</span>
       <span v-else class="thinking-spacer" />
@@ -44,10 +43,9 @@ function toggleCollapse(): void {
 .msg-thinking {
   font-size: 12.5px;
   color: hsl(var(--muted-foreground));
-  background: hsl(var(--muted) / 0.16);
-  border: 1px solid hsl(var(--border) / 0.45);
-  border-radius: 6px;
-  overflow: hidden;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .thinking-row {
@@ -55,19 +53,20 @@ function toggleCollapse(): void {
   align-items: center;
   gap: 5px;
   min-height: 26px;
-  padding: 3px 8px;
+  padding: 3px 0;
   cursor: pointer;
   user-select: none;
 }
 
 .thinking-row:hover {
-  background: hsl(var(--muted) / 0.28);
+  color: hsl(var(--foreground) / 0.72);
 }
 
 .thinking-label {
   font-weight: 500;
-  font-size: 11px;
-  color: hsl(var(--foreground) / 0.68);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: hsl(var(--muted-foreground) / 0.64);
 }
 
 .thinking-preview {
@@ -90,14 +89,16 @@ function toggleCollapse(): void {
   padding: 0;
   background: none;
   border: none;
-  color: hsl(var(--muted-foreground) / 0.6);
+  color: hsl(var(--muted-foreground) / 0.5);
   cursor: pointer;
 }
 
 .thinking-body {
-  border-top: 1px solid hsl(var(--border) / 0.35);
-  padding: 6px 8px;
-  background: hsl(var(--background) / 0.55);
+  margin: 4px -8px 0;
+  padding: 7px 8px;
+  border: 1px solid hsl(var(--border) / 0.42);
+  border-radius: 7px;
+  background: hsl(var(--muted) / 0.1);
 }
 
 .msg-thinking-text {

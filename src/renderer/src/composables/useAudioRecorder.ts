@@ -4,9 +4,9 @@
  * 封装麦克风采集、PCM 降采样、WebSocket 传输、ASR 结果消费全链路。
  *
  * 核心机制：
- *   1. 音频采集：ScriptProcessorNode → Float32 → 降采样 16kHz → Int16 → WebSocket
+ *   1. 音频采集：ScriptProcessorNode → Float32 → 累计若干采集帧 → 降采样 16kHz → Int16 → WebSocket
  *   2. 服务端 VAD：Python ASR 服务端检测停顿后触发识别，返回 partial/final
- *   3. 客户端 text-idle：partial 文本稳定超过 SILENCE_DURATION 后判定"说完了"，自动提交
+ *   3. 客户端 text-idle：partial 文本稳定超过 SILENCE_DURATION 后触发结束回调
  */
 
 import { ref } from 'vue';
@@ -21,19 +21,35 @@ export interface AsrMeta {
   event?: string | null;
 }
 
+export type AsrStatus = 'speech_start' | 'speech_active' | 'speech_end' | 'recognizing' | 'recognized';
+
+export interface AsrStatusPayload {
+  status: AsrStatus | string;
+  bufferedMs?: number;
+  latencyMs?: number;
+  textTail?: string;
+  energy?: number;
+}
+
 export interface AudioRecorderOptions {
   /** ASR partial 结果回调（实时识别中间结果） */
   onPartialResult?: (text: string, meta?: AsrMeta) => void;
   /** ASR final 结果回调（断连时最终结果） */
   onFinalResult?: (text: string, meta?: AsrMeta) => void;
+  /** ASR 服务端处理状态回调 */
+  onStatus?: (payload: AsrStatusPayload) => void;
   /** 音量变化回调，0-100 */
   onVolumeChange?: (volume: number) => void;
   /** 客户端检测到文本闲置（说话结束）回调 */
   onSilence?: () => void;
   /** 前端 VAD 阈值（0.0-1.0），默认 0.02 */
   vadThreshold?: number;
-  /** 文本闲置判定时长（毫秒），默认 1200 */
+  /** 文本闲置判定时长（毫秒），默认 10000 */
   silenceDuration?: number;
+  /** 前端检测到语音后保持 speaking 的时长（毫秒），默认 1200 */
+  speechHoldDuration?: number;
+  /** 音频累计满多少个采集帧后发送，默认 5 */
+  framesPerFlush?: number;
 }
 
 export interface UseAudioRecorderReturn {
@@ -78,8 +94,12 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
   let silenceTimer: number | null = null;
   let textIdleTimer: number | null = null;
 
+  const PROCESSOR_BUFFER_SIZE = 4096;
+  const FLUSH_FALLBACK_INTERVAL = 600;
+  const FRAMES_PER_FLUSH = Math.max(1, Math.floor(options.framesPerFlush ?? 5));
   const VAD_THRESHOLD = options.vadThreshold || 0.02;
   const SILENCE_DURATION = options.silenceDuration || 10000;
+  const SPEECH_HOLD_DURATION = options.speechHoldDuration || 1200;
 
   let sentTextLength = 0;
   let lastKnownFullText = '';
@@ -177,16 +197,27 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
     try {
       const data = JSON.parse(String(rawData)) as Record<string, unknown>;
 
-      // 忽略服务端状态消息
+      // 忽略连接准备状态，ASR 处理状态由 asr_status 单独透传。
       if (data.status === 'loading' || data.status === 'ready') return;
 
       const partial = typeof data.partial === 'string' ? data.partial : '';
       const finalText = typeof data.final === 'string' ? data.final.trim() : '';
+      const asrStatus = typeof data.asr_status === 'string' ? data.asr_status : '';
       const meta: AsrMeta = {
         lang: typeof data.lang === 'string' ? data.lang : null,
         emotion: typeof data.emotion === 'string' ? data.emotion : null,
         event: typeof data.event === 'string' ? data.event : null
       };
+
+      if (asrStatus && !isMuted.value) {
+        options.onStatus?.({
+          status: asrStatus,
+          bufferedMs: typeof data.buffered_ms === 'number' ? data.buffered_ms : undefined,
+          latencyMs: typeof data.latency_ms === 'number' ? data.latency_ms : undefined,
+          textTail: typeof data.text_tail === 'string' ? data.text_tail : undefined,
+          energy: typeof data.energy === 'number' ? data.energy : undefined
+        });
+      }
 
       if (partial) {
         lastKnownFullText = partial;
@@ -259,7 +290,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
 
     audioContext = new AudioContext();
     sourceNode = audioContext.createMediaStreamSource(mediaStream);
-    processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processor = audioContext.createScriptProcessor(PROCESSOR_BUFFER_SIZE, 1, 1);
 
     processor.onaudioprocess = (e) => {
       if (!isRecording.value) return;
@@ -285,11 +316,15 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
         if (silenceTimer) clearTimeout(silenceTimer);
         silenceTimer = window.setTimeout(() => {
           isSpeaking.value = false;
-        }, SILENCE_DURATION);
+        }, SPEECH_HOLD_DURATION);
       }
 
       // 缓存 PCM 数据
       pcmSendBuffer.push(new Float32Array(samples));
+      if (pcmSendBuffer.length >= FRAMES_PER_FLUSH) {
+        flushBuffer();
+      }
+
       // 静音时清空输出，避免回声
       e.outputBuffer.getChannelData(0).fill(0);
     };
@@ -297,7 +332,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
     sourceNode.connect(processor);
     processor.connect(audioContext.destination);
 
-    sendTimer = window.setInterval(flushBuffer, 250);
+    sendTimer = window.setInterval(flushBuffer, FLUSH_FALLBACK_INTERVAL);
     isRecording.value = true;
   };
 
@@ -319,6 +354,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
     }
 
     flushBuffer();
+    pcmSendBuffer = [];
 
     if (processor) {
       processor.disconnect();

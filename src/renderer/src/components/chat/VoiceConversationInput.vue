@@ -7,7 +7,7 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useWorkerStore } from '@/stores/worker';
-import { useAudioRecorder } from '@/composables/useAudioRecorder';
+import { useAudioRecorder, type AsrStatusPayload } from '@/composables/useAudioRecorder';
 
 const props = withDefaults(
   defineProps<{
@@ -31,49 +31,253 @@ const workerStore = useWorkerStore();
 
 const rootRef = ref<HTMLElement | null>(null);
 const partialText = ref('');
+const liveCaptionText = ref('');
+const liveCaptionTone = ref<'active' | 'processing' | 'recognized'>('active');
 const micError = ref('');
 const voiceLevel = ref(0);
 const recordingStartedAt = ref<number | null>(null);
 const recordingDurationMs = ref(0);
+const lastRecognitionAt = ref(0);
+const lastSpeechActivityAt = ref(0);
+const asrBusyUntil = ref(0);
+const resumeDelayActive = ref(false);
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let autoSubmitTimer: ReturnType<typeof setTimeout> | null = null;
+let resumeDelayTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ==================== ASR 录音 Composable ====================
 
 const MIN_EFFECTIVE_CHARS = 4;
+const LIVE_CAPTION_TAIL_CHARS = 36;
+const MAX_MERGE_OVERLAP_CHARS = 40;
+const AUTO_SUBMIT_IDLE_MS = 3500;
+const AUTO_SUBMIT_RETRY_MS = 500;
+const RESUME_LISTEN_DELAY_MS = 3000;
+const RECENT_SPEECH_GRACE_MS = 1500;
+const ASR_SPEECH_END_BUSY_MS = 2500;
+const ASR_RECOGNIZING_BUSY_MS = 6000;
+const SPEECH_VOLUME_THRESHOLD = 2;
 
 function countEffectiveChars(text: string): number {
   const matches = text.match(/[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]/g);
   return matches ? matches.length : 0;
 }
 
-function trySendOrQueue(text: string): void {
+function trySendOrQueue(text: string): boolean {
   const cleaned = text.trim();
-  if (!cleaned || countEffectiveChars(cleaned) < MIN_EFFECTIVE_CHARS) return;
-  if (props.disabled) return;
+  if (!cleaned || countEffectiveChars(cleaned) < MIN_EFFECTIVE_CHARS) return false;
+  if (props.disabled) return false;
   emit('send', { text: cleaned, files: [] });
+  return true;
+}
+
+function getTextTail(text: string, maxChars = LIVE_CAPTION_TAIL_CHARS): string {
+  const chars = Array.from(text.trim());
+  if (chars.length <= maxChars) return chars.join('');
+  return `...${chars.slice(-maxChars).join('')}`;
+}
+
+function shouldInsertSpace(before: string, after: string): boolean {
+  return /[a-zA-Z0-9]$/.test(before) && /^[a-zA-Z0-9]/.test(after);
+}
+
+function findTextOverlap(before: string, after: string): number {
+  const beforeChars = Array.from(before);
+  const afterChars = Array.from(after);
+  const maxOverlap = Math.min(beforeChars.length, afterChars.length, MAX_MERGE_OVERLAP_CHARS);
+
+  for (let length = maxOverlap; length > 0; length--) {
+    const beforeTail = beforeChars.slice(-length).join('');
+    const afterHead = afterChars.slice(0, length).join('');
+    if (beforeTail === afterHead) return length;
+  }
+
+  return 0;
+}
+
+function mergeRecognizedText(current: string, incoming: string): string {
+  const base = current.trim();
+  const next = incoming.trim();
+  if (!base) return next;
+  if (!next || next === base || base.includes(next)) return base;
+  if (next.startsWith(base) || next.includes(base)) return next;
+
+  const overlap = findTextOverlap(base, next);
+  const nextChars = Array.from(next);
+  const separator = overlap === 0 && shouldInsertSpace(base, next) ? ' ' : '';
+  return `${base}${separator}${nextChars.slice(overlap).join('')}`;
+}
+
+function formatBufferedDuration(ms?: number): string {
+  if (!ms || ms < 1000) return '';
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function clearAutoSubmitTimer(): void {
+  if (autoSubmitTimer) {
+    clearTimeout(autoSubmitTimer);
+    autoSubmitTimer = null;
+  }
+}
+
+function clearResumeDelayTimer(): void {
+  if (resumeDelayTimer) {
+    clearTimeout(resumeDelayTimer);
+    resumeDelayTimer = null;
+  }
+  resumeDelayActive.value = false;
+}
+
+function markSpeechActivity(): void {
+  lastSpeechActivityAt.value = Date.now();
+}
+
+function markAsrBusy(durationMs: number): void {
+  asrBusyUntil.value = Math.max(asrBusyUntil.value, Date.now() + durationMs);
+}
+
+function clearAsrBusy(): void {
+  asrBusyUntil.value = 0;
+}
+
+function clearVoiceDraft(): void {
+  partialText.value = '';
+  liveCaptionText.value = '';
+}
+
+function scheduleResumeListening(): void {
+  clearResumeDelayTimer();
+  if (props.disabled) return;
+
+  recorder.mute();
+  clearVoiceDraft();
+  clearAsrBusy();
+  resumeDelayActive.value = true;
+  liveCaptionTone.value = 'processing';
+  liveCaptionText.value = '稍后继续聆听';
+
+  resumeDelayTimer = setTimeout(() => {
+    resumeDelayTimer = null;
+    resumeDelayActive.value = false;
+    if (!props.disabled && recorder.isRecording.value) {
+      recorder.unmute();
+      liveCaptionText.value = '';
+    }
+  }, RESUME_LISTEN_DELAY_MS);
+}
+
+function schedulePendingSubmit(delayMs = AUTO_SUBMIT_IDLE_MS): void {
+  clearAutoSubmitTimer();
+  if (!partialText.value.trim()) return;
+
+  autoSubmitTimer = setTimeout(() => {
+    trySubmitPendingText();
+  }, delayMs);
+}
+
+function queueRecognizedText(text: string): void {
+  const cleaned = text.trim();
+  if (!cleaned) return;
+
+  const mergedText = mergeRecognizedText(partialText.value, cleaned);
+  partialText.value = mergedText;
+  lastRecognitionAt.value = Date.now();
+  clearAsrBusy();
+  liveCaptionTone.value = 'recognized';
+  liveCaptionText.value = `识别到：${getTextTail(mergedText)}`;
+  schedulePendingSubmit();
+}
+
+function trySubmitPendingText(): void {
+  autoSubmitTimer = null;
+
+  const text = partialText.value.trim();
+  if (!text || props.disabled || recorder.isMuted.value) return;
+
+  const now = Date.now();
+  const waitForStableText = AUTO_SUBMIT_IDLE_MS - (now - lastRecognitionAt.value);
+  const waitForRecentSpeech = RECENT_SPEECH_GRACE_MS - (now - lastSpeechActivityAt.value);
+  const waitForAsr = asrBusyUntil.value - now;
+  const waitForSpeaking = recorder.isSpeaking.value ? AUTO_SUBMIT_RETRY_MS : 0;
+  const waitMs = Math.max(waitForStableText, waitForRecentSpeech, waitForAsr, waitForSpeaking);
+
+  if (waitMs > 0) {
+    schedulePendingSubmit(Math.max(AUTO_SUBMIT_RETRY_MS, waitMs));
+    return;
+  }
+
+  if (trySendOrQueue(text)) {
+    partialText.value = '';
+    recorder.resetSentOffset();
+    liveCaptionTone.value = 'recognized';
+    liveCaptionText.value = `已发送：${getTextTail(text)}`;
+  }
+}
+
+function updateLiveCaptionFromStatus(payload: AsrStatusPayload): void {
+  switch (payload.status) {
+    case 'speech_start':
+      markSpeechActivity();
+      clearAsrBusy();
+      liveCaptionTone.value = 'active';
+      liveCaptionText.value = '听到声音，正在接收';
+      break;
+    case 'speech_active': {
+      const duration = formatBufferedDuration(payload.bufferedMs);
+      markSpeechActivity();
+      clearAsrBusy();
+      liveCaptionTone.value = 'active';
+      liveCaptionText.value = duration ? `正在接收语音 ${duration}` : '正在接收语音';
+      break;
+    }
+    case 'speech_end':
+      markAsrBusy(ASR_SPEECH_END_BUSY_MS);
+      liveCaptionTone.value = 'processing';
+      liveCaptionText.value = '正在整理这句话';
+      break;
+    case 'recognizing': {
+      const duration = formatBufferedDuration(payload.bufferedMs);
+      markAsrBusy(ASR_RECOGNIZING_BUSY_MS);
+      liveCaptionTone.value = 'processing';
+      liveCaptionText.value = duration ? `正在识别 ${duration} 语音` : '正在识别语音';
+      break;
+    }
+    case 'recognized':
+      clearAsrBusy();
+      schedulePendingSubmit(AUTO_SUBMIT_RETRY_MS);
+      liveCaptionTone.value = 'recognized';
+      liveCaptionText.value = payload.textTail ? `识别到：${getTextTail(payload.textTail)}` : '识别完成';
+      break;
+    default:
+      liveCaptionTone.value = 'processing';
+      liveCaptionText.value = '正在处理语音';
+      break;
+  }
 }
 
 const recorder = useAudioRecorder({
   onPartialResult: (text) => {
-    partialText.value = text;
+    queueRecognizedText(text);
   },
   onFinalResult: (text) => {
     if (text) {
-      partialText.value = '';
-      trySendOrQueue(text);
+      queueRecognizedText(text);
     }
   },
+  onStatus: updateLiveCaptionFromStatus,
   onVolumeChange: (vol) => {
     // composable 返回 0-100，转为 0-1 并带平滑衰减
     const nextLevel = Math.min(1, vol / 100);
     voiceLevel.value = Math.max(nextLevel, voiceLevel.value * 0.72);
+    if (vol >= SPEECH_VOLUME_THRESHOLD) {
+      markSpeechActivity();
+    }
   },
+  speechHoldDuration: RECENT_SPEECH_GRACE_MS,
   onSilence: () => {
-    // 客户端 text-idle 检测：partial 文本稳定超时 → 提交
+    // 客户端 text-idle 检测只触发提交检查，不直接发送。
     if (partialText.value.trim()) {
-      const text = partialText.value.trim();
-      partialText.value = '';
-      trySendOrQueue(text);
+      schedulePendingSubmit(AUTO_SUBMIT_RETRY_MS);
     }
   }
 });
@@ -101,6 +305,7 @@ const statusTitle = computed(() => {
   if (!asrWorker.value) return '未找到 ASR Worker';
   if (canStartWorker.value) return 'ASR 未启动';
   if (asrWorker.value.status !== 'ready') return getStatusLabel(asrWorker.value.status);
+  if (resumeDelayActive.value) return '稍后继续聆听';
   if (recorder.isMuted.value) return '语音已暂停';
   if (recorder.isRecording.value) return '正在聆听';
   if (recorder.isConnected.value) return '正在连接麦克风';
@@ -113,11 +318,20 @@ const statusDetail = computed(() => {
   if (canStartWorker.value) return '启动后会自动进入聆听状态';
   if (props.showStopButton) return '当前回复完成后继续聆听';
   if (asrWorker.value.status !== 'ready') return '语音服务准备中';
+  if (resumeDelayActive.value) return liveCaptionText.value || '稍后继续聆听';
   if (recorder.isMuted.value) return '麦克风已暂停';
-  if (partialText.value) return '识别中';
-  if (recorder.isRecording.value) return '说话后会自动发送识别结果';
+  if (liveCaptionText.value) return liveCaptionText.value;
+  if (partialText.value) return `识别到：${getTextTail(partialText.value)}`;
+  if (recorder.isRecording.value) return '说完后会自动发送整轮内容';
   return '正在准备语音输入';
 });
+
+const statusDetailClass = computed(() => ({
+  'voice-detail--error': statusTone.value === 'error',
+  'voice-detail--active': !!liveCaptionText.value && liveCaptionTone.value === 'active',
+  'voice-detail--processing': !!liveCaptionText.value && liveCaptionTone.value === 'processing',
+  'voice-detail--recognized': !!liveCaptionText.value && liveCaptionTone.value === 'recognized'
+}));
 
 const primaryActionLabel = computed(() => {
   if (!asrWorker.value) return '刷新';
@@ -164,6 +378,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  clearAutoSubmitTimer();
+  clearResumeDelayTimer();
   recorder.disconnect();
   stopRecordingTimer();
 });
@@ -181,6 +397,10 @@ watch(
           micError.value = err instanceof Error ? err.message : String(err);
         });
     } else {
+      clearAutoSubmitTimer();
+      clearResumeDelayTimer();
+      clearAsrBusy();
+      clearVoiceDraft();
       recorder.disconnect();
       stopRecordingTimer();
     }
@@ -192,11 +412,14 @@ watch(
   () => props.disabled,
   (disabled) => {
     if (disabled) {
+      clearAutoSubmitTimer();
+      clearResumeDelayTimer();
+      clearAsrBusy();
       recorder.mute();
-      partialText.value = '';
+      clearVoiceDraft();
     } else {
-      // 大模型回复完成，自动恢复麦克风
-      recorder.unmute();
+      // 大模型回复完成后，给用户一点反应时间再恢复聆听。
+      scheduleResumeListening();
     }
   }
 );
@@ -247,10 +470,15 @@ function toggleMute(): void {
   if (!canToggleMute.value) return;
 
   if (recorder.isMuted.value) {
+    clearResumeDelayTimer();
     recorder.unmute();
+    liveCaptionText.value = '';
   } else {
+    clearAutoSubmitTimer();
+    clearResumeDelayTimer();
+    clearAsrBusy();
     recorder.mute();
-    partialText.value = '';
+    clearVoiceDraft();
     voiceLevel.value = 0;
   }
 }
@@ -332,7 +560,7 @@ function getStatusLabel(status: string): string {
             <span>TTS</span>
           </span>
         </div>
-        <p class="voice-detail" :class="{ 'voice-detail--error': statusTone === 'error' }">{{ statusDetail }}</p>
+        <p class="voice-detail" :class="statusDetailClass">{{ statusDetail }}</p>
         <div
           v-if="showRecordingMeter"
           class="voice-meter-row"
@@ -342,10 +570,6 @@ function getStatusLabel(status: string): string {
           </div>
           <span class="voice-duration">{{ recordingDurationLabel }}</span>
           <span v-if="recorder.isMuted.value" class="voice-meter-label">暂停</span>
-        </div>
-        <div v-if="partialText" class="voice-partial">
-          <span class="i-carbon-circle-dash inline-block h-3.5 w-3.5" />
-          <span>{{ partialText }}</span>
         </div>
       </div>
 
@@ -545,6 +769,18 @@ function getStatusLabel(status: string): string {
   color: hsl(var(--error));
 }
 
+.voice-detail--active {
+  color: hsl(var(--primary));
+}
+
+.voice-detail--processing {
+  color: hsl(var(--warning));
+}
+
+.voice-detail--recognized {
+  color: hsl(var(--success));
+}
+
 .voice-meter-row {
   display: flex;
   align-items: center;
@@ -594,29 +830,6 @@ function getStatusLabel(status: string): string {
   font-size: 11px;
   font-weight: 600;
   padding: 0 7px;
-}
-
-.voice-partial {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  margin-top: 8px;
-  padding: 5px 8px;
-  border: 1px solid hsl(var(--primary) / 0.12);
-  border-radius: 7px;
-  background: hsl(var(--primary) / 0.06);
-  color: hsl(var(--primary));
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.voice-partial span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .voice-primary-action {

@@ -17,6 +17,8 @@ const agentId = computed(() => route.params.id as string);
 
 const currentStep = ref(1);
 const totalSteps = 4;
+const DEFAULT_RUNTIME_TYPE: AgentRuntimeType = 'pi-mono';
+const agentRuntimeTypes = ['pi-mono', 'openai', 'claude'] as const satisfies readonly AgentRuntimeType[];
 
 // 第1步：基本信息
 const form = ref<CreateAgentParams>({
@@ -26,7 +28,7 @@ const form = ref<CreateAgentParams>({
   instructions: '', // 暂时保留，但实际会从 SOUL.md 读取
   skills: [],
   model: '',
-  runtimeType: 'pi-mono',
+  runtimeType: DEFAULT_RUNTIME_TYPE,
   enableThinking: false,
   asrEnabled: false,
   ttsEnabled: false,
@@ -39,23 +41,62 @@ const form = ref<CreateAgentParams>({
 // 快捷问题管理
 const starterPrompts = ref<string[]>([]);
 const newPrompt = ref('');
+const isPromptComposing = ref(false);
 const starterPromptsLoaded = ref(false);
 const starterPromptsSaving = ref(false);
 const starterPromptsDirty = ref(false);
 let starterPromptsSaveTimer: number | null = null;
 
-const runtimeOptions: Array<{ value: AgentRuntimeType; label: string; description: string }> = [
-  { value: 'pi-mono', label: 'Pi', description: '默认 Agent Runtime' },
-  { value: 'openai', label: 'OpenAI', description: 'OpenAI Agents Runtime' },
-  { value: 'claude', label: 'Claude', description: 'Claude Runtime' }
+const runtimeOptions: Array<{ value: AgentRuntimeType; label: string; description: string; icon: string }> = [
+  { value: 'pi-mono', label: 'Pi Mono', description: '稳定默认', icon: 'i-carbon-application' },
+  { value: 'openai', label: 'OpenAI', description: 'Agents Runtime', icon: 'i-carbon-machine-learning-model' },
+  { value: 'claude', label: 'Claude', description: 'Claude SDK', icon: 'i-carbon-bot' }
 ];
+const selectedRuntimeOption = computed(
+  () => runtimeOptions.find((item) => item.value === form.value.runtimeType) || runtimeOptions[0]
+);
+
+function normalizeRuntimeType(value: unknown): AgentRuntimeType {
+  return agentRuntimeTypes.includes(value as AgentRuntimeType) ? (value as AgentRuntimeType) : DEFAULT_RUNTIME_TYPE;
+}
+
+function normalizeStarterPrompts(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  return value.reduce<string[]>((prompts, item) => {
+    if (typeof item !== 'string') return prompts;
+
+    const prompt = item.trim();
+    if (!prompt || seen.has(prompt)) return prompts;
+
+    seen.add(prompt);
+    prompts.push(prompt);
+    return prompts;
+  }, []);
+}
+
+function getMetadataString(metadata: Record<string, unknown> | undefined, key: string): string {
+  const value = metadata?.[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function buildAgentMetadata(promptSnapshot: string[] = starterPrompts.value): Record<string, unknown> {
+  const metadata = form.value.metadata || {};
+  return {
+    ...metadata,
+    greeting: getMetadataString(metadata, 'greeting'),
+    starterPrompts: [...promptSnapshot],
+    dataDirectory: getMetadataString(metadata, 'dataDirectory')
+  };
+}
 
 function syncStarterPromptsToMetadata(): void {
-  form.value.metadata = {
-    ...(form.value.metadata || {}),
-    greeting: form.value.metadata?.greeting || '',
-    starterPrompts: [...starterPrompts.value]
-  };
+  form.value.metadata = buildAgentMetadata();
+}
+
+function setRuntimeType(value: AgentRuntimeType): void {
+  form.value.runtimeType = value;
 }
 
 function clearStarterPromptsSaveTimer(): void {
@@ -74,64 +115,38 @@ function scheduleStarterPromptsSave(): void {
   }, 300);
 }
 
-async function saveStarterPrompts(): Promise<void> {
-  console.log('[AgentEditorView] saveStarterPrompts called:', {
-    isEdit: isEdit.value,
-    agentId: agentId.value,
-    starterPromptsLoaded: starterPromptsLoaded.value,
-    starterPromptsSaving: starterPromptsSaving.value,
-    starterPromptsDirty: starterPromptsDirty.value,
-    promptsCount: starterPrompts.value.length,
-    allPrompts: [...starterPrompts.value]
-  });
+async function waitForStarterPromptsSave(): Promise<void> {
+  while (starterPromptsSaving.value) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+  }
+}
 
+async function saveStarterPrompts(): Promise<void> {
   if (!isEdit.value || !agentId.value || !starterPromptsLoaded.value) {
-    console.warn('[AgentEditorView] Save skipped: conditions not met');
     return;
   }
   if (starterPromptsSaving.value) {
-    console.log('[AgentEditorView] Already saving, rescheduling...');
     scheduleStarterPromptsSave();
     return;
   }
   if (!starterPromptsDirty.value) {
-    console.log('[AgentEditorView] No changes to save');
     return;
   }
 
   // 拍快照，避免保存过程中 starterPrompts 被修改
   const snapshot = [...starterPrompts.value];
-  const currentGreeting = form.value.metadata?.greeting || '';
-
-  console.log('[AgentEditorView] Saving starterPrompts:', {
-    snapshot,
-    greeting: currentGreeting,
-    fullMetadata: { greeting: currentGreeting, starterPrompts: snapshot }
-  });
+  const metadataToSave = buildAgentMetadata(snapshot);
 
   starterPromptsSaving.value = true;
   try {
-    // 构造完整的 metadata 对象（基于快照，不依赖 form.value.metadata 当前状态）
-    const metadataToSave = {
-      greeting: currentGreeting,
-      starterPrompts: snapshot
-    };
-
     const success = await agentsStore.modifyAgent(agentId.value, {
       metadata: metadataToSave
     });
 
-    console.log('[AgentEditorView] Save result:', {
-      success,
-      error: agentsStore.error,
-      sentData: metadataToSave
-    });
-
     if (success) {
-      // 保存成功后，同步到 form.value.metadata
-      syncStarterPromptsToMetadata();
       // 检查是否在保存期间又有新的修改
       starterPromptsDirty.value = JSON.stringify(starterPrompts.value) !== JSON.stringify(snapshot);
+      form.value.metadata = starterPromptsDirty.value ? buildAgentMetadata() : metadataToSave;
     } else {
       console.warn('[AgentEditorView] Auto save starterPrompts failed:', agentsStore.error);
       starterPromptsDirty.value = true; // 保存失败，标记为脏数据
@@ -139,32 +154,42 @@ async function saveStarterPrompts(): Promise<void> {
   } finally {
     starterPromptsSaving.value = false;
     if (starterPromptsDirty.value) {
-      console.log('[AgentEditorView] Still dirty after save, rescheduling...');
       scheduleStarterPromptsSave();
-    } else {
-      console.log('[AgentEditorView] Save completed successfully');
     }
   }
 }
 
-const addStarterPrompt = (): void => {
+function commitStarterPrompt(shouldAutoSave: boolean): boolean {
   const prompt = newPrompt.value.trim();
-  if (prompt && !starterPrompts.value.includes(prompt)) {
-    starterPrompts.value.push(prompt);
-    syncStarterPromptsToMetadata();
-    starterPromptsDirty.value = true;
-    console.log('[AgentEditorView] Added starter prompt:', {
-      prompt,
-      totalPrompts: starterPrompts.value.length,
-      allPrompts: [...starterPrompts.value],
-      isEdit: isEdit.value,
-      agentId: agentId.value,
-      starterPromptsLoaded: starterPromptsLoaded.value
-    });
-    scheduleStarterPromptsSave();
-    newPrompt.value = '';
+  if (!prompt) return false;
+
+  if (starterPrompts.value.includes(prompt)) {
+    messageStore.warning('这个快捷问题已经添加过了');
+    return false;
   }
+
+  starterPrompts.value = [...starterPrompts.value, prompt];
+  syncStarterPromptsToMetadata();
+  starterPromptsDirty.value = true;
+  newPrompt.value = '';
+
+  if (shouldAutoSave) {
+    scheduleStarterPromptsSave();
+  }
+
+  return true;
+}
+
+const addStarterPrompt = (): void => {
+  commitStarterPrompt(true);
 };
+
+function handleStarterPromptEnter(event: KeyboardEvent): void {
+  if (event.isComposing || isPromptComposing.value) return;
+
+  event.preventDefault();
+  commitStarterPrompt(true);
+}
 
 const removeStarterPrompt = (index: number): void => {
   starterPrompts.value.splice(index, 1);
@@ -177,8 +202,11 @@ const removeStarterPrompt = (index: number): void => {
 async function selectDataDirectory(): Promise<void> {
   try {
     const result = await window.api?.openDirectory();
-    if (result && form.value.metadata) {
-      form.value.metadata.dataDirectory = result;
+    if (result) {
+      form.value.metadata = {
+        ...buildAgentMetadata(),
+        dataDirectory: result
+      };
     }
   } catch (err) {
     console.error('[AgentEditorView] selectDataDirectory error:', err);
@@ -301,6 +329,7 @@ onMounted(async () => {
       // 获取基本信息
       const res = await agentsStore.getAgentDetail(agent.id);
       if (res) {
+        const loadedStarterPrompts = normalizeStarterPrompts(res.metadata?.starterPrompts);
         form.value = {
           id: res.id,
           name: res.name,
@@ -308,23 +337,20 @@ onMounted(async () => {
           instructions: res.instructions || '',
           skills: res.skills || [],
           model: res.model || '',
-          runtimeType: res.runtimeType || 'pi-mono',
+          runtimeType: normalizeRuntimeType(res.runtimeType),
           enableThinking: res.enableThinking ?? false,
           asrEnabled: res.asrEnabled ?? false,
           ttsEnabled: res.ttsEnabled ?? false,
           metadata: {
-            greeting: (res.metadata?.greeting as string) || '',
-            starterPrompts: Array.isArray(res.metadata?.starterPrompts) ? res.metadata.starterPrompts : [],
-            dataDirectory: (res.metadata?.dataDirectory as string) || ''
+            ...(res.metadata || {}),
+            greeting: getMetadataString(res.metadata, 'greeting'),
+            starterPrompts: loadedStarterPrompts,
+            dataDirectory: getMetadataString(res.metadata, 'dataDirectory')
           }
         };
 
         // 初始化快捷问题列表
-        if (res.metadata && Array.isArray(res.metadata.starterPrompts)) {
-          starterPrompts.value = [...res.metadata.starterPrompts];
-        } else {
-          starterPrompts.value = [];
-        }
+        starterPrompts.value = loadedStarterPrompts;
         syncStarterPromptsToMetadata();
         starterPromptsDirty.value = false;
         starterPromptsLoaded.value = true;
@@ -336,7 +362,7 @@ onMounted(async () => {
           instructions: '',
           skills: agent.skills || [],
           model: agent.model || '',
-          runtimeType: agent.runtimeType || 'pi-mono',
+          runtimeType: normalizeRuntimeType(agent.runtimeType),
           enableThinking: agent.enableThinking ?? false,
           asrEnabled: agent.asrEnabled ?? false,
           ttsEnabled: agent.ttsEnabled ?? false,
@@ -420,27 +446,34 @@ const handleSubmit = async (): Promise<void> => {
     return;
   }
 
-  console.log('[AgentEditorView] Submitting agent:', {
-    id: form.value.id,
-    name: form.value.name,
-    description: form.value.description,
-    personalityFiles: Object.keys(personalityFiles.value).reduce(
-      (acc, key) => {
-        acc[key] = personalityFiles.value[key as PersonalityFile].length;
-        return acc;
-      },
-      {} as Record<string, number>
-    ),
-    skills: form.value.skills,
-    model: form.value.model,
-    runtimeType: form.value.runtimeType,
-    enableThinking: form.value.enableThinking,
-    asrEnabled: form.value.asrEnabled,
-    ttsEnabled: form.value.ttsEnabled
-  });
-
   submitting.value = true;
   try {
+    commitStarterPrompt(false);
+    await waitForStarterPromptsSave();
+    clearStarterPromptsSaveTimer();
+
+    form.value.runtimeType = normalizeRuntimeType(form.value.runtimeType);
+    const metadata = buildAgentMetadata();
+
+    console.log('[AgentEditorView] Submitting agent:', {
+      id: form.value.id,
+      name: form.value.name,
+      description: form.value.description,
+      personalityFiles: Object.keys(personalityFiles.value).reduce(
+        (acc, key) => {
+          acc[key] = personalityFiles.value[key as PersonalityFile].length;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+      skills: form.value.skills,
+      model: form.value.model,
+      runtimeType: form.value.runtimeType,
+      enableThinking: form.value.enableThinking,
+      asrEnabled: form.value.asrEnabled,
+      ttsEnabled: form.value.ttsEnabled
+    });
+
     let success = false;
     if (isEdit.value) {
       // 编辑模式
@@ -454,12 +487,7 @@ const handleSubmit = async (): Promise<void> => {
         enableThinking: form.value.enableThinking,
         asrEnabled: form.value.asrEnabled,
         ttsEnabled: form.value.ttsEnabled,
-        metadata: {
-          ...form.value.metadata,
-          greeting: form.value.metadata?.greeting || '',
-          starterPrompts: [...starterPrompts.value],
-          dataDirectory: form.value.metadata?.dataDirectory || ''
-        }
+        metadata
       });
 
       // 更新人格文件
@@ -473,12 +501,7 @@ const handleSubmit = async (): Promise<void> => {
       success = await agentsStore.createNewAgent({
         ...form.value,
         instructions: personalityFiles.value['SOUL.md'] || '你是一个智能助手。', // 使用 SOUL.md 作为 instructions，如果为空则使用默认值
-        metadata: {
-          ...form.value.metadata,
-          greeting: form.value.metadata?.greeting || '',
-          starterPrompts: [...starterPrompts.value],
-          dataDirectory: form.value.metadata?.dataDirectory || ''
-        }
+        metadata
       });
 
       // 创建后更新人格文件
@@ -619,26 +642,39 @@ onUnmounted(() => {
             </div>
 
             <div class="space-y-3 border-t border-border/40 pt-4">
-              <div>
-                <label class="text-sm font-medium">默认运行配置</label>
-                <p class="mt-1 text-xs text-muted-foreground">新会话默认继承这里的设置，会话内可单独覆盖。</p>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <label class="text-sm font-medium">默认运行配置</label>
+                  <p class="mt-1 text-xs text-muted-foreground">新会话默认继承这里的设置，会话内可单独覆盖。</p>
+                </div>
+                <span
+                  class="shrink-0 rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+                  当前 {{ selectedRuntimeOption.label }}
+                </span>
               </div>
 
-              <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-                <div class="grid grid-cols-3 gap-2 rounded-lg bg-muted/35 p-1">
+              <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+                <div class="grid gap-2 sm:grid-cols-3">
                   <button
                     v-for="item in runtimeOptions"
                     :key="item.value"
                     type="button"
-                    class="flex min-h-12 flex-col items-start justify-center rounded-md px-3 text-left transition-colors"
+                    :aria-pressed="form.runtimeType === item.value"
+                    class="flex h-14 min-w-0 items-center rounded-lg border px-3 text-left transition-colors"
                     :class="
                       form.runtimeType === item.value
-                        ? 'bg-background text-primary shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
+                        ? 'border-primary/50 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
+                        : 'border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/35 hover:text-foreground'
                     "
-                    @click="form.runtimeType = item.value">
-                    <span class="text-xs font-semibold">{{ item.label }}</span>
-                    <span class="mt-0.5 truncate text-[10px] opacity-75">{{ item.description }}</span>
+                    @click="setRuntimeType(item.value)">
+                    <span :class="[item.icon, 'h-4 w-4 shrink-0']"></span>
+                    <span class="ml-2 min-w-0 flex-1">
+                      <span class="block truncate text-xs font-semibold">{{ item.label }}</span>
+                      <span class="mt-0.5 block truncate text-[10px] opacity-75">{{ item.description }}</span>
+                    </span>
+                    <span
+                      v-if="form.runtimeType === item.value"
+                      class="i-carbon-checkmark-filled ml-2 h-3.5 w-3.5 shrink-0"></span>
                   </button>
                 </div>
 
@@ -656,6 +692,7 @@ onUnmounted(() => {
                       <span class="i-carbon-phrase-sentiment h-3.5 w-3.5 shrink-0"></span>
                       <span class="truncate text-xs font-medium">思维链</span>
                     </span>
+                    <span v-if="form.enableThinking" class="i-carbon-checkmark-filled h-3.5 w-3.5 shrink-0"></span>
                   </button>
 
                   <button
@@ -671,6 +708,7 @@ onUnmounted(() => {
                       <span class="i-carbon-microphone h-3.5 w-3.5 shrink-0"></span>
                       <span class="truncate text-xs font-medium">ASR</span>
                     </span>
+                    <span v-if="form.asrEnabled" class="i-carbon-checkmark-filled h-3.5 w-3.5 shrink-0"></span>
                   </button>
 
                   <button
@@ -686,6 +724,7 @@ onUnmounted(() => {
                       <span class="i-carbon-volume-up h-3.5 w-3.5 shrink-0"></span>
                       <span class="truncate text-xs font-medium">TTS</span>
                     </span>
+                    <span v-if="form.ttsEnabled" class="i-carbon-checkmark-filled h-3.5 w-3.5 shrink-0"></span>
                   </button>
                 </div>
               </div>
@@ -738,7 +777,9 @@ onUnmounted(() => {
                   spellcheck="false"
                   placeholder="输入快捷问题，按回车添加..."
                   class="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  @keydown.enter.prevent="addStarterPrompt" />
+                  @compositionstart="isPromptComposing = true"
+                  @compositionend="isPromptComposing = false"
+                  @keydown.enter="handleStarterPromptEnter" />
                 <button
                   type="button"
                   :disabled="!newPrompt.trim()"

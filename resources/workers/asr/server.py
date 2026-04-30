@@ -871,10 +871,35 @@ async def local_asr_stream(ws: WebSocket):
     committed_text = ""
     connected = True
     pending = asyncio.Event()
+    send_lock = asyncio.Lock()
+    last_status_sent_at = 0.0
     
     # VAD 状态
     speech_start_pos = -1      # 当前语音段的起始位置（-1=没在说话）
     silence_start_pos = -1     # 静音开始的位置
+
+    async def send_json(payload: dict) -> bool:
+        try:
+            async with send_lock:
+                await ws.send_json(payload)
+            return True
+        except Exception:
+            return False
+
+    async def send_asr_status(asr_status: str, throttle_ms: int = 0, **payload) -> bool:
+        """向前端推送 ASR 处理状态，文本结果仍走 partial/final。"""
+        nonlocal last_status_sent_at
+
+        now = time.time()
+        if throttle_ms > 0 and (now - last_status_sent_at) * 1000 < throttle_ms:
+            return True
+
+        last_status_sent_at = now
+        message = {
+            "asr_status": asr_status,
+            **payload,
+        }
+        return await send_json(message)
     
     async def receive_chunks():
         """接收 PCM 字节流，做 VAD 检测，在停顿时触发识别"""
@@ -899,6 +924,17 @@ async def local_asr_stream(ws: WebSocket):
                         if skip_to > recognized_pos:
                             recognized_pos = skip_to
                         log.debug(f"[VAD] 开始说话 pos={speech_start_pos}")
+                        if not await send_asr_status("speech_start", energy=energy):
+                            break
+                    else:
+                        speech_ms = int((len(buffer) - speech_start_pos) / BYTES_PER_SEC * 1000)
+                        if not await send_asr_status(
+                            "speech_active",
+                            throttle_ms=500,
+                            buffered_ms=speech_ms,
+                            energy=energy,
+                        ):
+                            break
                     silence_start_pos = -1
                     
                     # 安全阀：连续说话太久，强制触发识别
@@ -919,11 +955,14 @@ async def local_asr_stream(ws: WebSocket):
                         silence_len = len(buffer) - silence_start_pos
                         if silence_len >= SILENCE_BYTES:
                             utterance_bytes = silence_start_pos - recognized_pos
+                            utterance_ms = int(utterance_bytes / BYTES_PER_SEC * 1000)
                             log.debug(
                                 f"[VAD] 停顿 "
                                 f"(语音 {utterance_bytes / BYTES_PER_SEC:.1f}s)"
                             )
                             if utterance_bytes >= MIN_UTTERANCE_BYTES:
+                                if not await send_asr_status("speech_end", buffered_ms=utterance_ms):
+                                    break
                                 pending.set()
                             else:
                                 recognized_pos = len(buffer)
@@ -954,8 +993,12 @@ async def local_asr_stream(ws: WebSocket):
             # 取音频段（含少量尾部静音没关系，模型能处理）
             end = min(recognized_pos + MAX_UTTERANCE_BYTES, len(buffer))
             segment = bytes(buffer[recognized_pos:end])
+            segment_ms = int(len(segment) / BYTES_PER_SEC * 1000)
             
             try:
+                if not await send_asr_status("recognizing", buffered_ms=segment_ms):
+                    break
+
                 result = await transcribe_async(segment)
                 recognized_pos = end
                 
@@ -977,9 +1020,13 @@ async def local_asr_stream(ws: WebSocket):
                         msg["emotion"] = result["emotion"]
                     if result.get("event"):
                         msg["event"] = result["event"]
-                    try:
-                        await ws.send_json(msg)
-                    except Exception:
+                    if not await send_json(msg):
+                        break
+                    if not await send_asr_status(
+                        "recognized",
+                        text_tail=committed_text[-32:],
+                        latency_ms=result["latency_ms"],
+                    ):
                         break
             
             except Exception as e:
@@ -1010,10 +1057,7 @@ async def local_asr_stream(ws: WebSocket):
             pass
     
     if committed_text:
-        try:
-            await ws.send_json({"final": committed_text})
-        except Exception:
-            pass
+        await send_json({"final": committed_text})
     
     log.debug(
         f"会话结束: {len(buffer)} bytes, "
