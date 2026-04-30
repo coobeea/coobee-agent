@@ -1,48 +1,25 @@
 # Extension 系统
 
-## 概述
+Extension 是动态可插拔的功能模块，可以注册工具（Tool）、生命周期钩子（Hook）、Gateway 方法、Channel、HTTP 路由、后台服务，也可以贡献 Skill。
 
-Extension 是动态可插拔的功能模块，可以注册工具（Tool）、生命周期钩子（Hook）、Gateway 方法、Channel、HTTP 路由和后台服务，还可以贡献 Skill。
+## 两级加载（按优先级从低到高）
 
----
+- **builtin** — `resources/extensions/`。内置，随应用分发，只读。
+- **user** — `.home/extensions/`。用户安装或编写。
 
-## Extension 来源（按优先级）
+同 ID 高优先级覆盖低优先级。历史上曾有"workspace 级热加载"的设想，当前实现不再注入 workspace 级路径，`{workspace}/extensions/` 下的内容不会被自动加载，不要依赖。
 
-| 优先级    | 来源  | 路径                      | 说明             |
-| --------- | ----- | ------------------------- | ---------------- |
-| 1（最低） | 内置  | `builtinExtensionsDir`    | 随系统分发，只读 |
-| 2         | 用户  | `userExtensionsDir`       | 用户安装/编写    |
-| 3（最高） | Agent | `{workspace}/extensions/` | 你自己创建的     |
+写新 Extension 就放在 `.home/extensions/{ext-id}/`。
 
-**同 ID 高优先级覆盖低优先级。** 工作空间级 Extension 会被 `fs.watch` 热加载。
-
----
-
-## Extension 能力
-
-| 能力                    | 说明                               |
-| ----------------------- | ---------------------------------- |
-| `registerTool`          | 注册新工具，可被 LLM function call |
-| `registerChannel`       | 注册 Channel（对接外部系统）       |
-| `registerHttpRoute`     | 注册 HTTP 路由                     |
-| `registerService`       | 注册后台服务（长期运行）           |
-| `registerGatewayMethod` | 注册 Gateway RPC 方法              |
-| `on(hookName)`          | 注册 Agent 生命周期钩子            |
-| 声明 `skills`           | 在 manifest 中声明 Skill 目录      |
-
----
-
-## 创建 Extension
-
-### 最小结构
+## 目录最小结构
 
 ```
-{workspace}/extensions/my-ext/
-├── extension.json        # 必须 — 扩展清单
-└── index.ts              # 可选 — 代码入口（纯 Skill 扩展可省略）
+{ext-id}/
+├── extension.json        必需 — 清单
+└── index.ts              可选 — 代码入口（纯 Skill 扩展可省略）
 ```
 
-### extension.json 格式
+## extension.json
 
 ```json
 {
@@ -54,7 +31,20 @@ Extension 是动态可插拔的功能模块，可以注册工具（Tool）、生
 }
 ```
 
-### index.ts 代码骨架
+`skills` 字段指向同目录下的 skills 子目录，注册后其 SKILL.md 会并入 `skill_search_paths`（来源 kind = `extension`）。
+
+## 代码能力
+
+`index.ts` 导出默认模块（ExtensionModule）。在 `register(api)` 中可以：
+
+- `api.registerTool({...})` — 注册新工具，LLM 可通过 function call 调用
+- `api.registerGatewayMethod('id', handler)` — 注册 RPC 方法，前端可调
+- `api.registerChannel({...})` — 注册 Channel，对接外部系统
+- `api.registerHttpRoute({...})` — 注册 HTTP 路由
+- `api.registerService({id, start, stop})` — 注册长期运行的后台服务
+- `api.on('hook_name', handler)` — 订阅 Agent 生命周期钩子
+
+骨架：
 
 ```typescript
 import type { ExtensionModule } from '@main/extension';
@@ -62,89 +52,52 @@ import type { ExtensionModule } from '@main/extension';
 export default {
   id: 'my-ext',
   name: 'My Extension',
-
   register(api) {
-    // 注册工具
     api.registerTool({
       name: 'my_tool',
-      description: '工具描述',
+      description: '...',
       parameters: {
-        /* ... */
+        /* JSON Schema */
       },
       execute: async (params) => {
         /* ... */
       }
     });
 
-    // 注册生命周期钩子
     api.on('before_agent_start', async (event) => {
-      // 在 Agent 启动前执行
-    });
-
-    // 注册 Gateway 方法
-    api.registerGatewayMethod('myext.hello', async (params) => {
-      return { message: 'Hello' };
-    });
-
-    // 注册 Channel
-    api.registerChannel({
-      id: 'my-channel',
-      name: 'My Channel',
-      gateway: {
-        start: async (ctx) => {
-          /* ... */
-        },
-        stop: async (ctx) => {
-          /* ... */
-        }
-      }
-    });
-
-    // 注册后台服务
-    api.registerService({
-      id: 'my-service',
-      start: async () => {
-        /* ... */
-      },
-      stop: async () => {
-        /* ... */
-      }
+      // ...
     });
   }
 } as ExtensionModule;
 ```
 
----
-
 ## 纯 Skill 扩展
 
-如果只需要贡献 Skill（无代码），可以省略 `index.ts`：
+没有代码、只贡献 Skill 的扩展可省略 `index.ts`：
 
 ```
-{workspace}/extensions/my-skill-pack/
-├── extension.json        # 声明 skills 字段
+{ext-id}/
+├── extension.json        含 "skills": "skills"
 └── skills/
     ├── skill-a/SKILL.md
     └── skill-b/SKILL.md
 ```
 
----
+## 给 Agent 的操作建议
 
-## 热重载
+Extension 是偏重型的动作，通常由用户/开发者编写，不建议你（Agent）在运行时自己去写 `.home/extensions/` 下的 index.ts。
 
-工作空间级 Extension (`{workspace}/extensions/`) 支持热重载：
+如果确实需要新增能力，先判断：
 
-1. 创建或修改 Extension 文件
-2. 系统自动检测（fs.watch）
-3. 卸载旧版本（如果存在）
-4. 加载新版本
-5. 立即生效
+- 只想告诉未来的自己"遇到某场景该怎么做" → 写 Skill，不是 Extension
+- 想注册一个新工具给 LLM 调 → 要写 Extension，但这通常应当拆成独立 POC 由用户审核
 
----
+如果要读取已加载的 Extension 信息，看 `<runtime_environment>` 中的 `extensions` 字段（当前会话已加载的 id 列表）。
 
-## 使用建议
+## 注意事项
 
-1. **明确需求** - 创建前确认确实需要新的能力
-2. **复用优先** - 先检查是否有现成的 Extension
-3. **模块化** - 一个 Extension 做一件事
-4. **文档完整** - 注释清楚，便于维护
+一、Extension id 全局唯一，重复加载会被高优先级覆盖。
+
+二、不要在 Extension 里自行发起网络请求到外部服务，除非用户明确同意。
+
+三、Extension 的生命周期钩子里抛异常会影响主流程，写的时候兜住所有异常。

@@ -406,30 +406,6 @@ graph LR
 
 但这**不是必须的**。简单的 Agent（翻译助手、日程管理）不需要维度体系。
 
-## 多 Agent 委托与任务计划
-
-当一个任务需要多个 Agent 协作时，**推荐使用 `task_plan` 工具来管理全过程**：
-
-### 推荐工作流
-
-1. **创建计划**：先分析任务，拆解为步骤，用 `task_plan(create)` 创建结构化计划
-2. **逐步执行**：每个步骤用 `task_plan(update_step)` 标记状态，用 `delegate_to_agent(taskId=...)` 委托执行
-3. **经验传递**：`delegate_to_agent` 会自动将前序子 Agent 的执行经验传递给后续子 Agent
-4. **完成汇总**：所有步骤完成后，用 `task_plan(complete)` 标记并写入总结
-
-### 子 Agent 工作空间
-
-- 子 Agent 的工作空间嵌套在父 workspace 下：`tasks/{taskId}/agents/{agentId}/`
-- 子 Agent 的执行结果自动写入：`tasks/{taskId}/results/{agentId}.md`
-- 用户可以通过查看 `tasks/{taskId}/plan.md` 了解完整计划和进度
-
-### 何时使用 task_plan
-
-- **需要**：涉及 2 个以上子 Agent 的协作任务、需要跟踪进度的任务
-- **不需要**：简单的单次委托、纯对话任务
-
-详见 `references/shared-state-conventions.md`。
-
 ## 示例
 
 ### 示例 1：翻译助手（简单，无工具）

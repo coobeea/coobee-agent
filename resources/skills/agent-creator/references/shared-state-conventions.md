@@ -8,8 +8,6 @@
 {workspace}/
 ├── tasks/                              # 任务目录（由主 Agent 管理）
 │   └── {taskId}/                       # 每个委托任务一个目录
-│       ├── plan.md                     # 任务计划（task_plan 工具写入，人类可读）
-│       ├── status.json                 # 任务状态（task_plan 工具更新，机器可读）
 │       ├── agents/                     # 子 Agent 工作目录
 │       │   └── {agentId}/             # 每个子 Agent 一个子目录
 │       │       ├── sessions/          # 子 Agent 会话数据
@@ -27,34 +25,10 @@
 
 - 子 Agent **不再创建**独立的顶级 workspace，而是嵌套在父 workspace 的 `tasks/{taskId}/agents/{agentId}/` 下
 - `delegate_to_agent` 工具会自动创建上述目录结构
-- `task_plan` 工具会写入 `plan.md`（人类可读）和 `status.json`（机器可读），让任务全过程可追踪
 - `results/{agentId}.md` 由 `delegate_to_agent` 工具在子 Agent 完成后自动写入
 - `experiences/` 目录用于经验共享（见下文"经验共享"章节）
 
 ## 使用流程
-
-### 推荐：带计划的多 Agent 协作
-
-1. **创建计划**：
-
-   ```
-   task_plan(action="create", title="批量合同审查", goal="...", steps=[...])
-   ```
-
-   → 获得 `taskId`
-
-2. **跟踪进度 & 委托执行**：
-
-   ```
-   task_plan(action="update_step", taskId="...", stepId=1, stepStatus="running")
-   delegate_to_agent(agentId="contract-reviewer", task="审查合同A", taskId="...")
-   task_plan(action="update_step", taskId="...", stepId=1, stepStatus="done")
-   ```
-
-3. **完成任务**：
-   ```
-   task_plan(action="complete", taskId="...", summary="3份合同已审查完毕")
-   ```
 
 ### 串行委托
 
@@ -121,4 +95,3 @@ LLM 可以一次返回多个 `delegate_to_agent` 调用：
 - **结果要持久化**：所有中间结果写文件，可审计可恢复
 - **context 参数传递路径**：不传完整内容，传文件路径
 - **经验自动流转**：`delegate_to_agent` 会自动将已有经验传递给后续子 Agent
-- **计划可视化**：使用 `task_plan` 工具让用户看到任务全貌和进度

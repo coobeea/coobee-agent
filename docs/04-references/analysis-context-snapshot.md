@@ -264,7 +264,7 @@ How to use Skills:
 | 7   | `search`     | 搜索文件内容（类似 grep）                   |
 | 8   | `glob`       | 按名称模式查找文件                          |
 | 9   | `skill_list` | 快速发现可用 Skills                         |
-| 10  | `task_plan`  | 创建和管理结构化任务计划                    |
+| 10  | `task_plan`  | 创建和管理结构化任务计划 ⚠️ 已删除          |
 | 11  | `todo_write` | 创建和管理 TODO 列表                        |
 | 12  | `emit_event` | 向 UI 发送事件（打开预览、文件、通知）      |
 
@@ -371,7 +371,7 @@ Supports glob patterns: *.ts, **/*.test.ts, package.json, src/**/*.vue"
 }
 ```
 
-**10. task_plan**
+**10. task_plan** ⚠️ 已删除
 
 ```json
 {
@@ -670,20 +670,20 @@ Agent 输出 (友好的自我介绍)
 
 #### 2.3 工具能力矩阵
 
-| 能力类别     | 工具                     | 说明                      |
-| ------------ | ------------------------ | ------------------------- |
-| **文件操作** | read, write, edit        | 完整的文件 CRUD           |
-| **代码执行** | exec, process            | 支持前台/后台命令执行     |
-| **搜索发现** | search, glob, skill_list | 内容搜索 + 文件查找       |
-| **记忆管理** | memory                   | 两层记忆（agent/session） |
-| **任务协作** | task_plan, todo_write    | 结构化任务管理            |
-| **UI 交互**  | emit_event               | 前端事件触发              |
+| 能力类别     | 工具                      | 说明                               |
+| ------------ | ------------------------- | ---------------------------------- |
+| **文件操作** | read, write, edit         | 完整的文件 CRUD                    |
+| **代码执行** | exec, process             | 支持前台/后台命令执行              |
+| **搜索发现** | search, glob, skill_list  | 内容搜索 + 文件查找                |
+| **记忆管理** | memory                    | 两层记忆（agent/session）          |
+| **任务协作** | ~~task_plan~~, todo_write | 结构化任务管理（task_plan 已删除） |
+| **UI 交互**  | emit_event                | 前端事件触发                       |
 
 **设计亮点**：
 
 - 工具互补性强（如 search + glob）
 - 支持长期记忆和短期记忆
-- 支持多智能体协作（task_plan）
+- 支持多智能体协作（task_plan）⚠️ task_plan 已删除
 - 支持 UI 联动（emit_event）
 
 #### 2.4 性能优化空间

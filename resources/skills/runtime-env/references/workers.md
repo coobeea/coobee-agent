@@ -1,181 +1,95 @@
-# Worker 子进程管理
+# Worker 子进程
 
-## 概述
+Worker 是独立运行的子进程（Python / Node），提供后台能力（ASR / TTS / Embedding 等）。由 WorkerManager 统一管理，生命周期通过 Gateway RPC 暴露。
 
-Worker 是独立的子进程（Python/Node.js），提供后台服务能力。每个 Worker 通过 `worker.json` 配置文件控制启停。
+## 双层目录结构
 
-**存储位置**: `{userHome}/workers/`  
-**管理方式**: 修改配置文件，系统自动检测并应用变更（热重载）
+Worker 是"只读脚本 + 可写运行产物"两层：
 
----
-
-## Worker 目录结构
+**脚本层（只读，随应用分发）**
 
 ```
-{userHome}/workers/
-├── tavern-poller/              # Tavern 任务扫描 Worker
-│   ├── worker.json             # 配置文件 ← 修改这个文件控制启停
-│   ├── server.py               # Worker 入口脚本
-│   └── requirements.txt        # Python 依赖
-└── embedding-service/          # 嵌入向量服务 Worker
-    ├── worker.json
-    └── server.py
+resources/workers/
+├── tts/
+│   ├── worker.json          扫描入口（name/type/entry/port/enable/autoStart/...）
+│   ├── server.py            入口脚本
+│   └── requirements.txt     Python 依赖
+├── asr/
+│   └── ...
+└── ...
 ```
 
----
+生产环境下这层是打包在 app bundle 里的只读资源，不要尝试写入。
 
-## worker.json 配置格式
-
-```json5
-{
-  name: 'tavern-poller', // Worker 名称
-  label: 'Tavern Poller', // 显示名称
-  type: 'python', // 类型: python | native
-  entry: 'server.py', // 入口脚本
-  port: 9010, // 监听端口
-  enable: true, // ← 控制是否启用
-  autoStart: false, // ← 控制是否应用启动时自动运行
-  autoRestart: true, // 崩溃后自动重启
-  maxRestarts: 5, // 最大重启次数
-  healthCheckPath: '/health', // 健康检查路径
-  healthCheckTimeout: 5000, // 健康检查超时（毫秒）
-  env: {} // 环境变量
-}
-```
-
----
-
-## 关键字段说明
-
-### `enable` - 控制是否启用
-
-| 值      | 说明                    |
-| ------- | ----------------------- |
-| `true`  | Worker 可以被启动       |
-| `false` | Worker 被禁用，停止运行 |
-
-### `autoStart` - 控制自动启动
-
-| 值      | 说明                        |
-| ------- | --------------------------- |
-| `true`  | 应用启动时自动运行此 Worker |
-| `false` | 需要手动或按需启动          |
-
----
-
-## 控制 Worker 启停（配置驱动）
-
-### 方法: 修改 worker.json，系统自动应用
-
-#### 启动 Worker
-
-```typescript
-// 1. 读取配置
-const configPath = `${paths.userHome}/workers/tavern-poller/worker.json`;
-const config = JSON.parse(await read(configPath));
-
-// 2. 修改配置
-config.enable = true;
-config.autoStart = true;
-
-// 3. 写回配置文件（触发热重载）
-await write(configPath, JSON.stringify(config, null, 2));
-
-// 系统会自动检测配置变化并启动 Worker ✅
-```
-
-#### 停止 Worker
-
-```typescript
-// 1. 读取配置
-const config = JSON.parse(await read(configPath));
-
-// 2. 修改配置
-config.enable = false;
-// 或者
-config.autoStart = false;
-
-// 3. 写回配置文件
-await write(configPath, JSON.stringify(config, null, 2));
-
-// 系统会自动检测配置变化并停止 Worker ✅
-```
-
----
-
-## 配置热重载机制
-
-**WorkerManager 会监控所有 worker.json 文件的变化：**
-
-| 配置变化                           | 系统响应              |
-| ---------------------------------- | --------------------- |
-| `enable: false`                    | 自动停止 Worker       |
-| `enable: true` + `autoStart: true` | 自动启动 Worker       |
-| `autoStart: true → false`          | 停止正在运行的 Worker |
-| `autoStart: false → true`          | 启动 Worker           |
-
-**无需重启应用，配置修改立即生效。**
-
----
-
-## 使用场景
-
-### 场景 1：按需启动服务
+**运行产物层（可写）**
 
 ```
-用户: "帮我启动 Tavern 任务扫描服务"
-
-你的操作:
-1. read('~/.coobee-agent/workers/tavern-poller/worker.json')
-2. 修改 enable: true, autoStart: true
-3. write 写回配置文件
-4. 告诉用户"Tavern 扫描服务已启动"
+.home/workers/
+└── {name}/
+    ├── config.json          用户可写配置（覆盖脚本层 worker.json 的字段）
+    ├── source/              用户源码副本（二阶段使用）
+    ├── venv/                Python 虚拟环境
+    ├── data/                Worker 数据
+    └── cache/               Worker 缓存
 ```
 
-### 场景 2：节省资源
+模型共享仓库在 `.home/models/`（或由环境变量 `VITE_MODEL_DIR` 指向的路径）。
 
-```
-用户: "暂停 Tavern 扫描，节省资源"
+## 启动流程
 
-你的操作:
-1. read('~/.coobee-agent/workers/tavern-poller/worker.json')
-2. 修改 enable: false
-3. write 写回配置文件
-4. 告诉用户"Tavern 扫描已暂停"
-```
+WorkerManager 启动时：
 
-### 场景 3：调整自动启动
+一、扫描 `resources/workers/` 下所有含 `worker.json` 的子目录，读入配置。`enable: false` 的跳过。
 
-```
-用户: "我希望 Tavern 服务开机自动运行"
+二、对 `autoStart: true` 的 Worker，等端口可用、准备 venv、spawn 子进程、健康检查。
 
-你的操作:
-1. read('~/.coobee-agent/workers/tavern-poller/worker.json')
-2. 修改 autoStart: true
-3. write 写回配置文件
-4. 告诉用户"已设置为开机自动启动"
-```
+三、对 `worker.json` 进行 `fs.watch` 监控，文件变化触发防抖重载（500ms）。
 
----
+开发态下你可以直接编辑项目下 `resources/workers/{name}/worker.json`，生效。生产态该目录在 app bundle 里只读，只能通过 RPC 接口或前端设置去改。
+
+## 给 Agent 的控制入口
+
+**不要直接改 worker.json 或 config.json。** 控制 worker 走 Gateway RPC：
+
+- `worker.start`（参数 `{ name }`）— 启动某个 worker（异步，不阻塞）
+- `worker.stop`（参数 `{ name }`）— 停止
+- `worker.list` — 列出已注册的所有 worker 与状态
+- `worker.status`（参数 `{ name }`）— 查某个 worker 的当前状态
+
+状态推送由前端订阅 `worker:status` / `worker:progress` / `worker:error` 事件。
+
+Agent 自身目前没有"启停 worker"的 builtin 工具。如果业务确实需要，你能做的选择是：
+
+一、告知用户通过应用设置里的 Worker 面板操作。
+
+二、如果上层把 `worker.start` / `worker.stop` 封成了 Extension 注册的工具，通过 `<runtime_environment>` 的 `extensions` 列表判断是否可用，再调用。
+
+三、只读查询 `.home/workers/{name}/config.json` 了解当前配置是合法的。
+
+## 配置关键字段
+
+`worker.json` / `config.json` 典型字段：
+
+- `name` — Worker 名称（默认等于目录名）
+- `type` — `python` / `native`
+- `entry` — 入口脚本
+- `port` — 监听端口
+- `enable` — 是否启用（默认 true，显式 false 时跳过启动）
+- `autoStart` — 应用启动时是否自动运行
+- `autoRestart` — 崩溃后自动重启
+- `maxRestarts` — 最大重启次数
+- `healthCheckPath` / `healthCheckTimeout` — 健康检查
+- `modelDir` — 覆盖默认模型目录
+- `env` — 额外环境变量
+
+## 事实修正
+
+老文档建议"读 worker.json → 改 enable → 写回"的做法在当前实现下是错的：真实监听的 `worker.json` 在打包后只读的 `resources/workers/` 里，写不进去；`.home/workers/{name}/` 下是 `config.json` 而不是 `worker.json`。正确的控制手段是调 `worker.start` / `worker.stop` RPC。
 
 ## 注意事项
 
-1. **只修改 enable 和 autoStart 字段** - 其他字段（port、entry 等）不应随意修改
-2. **先读后改** - 保留其他配置项，只修改需要的字段
-3. **配置立即生效** - 修改后自动检测并应用，无需手动操作
-4. **健康检查** - Worker 启动后会自动进行健康检查
-5. **崩溃重启** - `autoRestart: true` 的 Worker 崩溃后会自动重启
+一、Worker 是系统级组件，生命周期由 WorkerManager 独占，不要 spawn 自己的 Python 子进程去复刻它。
 
----
+二、改 `.home/workers/{name}/config.json` 只会影响下次启动时的用户配置层，即时生效需要配合 `worker.stop` + `worker.start`。
 
-## 开发者友好
-
-开发者也可以直接编辑配置文件：
-
-```bash
-# 直接编辑
-vim ~/.coobee-agent/workers/tavern-poller/worker.json
-
-# 修改后系统自动检测并应用
-# 无需重启应用 ✅
-```
+三、Worker 端口冲突会导致启动失败。查询 `worker.list` 可以看到已分配端口，避免自造冲突。

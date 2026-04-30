@@ -1,126 +1,68 @@
 ---
 name: runtime-env
-description: 描述 Agent 运行时环境的目录结构、路径约定和可用资源。当 Agent 需要了解文件存放位置、工作空间结构、Skill 来源、Extension 系统或记忆存储时使用此技能。
+description: 描述 Agent 运行时的真实目录结构、路径字段与可用资源。当你（Agent）需要了解文件该写在哪里、会话产物落点、技能与扩展来源、记忆如何组织、Worker 如何工作时，读本技能下的对应 reference。
 ---
 
 # Runtime Environment
 
-## 概述
+## 你的坐标
 
-你正在 **coobee-agent** 系统中运行。系统为你提供了隔离的工作空间和多级资源。
+你运行在 coobee-agent 里。每次被唤起时，系统会在系统提示的 `<runtime_environment>` 块中注入你当前会话的坐标，包括：
 
-**系统信息**：
+- `Agent.id` / `Agent.name` — 你是谁
+- `Agent.Session` — 当前会话 ID（= threadId）
+- `data_directory` — Agent 持久业务数据目录
+- `session_dir` — 当前会话的产物目录（系统管理，勿改）
+- `agent_home` — 你的身份、记忆、Agent 级配置所在目录
+- `workspace` — 工具默认 cwd 与持久业务工作区
+- `config` — 全局配置目录
+- `skill_search_paths` — 当前会话可见的 Skill 来源（已按优先级排序）
+- `agents_definitions` — 用户 Agent 定义目录
 
-- 平台: `<runtime_environment>` 中的 `platform`, `arch`, `appVersion`
-- 工作空间: `<session>` 中的 `workspace`
-- 路径: `<runtime_environment>` 中的 `paths`
+所有路径以这个块为准。不要硬编码 `~/.coobee-agent/...` 等字面量。
 
----
-
-## 核心目录结构（概览）
-
-```
-{userHome}/                           # 应用主目录（如 ~/.coobee-agent）
-├── config/                           # 配置文件
-├── agents/                           # Agent 定义
-├── threads/                          # 会话线程
-├── memory/                           # 记忆存储
-├── skills/                           # 用户 Skill
-├── extensions/                       # 用户 Extension
-├── workers/                          # Worker 子进程
-└── workspaces/                       # Agent 工作空间
-    └── {session-id}/                 # 你的工作空间
-```
-
----
-
-## 📚 主题索引（按需查阅）
-
-详细说明请查看对应的 references 文件：
-
-### 核心系统
-
-1. **[路径系统](./references/paths.md)** - 核心路径说明、环境变量
-2. **[Agent 系统](./references/agents.md)** - Agent 定义、管理方式
-3. **[会话线程](./references/threads.md)** - Thread 结构、生命周期
-4. **[工作空间](./references/workspace.md)** - 你的工作目录、文件组织
-
-### 扩展机制
-
-5. **[Skill 系统](./references/skills.md)** - Skill 来源、创建方法、配置
-6. **[Extension 系统](./references/extensions.md)** - Extension 能力、创建方法
-7. **[Worker 管理](./references/workers.md)** - Worker 配置、启停控制 ⭐
-
-### 数据存储
-
-8. **[记忆系统](./references/memory.md)** - 用户级/Agent 级记忆
-
----
-
-## 🔍 快速查找
-
-### 文件存放位置问题
-
-→ 查看 [路径系统](./references/paths.md) 或 [工作空间](./references/workspace.md)
-
-### Skill 相关问题
-
-→ 查看 [Skill 系统](./references/skills.md)
-
-### Extension 相关问题
-
-→ 查看 [Extension 系统](./references/extensions.md)
-
-### Agent 创建和管理
-
-→ 查看 [Agent 系统](./references/agents.md)
-
-### Worker 启停控制 ⭐
-
-→ 查看 [Worker 管理](./references/workers.md)
-
-### 记忆读写
-
-→ 查看 [记忆系统](./references/memory.md)
-
----
-
-## 💡 使用方式
-
-### 渐进式阅读
+## 真实布局速览
 
 ```
-需要了解某个主题时:
-  ↓
-1. 在索引中找到对应主题
-  ↓
-2. 使用 read 工具读取 references/xxx.md
-  ↓
-3. 获取详细信息
-  ↓
-4. 执行相应操作
+.home/                            # userHome（dev: 项目/.home；prod: ~/.coobee-agent）
+├── config/                       # 全局配置与 secrets
+├── agents/
+│   ├── {agentId}.json            # Agent 定义（id/name/instructions/tools/skills/model）
+│   └── {agentId}/                # Agent Home（与定义同名的目录）
+│       ├── IDENTITY.md SOUL.md USER.md NOTES.md HEARTBEAT.md AGENTS.md BOOTSTRAP.md
+│       ├── sessions.jsonl        # 会话追加索引
+│       ├── memory/               # Agent 级永久记忆
+│       ├── skills/               # Agent 私有 Skill
+│       ├── workspace/            # agent_home/workspace/ ← workspace & data_directory
+│       │   └── memory/           # session 级记忆落点
+│       └── sessions/
+│           └── {sessionId}/      # ← session_dir：history/events/context/todos/子会话
+├── threads/{threadId}.json       # Thread 定义（sessionId 恒等 threadId）
+├── skills/                       # 用户/市场安装的 Skill
+├── extensions/                   # 用户 Extension
+├── workers/{name}/               # Worker 运行产物（可写：config/venv/data/cache）
+└── models/                       # Worker 共享模型仓库
 ```
 
-**优势**: 按需加载，节省 Token，提高效率
+Worker 的源码脚本在只读的 `resources/workers/{name}/`，和 `.home/workers/` 是两个层次。
 
----
+## 各主题 reference 索引
 
-## ⚠️ 安全边界
+按需读取对应文件，不用全部加载。
 
-以下资源**不对你开放**：
+- [路径系统 paths.md](./references/paths.md) — `<runtime_environment>` 注入字段对照表、`.home/` 真实布局、写入规则
+- [Agent 系统 agents.md](./references/agents.md) — Agent 定义 JSON + Agent Home 目录形态、七个标准 md、创建与委托入口
+- [会话线程 threads.md](./references/threads.md) — Thread 存储、sessionId 恒等规则、sessions.jsonl 索引、sessionDir 概念
+- [工作区 workspace.md](./references/workspace.md) — `workspace` 与 `data_directory` 的真实含义、与 `session_dir` 的边界、可写/不可写指引
+- [记忆系统 memory.md](./references/memory.md) — `agent` 与 `session` 两级记忆的真实路径、memory 工具的 action/scope 语义
+- [Skill 系统 skills.md](./references/skills.md) — 5 级搜索路径、SKILL.md 规范、skill 环境变量
+- [Extension 系统 extensions.md](./references/extensions.md) — 真实两级加载（builtin + user）、manifest、能力清单
+- [Worker 子进程 workers.md](./references/workers.md) — 脚本只读 / 运行产物可写的双层结构、控制 worker 的正确路径
 
-- 数据库文件（由主进程管理）
-- 应用内部数据目录（userData、installDir）
-- 服务端口配置（serverPort）
-- API 密钥和凭据（由 secrets.json5 管理）
+## 三条铁律
 
-需要这些资源时，请通过工具调用向主进程请求。
+一、会话产物由系统管理：`session_dir/history.jsonl`、`session_dir/events.jsonl`、`session_dir/context.jsonl`、`session_dir/sessions/` 这些文件与目录你不要手动改写或删除。
 
----
+二、路径用注入字段别硬编码。`<runtime_environment>` 里给你的字段名就是真相，自己拼路径容易和真实 layout 脱节。
 
-## 🚀 快速上手
-
-1. **了解路径** → `read skills/runtime-env/references/paths.md`
-2. **管理 Worker** → `read skills/runtime-env/references/workers.md`
-3. **创建 Skill** → `read skills/runtime-env/references/skills.md`
-4. **使用记忆** → `read skills/runtime-env/references/memory.md`
+三、不确定的目录不要乱建。如果你想建新目录，应落在 `workspace/` 或 `agent_home/memory/` 的合法子目录下；不要在 `.home/` 根、`session_dir` 根、`resources/` 下自造新目录。

@@ -74,7 +74,7 @@ Directory Structure:
   ├── history.jsonl                         — Aggregated message history (frontend display)
   ├── events.jsonl                          — Debug event logs
   ├── context.jsonl                         — Context snapshots (append-only)
-  └── tasks/                                — Multi-agent collaboration area (optional, created by task_plan tool)
+  └── tasks/                                — Multi-agent collaboration area (optional, created by task_plan tool) ⚠️ task_plan tool removed
 
   **PURPOSE**: This is the internal sandbox for the CURRENT task.
   Files here are task-specific and may be cleaned up after task completion.
@@ -225,7 +225,7 @@ builder.appendInstructions(
 - `history.jsonl` - 聚合的消息历史（供前端展示）
 - `events.jsonl` - 调试事件流
 - `context.jsonl` - 上下文快照（追加式）
-- `tasks/` - 多 Agent 协作区（可选，由 task_plan 工具创建）
+- `tasks/` - 多 Agent 协作区（可选，由 task_plan 工具创建）⚠️ task_plan 已删除
 
 **Key System Directories**: 关键系统目录
 
