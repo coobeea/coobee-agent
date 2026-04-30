@@ -74,29 +74,19 @@ provide('addFileToTask', undefined);
 provide('openFilePreview', openFilePreview);
 provide('directoryMode', directoryMode);
 provide('toggleDirectoryMode', toggleDirectoryMode);
-provide('setProjectDir', setProjectDir);
 
 async function updateProjectPathForMode(thread: {
   agentId?: string;
   agentHomePath?: string;
+  agentWorkspacePath?: string;
   workspacePath?: string;
 }): Promise<void> {
   if (rightTab.value === 'agent-home') {
     projectPath.value = thread.agentHomePath || '';
   } else if (rightTab.value === 'workspace') {
-    projectPath.value = thread.workspacePath || '';
+    projectPath.value = thread.agentWorkspacePath || thread.workspacePath || '';
   } else if (rightTab.value === 'project') {
-    // 数据目录：从 Agent 的 metadata.dataDirectory 读取
-    if (thread.agentId) {
-      const agent = await agentsStore.getAgentDetail(thread.agentId);
-      if (agent && agent.metadata && agent.metadata.dataDirectory) {
-        projectPath.value = agent.metadata.dataDirectory as string;
-      } else {
-        projectPath.value = '';
-      }
-    } else {
-      projectPath.value = '';
-    }
+    projectPath.value = thread.agentWorkspacePath || thread.workspacePath || '';
   }
 }
 
@@ -130,36 +120,6 @@ async function openRightPanel(tab: 'agent-home' | 'workspace' | 'project' | 'ter
   const thread = currentThread.value;
   if (thread && tab !== 'terminal') {
     await updateProjectPathForMode(thread);
-  }
-}
-
-async function setProjectDir(): Promise<void> {
-  const thread = currentThread.value;
-  if (!thread) return;
-
-  try {
-    const result = await window.api?.openDirectory();
-    if (!result) return;
-
-    // 更新 Agent 的 dataDirectory（而不是 Thread 的 projectDir）
-    const agent = await agentsStore.getAgentDetail(thread.agentId);
-    if (!agent) return;
-
-    const success = await agentsStore.modifyAgent(agent.id, {
-      metadata: {
-        ...agent.metadata,
-        dataDirectory: result
-      }
-    });
-
-    if (success) {
-      projectPath.value = result;
-      rightTab.value = 'project';
-      rightDrawerOpen.value = true;
-      console.log('[ThreadViewDual] Data directory updated to:', result);
-    }
-  } catch (err) {
-    console.warn('[ThreadViewDual] setProjectDir failed:', err);
   }
 }
 

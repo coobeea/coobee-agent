@@ -11,7 +11,7 @@
  *
  * 安全限制：
  *   - path 不能包含 .. 遍历
- *   - 上传/复制限制在 workspaces 目录内
+ *   - 上传/复制/删除限制在 Agent Home 目录内
  *   - 限制深度（默认 3 层）和单层数量（最多 200）
  */
 
@@ -370,10 +370,10 @@ export function registerFileRoutes(router: Router): void {
       return;
     }
 
-    const workspacesDir = Env.paths.workspacesDir;
+    const agentHomesDir = Env.paths.userAgentsDir;
 
     // 验证路径安全
-    if (!isPathSafe(targetDir, workspacesDir)) {
+    if (!isPathSafe(targetDir, agentHomesDir)) {
       ctx.status = 400;
       ctx.body = { error: 'Invalid target directory: directory traversal not allowed' };
       return;
@@ -434,21 +434,21 @@ export function registerFileRoutes(router: Router): void {
       return;
     }
 
-    const workspacesDir = Env.paths.workspacesDir;
+    const agentHomesDir = Env.paths.userAgentsDir;
     const appHome = Env.paths.userHome;
     const systemHome = Env.paths.home;
 
     if (
-      !isPathSafe(sourcePath, workspacesDir) &&
+      !isPathSafe(sourcePath, agentHomesDir) &&
       !isPathSafe(sourcePath, appHome) &&
       !isPathSafe(sourcePath, systemHome)
     ) {
       ctx.status = 400;
-      ctx.body = { error: 'Invalid source path: must be within workspaces, app data, or user home' };
+      ctx.body = { error: 'Invalid source path: must be within agent homes, app data, or user home' };
       return;
     }
 
-    if (!isPathSafe(targetDir, workspacesDir)) {
+    if (!isPathSafe(targetDir, agentHomesDir)) {
       ctx.status = 400;
       ctx.body = { error: 'Invalid target directory: directory traversal not allowed' };
       return;
@@ -524,10 +524,10 @@ export function registerFileRoutes(router: Router): void {
       return;
     }
 
-    const workspacesDir = Env.paths.workspacesDir;
+    const agentHomesDir = Env.paths.userAgentsDir;
 
     // 验证路径安全
-    if (!isPathSafe(targetPath, workspacesDir)) {
+    if (!isPathSafe(targetPath, agentHomesDir)) {
       ctx.status = 400;
       ctx.body = { error: 'Invalid path: directory traversal not allowed' };
       return;

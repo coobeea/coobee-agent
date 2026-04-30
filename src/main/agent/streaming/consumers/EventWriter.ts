@@ -12,6 +12,7 @@
 import path from 'node:path';
 import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
+import { resolveThreadRuntimeLayoutSync } from '@main/agent/context/AgentRuntimeLayout';
 import { StreamEventType, type StreamEvent, type StreamMessage } from '../types';
 import { AsyncJsonlWriter } from './AsyncJsonlWriter';
 
@@ -24,12 +25,7 @@ export class EventWriter {
   private eventsFiles = new Map<string, string>();
   private sequences = new Map<string, number>();
   private writer = new AsyncJsonlWriter('EventWriter');
-  private workspacesDir: string;
   private initialized = false;
-
-  constructor(workspacesDir: string) {
-    this.workspacesDir = workspacesDir;
-  }
 
   /**
    * 启动监听
@@ -68,8 +64,8 @@ export class EventWriter {
     const { sessionId, message } = event;
 
     // 获取或创建文件路径
-    if (!this.eventsFiles.has(sessionId)) {
-      this.initializeSession(sessionId);
+    if (!this.eventsFiles.has(sessionId) && !this.initializeSession(sessionId, getAgentIdFromMessage(message))) {
+      return;
     }
 
     // 分配序列号并写入
@@ -80,14 +76,21 @@ export class EventWriter {
   /**
    * 初始化会话（创建文件路径）
    */
-  private initializeSession(sessionId: string): void {
-    const workspacePath = path.join(this.workspacesDir, sessionId);
-    const eventsFile = path.join(workspacePath, 'events.jsonl');
+  private initializeSession(sessionId: string, agentId?: string): boolean {
+    let eventsFile: string;
+    try {
+      const layout = resolveThreadRuntimeLayoutSync(sessionId, agentId);
+      eventsFile = path.join(layout.sessionDir, 'events.jsonl');
+    } catch (error) {
+      log.error(`[EventWriter] Failed to resolve session path for ${sessionId}:`, error);
+      return false;
+    }
 
     this.eventsFiles.set(sessionId, eventsFile);
     this.sequences.set(sessionId, 0);
 
     log.debug(`[EventWriter] Initialized session: ${sessionId}`);
+    return true;
   }
 
   /**
@@ -140,4 +143,8 @@ export class EventWriter {
   async flush(): Promise<void> {
     await this.writer.flush();
   }
+}
+
+function getAgentIdFromMessage(message: StreamMessage): string | undefined {
+  return message.source?.type === 'agent' ? message.source.id : undefined;
 }

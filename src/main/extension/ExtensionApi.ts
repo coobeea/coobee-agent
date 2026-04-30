@@ -120,8 +120,8 @@ function createExtensionServices(): ExtensionServices {
     },
     paths: {
       async getWorkspace(sessionId) {
-        const { Threads } = await import('../config');
-        return Threads.getWorkspaceDir(sessionId);
+        const { resolveThreadRuntimeLayoutSync } = await import('../agent/context/AgentRuntimeLayout');
+        return resolveThreadRuntimeLayoutSync(sessionId).agentWorkspacePath;
       },
       async getAgentHome(agentId) {
         // 这里先保持与主运行时一致的 home 路径来源；AgentsConfig 仍在单独收敛中。

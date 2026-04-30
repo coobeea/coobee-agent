@@ -23,6 +23,7 @@ import { generateSnowflakeId } from '@main/utils/SnowflakeIdGenerator';
 import { ThreadEventTypes } from '@shared/events/thread';
 import type { ThreadMessageAction, ThreadMessageEventPayload } from '@shared/events/thread';
 import { normalizeModelSpec } from '../provider/ModelSpec';
+import { createAgentRuntimeLayout, ensureAgentRuntimeLayout } from '../context/AgentRuntimeLayout';
 import type {
   ThreadDefinition,
   ThreadIndexEntry,
@@ -39,11 +40,8 @@ export class ThreadStore {
   private static instance: ThreadStore | null = null;
 
   private readonly threadsDir: string;
-  private readonly workspacesDir: string;
-
-  constructor(threadsDir: string, workspacesDir: string) {
+  constructor(threadsDir: string, _deprecatedWorkspacesDir?: string) {
     this.threadsDir = threadsDir;
-    this.workspacesDir = workspacesDir;
   }
 
   // ==================== 单例 ====================
@@ -51,7 +49,7 @@ export class ThreadStore {
   static async getInstance(): Promise<ThreadStore> {
     if (!ThreadStore.instance) {
       const { Env } = await import('@main/common/env');
-      ThreadStore.instance = new ThreadStore(Env.paths.threadsDir, Env.paths.workspacesDir);
+      ThreadStore.instance = new ThreadStore(Env.paths.threadsDir);
     }
     return ThreadStore.instance;
   }
@@ -116,8 +114,8 @@ export class ThreadStore {
 
     await this.writeDefinition(definition);
 
-    // 立即创建工作空间目录结构（sessions、contexts、events 等）
-    await this.createWorkspaceDirectories(id);
+    // 立即创建 Agent 运行目录结构（workspace、sessions/{threadId} 等）
+    await this.createRuntimeDirectories(definition);
 
     // P1 重构：移除 dataDirectory 初始化，由 AgentContextResolver 在运行时处理
 
@@ -128,22 +126,18 @@ export class ThreadStore {
     });
 
     log.info(`[ThreadStore] Created thread: ${definition.id} (agent: ${definition.agentId})`);
-    this.emitThreadMessage('created', toIndexEntry(definition, this.workspacesDir));
+    this.emitThreadMessage('created', toIndexEntry(definition));
     return definition;
   }
 
-  /** 创建 Thread 的工作空间目录（扁平化结构） */
-  private async createWorkspaceDirectories(threadId: string): Promise<void> {
-    try {
-      const { Threads } = await import('@main/config/threads');
-      // Threads.getWorkspaceDir 会自动创建工作空间根目录：
-      // - workspaces/{threadId}/
-      // 扁平化结构，不再创建子目录，文件会在运行时按需创建
-      await Threads.getWorkspaceDir(threadId);
-      log.debug(`[ThreadStore] Created workspace directory for thread ${threadId}`);
-    } catch (err) {
-      log.warn(`[ThreadStore] Failed to create workspace directory for thread ${threadId}:`, err);
-    }
+  /** 创建 Thread 的 Agent 运行目录 */
+  private async createRuntimeDirectories(thread: ThreadDefinition): Promise<void> {
+    await ensureAgentRuntimeLayout({
+      agentId: thread.agentId,
+      sessionId: thread.sessionId,
+      agentHomePath: thread.agentHomePath
+    });
+    log.debug(`[ThreadStore] Created runtime directories for thread ${thread.id}`);
   }
 
   // P1 重构：已移除 ensureAgentDataDirectory() 方法
@@ -170,7 +164,7 @@ export class ThreadStore {
   /** 获取 Thread 列表条目形态（用于 API/事件返回给前端） */
   async getEntry(threadId: string): Promise<ThreadIndexEntry | null> {
     const thread = await this.get(threadId);
-    return thread ? toIndexEntry(thread, this.workspacesDir) : null;
+    return thread ? toIndexEntry(thread) : null;
   }
 
   /**
@@ -213,7 +207,7 @@ export class ThreadStore {
           if (options?.agentId && thread.agentId !== options.agentId) return null;
           if (options?.status && thread.status !== options.status) return null;
 
-          return toIndexEntry(thread, this.workspacesDir);
+          return toIndexEntry(thread);
         })
       )
     ).filter((entry): entry is ThreadIndexEntry => entry !== null);
@@ -266,7 +260,7 @@ export class ThreadStore {
         if (options?.agentId && thread.agentId !== options.agentId) continue;
         if (options?.status && thread.status !== options.status) continue;
 
-        entries.push(toIndexEntry(thread, this.workspacesDir));
+        entries.push(toIndexEntry(thread));
       } catch (err) {
         log.warn(`[ThreadStore] Failed to read ${file}:`, err);
       }
@@ -320,7 +314,7 @@ export class ThreadStore {
 
     this.emitThreadMessage(
       'updated',
-      toIndexEntry(updated, this.workspacesDir),
+      toIndexEntry(updated),
       updated.runStatus !== prevRunStatus ? { prevRunStatus } : undefined
     );
 
@@ -449,7 +443,13 @@ export type ThreadMessageEvent = ThreadMessageEventPayload;
 // ==================== 辅助函数 ====================
 
 /** 从完整定义提取索引条目 */
-function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndexEntry {
+function toIndexEntry(def: ThreadDefinition): ThreadIndexEntry {
+  const layout = createAgentRuntimeLayout({
+    agentId: def.agentId,
+    sessionId: def.sessionId,
+    agentHomePath: def.agentHomePath
+  });
+
   return {
     id: def.id,
     title: def.title,
@@ -459,7 +459,9 @@ function toIndexEntry(def: ThreadDefinition, workspacesDir: string): ThreadIndex
     runStatus: def.runStatus ?? 'idle',
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
-    workspacePath: path.join(workspacesDir, def.id),
+    workspacePath: layout.agentWorkspacePath,
+    agentWorkspacePath: layout.agentWorkspacePath,
+    sessionPath: layout.sessionDir,
     agentHomePath: def.agentHomePath,
     overrideModel: def.overrideModel,
     runtimeType: def.runtimeType,

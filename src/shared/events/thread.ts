@@ -25,7 +25,12 @@ export interface ThreadEntry {
   runStatus: ThreadRunStatus;
   createdAt: string;
   updatedAt: string;
+  /** Agent 业务工作区路径（= agents/{agentId}/workspace），也是工具默认 cwd */
   workspacePath: string;
+  /** Agent 业务工作区路径（同 workspacePath，显式字段便于前端消除歧义） */
+  agentWorkspacePath: string;
+  /** 当前 Thread 的会话产物目录（= agents/{agentId}/sessions/{threadId}） */
+  sessionPath: string;
   agentHomePath: string;
   overrideModel?: string | null;
   runtimeType?: ThreadRuntimeType;

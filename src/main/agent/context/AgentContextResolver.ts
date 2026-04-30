@@ -6,20 +6,23 @@
  *   - 解析数据目录（dataDirectory）
  *   - 解析会话目录（sessionDir）
  *   - 解析有效模型（effectiveModel）
- *   - 验证和规范化工作空间路径
+ *   - 解析 Agent workspace（工具 cwd）与 session 目录
  *
  * 目标：
  *   - 消除 AgentStore、ThreadStore、AgentEnvInjector 中的路径逻辑重复
  *   - 提供统一的路径解析和缓存机制
- *   - 增强安全性（路径验证）
+ *   - 增强安全性（路径集中管理）
  *
  * @since P1 阶段重构
  */
 
-import path from 'node:path';
-import fs from 'node:fs';
 import { createLogger } from '@main/common/logger';
 import { normalizeModelSpec } from '../provider/ModelSpec';
+import {
+  ensureAgentRuntimeLayout,
+  migrateLegacyAgentDataDirectory,
+  migrateLegacyThreadWorkspace
+} from './AgentRuntimeLayout';
 
 const log = createLogger('context-resolver');
 
@@ -43,13 +46,19 @@ export interface AgentContext {
   /** Agent 专属的数据目录（持久化业务数据） */
   dataDirectory: string;
 
-  /** 工作空间根目录（可选，chat 模式可能为空） */
-  workspacePath: string | undefined;
+  /** Agent 业务工作区，也是工具默认 cwd */
+  workspacePath: string;
+
+  /** Agent 业务工作区，也是工具默认 cwd */
+  agentWorkspacePath: string;
+
+  /** Agent 私有技能目录 */
+  agentSkillsPath: string;
 
   /** 有效模型（modelOverride || agent.model） */
   effectiveModel: string | undefined;
 
-  /** 会话目录（dataDirectory/sessions/{sessionId}） */
+  /** 会话目录（agent_home/sessions/{sessionId}） */
   sessionDir: string;
 
   /** 会话 ID */
@@ -69,7 +78,7 @@ export interface ResolveParams {
   /** Thread ID（可选，用于 Thread 恢复场景） */
   threadId?: string;
 
-  /** 工作空间路径（可选，chat 模式可能为空） */
+  /** 已废弃：Agent 模式下工作区由 AgentRuntimeLayout 统一决定 */
   workspace?: string;
 
   /** 模型覆盖（可选，Thread 级别的模型覆盖） */
@@ -155,49 +164,37 @@ export class AgentContextResolver {
     const { AgentHomeManager } = await import('../agents/AgentHomeManager');
 
     // 4.1 Agent Home 路径
-    let agentHomePath: string;
-    try {
-      const homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
-      agentHomePath = homeManager.initHome(params.agentId);
-    } catch (err) {
-      log.warn(`[ContextResolver] Failed to initialize Agent Home for ${params.agentId}:`, err);
-      agentHomePath = path.join(Env.paths.userAgentsDir, params.agentId);
-    }
+    const homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
+    const agentHomePath = homeManager.initHome(params.agentId);
 
-    // 4.2 数据目录
-    let dataDirectory = agent.metadata?.dataDirectory as string | undefined;
-    if (!dataDirectory) {
-      // 使用默认路径：.home/data/{agentId}
-      dataDirectory = path.join(Env.paths.userHome, 'data', params.agentId);
-      log.debug(`[ContextResolver] Using default dataDirectory: ${dataDirectory}`);
+    // 4.2 Agent 运行目录布局
+    if (agent.metadata?.dataDirectory) {
+      log.warn(
+        `[ContextResolver] metadata.dataDirectory is deprecated and ignored for ${params.agentId}: ${agent.metadata.dataDirectory}`
+      );
     }
-    await this.ensureDirectory(dataDirectory, 'dataDirectory');
-
-    // 4.3 工作空间路径（验证安全性）
-    let workspacePath = params.workspace;
-    if (workspacePath) {
-      // 验证路径安全性（防止路径遍历攻击）
-      if (!this.validatePath(Env.paths.userHome, workspacePath)) {
-        log.warn(`[ContextResolver] Invalid workspace path: ${workspacePath}`);
-        workspacePath = undefined;
-      }
-    }
+    const layout = await ensureAgentRuntimeLayout({
+      agentId: params.agentId,
+      sessionId: params.sessionId,
+      agentHomePath
+    });
+    await migrateLegacyAgentDataDirectory(params.agentId, layout.agentWorkspacePath);
+    await migrateLegacyThreadWorkspace(params.sessionId, layout.sessionDir);
 
     // 4.4 有效模型
     const effectiveModel = normalizeModelSpec(params.modelOverride) || normalizeModelSpec(agent.model);
-
-    // 4.5 会话目录
-    const sessionDir = path.join(dataDirectory, 'sessions', params.sessionId);
 
     // 5. 构建上下文
     const context: AgentContext = {
       agentId: params.agentId,
       agentName: agent.name,
-      agentHomePath,
-      dataDirectory,
-      workspacePath,
+      agentHomePath: layout.agentHomePath,
+      dataDirectory: layout.dataDirectory,
+      workspacePath: layout.agentWorkspacePath,
+      agentWorkspacePath: layout.agentWorkspacePath,
+      agentSkillsPath: layout.agentSkillsPath,
       effectiveModel,
-      sessionDir,
+      sessionDir: layout.sessionDir,
       sessionId: params.sessionId
     };
 
@@ -214,6 +211,7 @@ export class AgentContextResolver {
           agentName: context.agentName,
           agentHomePath: context.agentHomePath,
           dataDirectory: context.dataDirectory,
+          sessionDir: context.sessionDir,
           effectiveModel: context.effectiveModel,
           hasWorkspace: !!context.workspacePath
         },
@@ -259,45 +257,6 @@ export class AgentContextResolver {
       throw new Error('[ContextResolver] sessionId is required');
     }
   }
-
-  /**
-   * 验证路径安全性（防止路径遍历攻击）
-   *
-   * @param basePath 基础路径（如 userHome）
-   * @param targetPath 目标路径
-   * @returns 是否安全
-   */
-  private validatePath(basePath: string, targetPath: string): boolean {
-    try {
-      const resolved = path.resolve(basePath, targetPath);
-      // 确保解析后的路径在基础路径内
-      return resolved.startsWith(basePath);
-    } catch (err) {
-      log.warn('[ContextResolver] Path validation failed:', err);
-      return false;
-    }
-  }
-
-  /**
-   * 确保运行期目录存在。
-   *
-   * Resolver 会把 dataDirectory 暴露给 Agent；如果只返回路径但不创建，
-   * Agent 后续写业务数据时会遇到不必要的 ENOENT。
-   */
-  private async ensureDirectory(dirPath: string, label: string): Promise<void> {
-    try {
-      await fs.promises.mkdir(dirPath, { recursive: true });
-    } catch (error) {
-      throw new Error(`[ContextResolver] Failed to create ${label}: ${dirPath} (${formatUnknownError(error)})`);
-    }
-  }
-}
-
-function formatUnknownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
 }
 
 // ==================== 导出单例工厂 ====================

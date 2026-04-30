@@ -5,7 +5,7 @@
  * 显示项目目录的文件树，通过 HTTP API 获取目录结构。
  * 支持目录展开/折叠、文件类型图标、手动刷新、文件选中。
  * 自动监听文件变化并刷新树。
- * 支持切换显示"智能体目录"或"任务工作目录"。
+ * 支持切换显示"智能体目录"或"业务工作区"。
  */
 import { ref, watch, provide, onUnmounted, inject, computed, type Ref } from 'vue';
 import { useOpenFiles } from '@/composables/useOpenFiles';
@@ -26,12 +26,11 @@ const logStore = useLogStore();
 type DirectoryMode = 'agent-home' | 'workspace' | 'project';
 const injectedDirectoryMode = inject<Ref<DirectoryMode>>('directoryMode', ref('agent-home'));
 const toggleDirectoryMode = inject<() => void>('toggleDirectoryMode', () => {});
-const setProjectDir = inject<() => Promise<void>>('setProjectDir', async () => {});
 
 const DIRECTORY_META: Record<DirectoryMode, { title: string; icon: string }> = {
   'agent-home': { title: '智能体', icon: 'i-carbon-user-avatar' },
-  workspace: { title: '任务工作目录', icon: 'i-carbon-folder-shared' },
-  project: { title: '数据目录', icon: 'i-carbon-folder-details' }
+  workspace: { title: '业务工作区', icon: 'i-carbon-folder-shared' },
+  project: { title: '业务数据', icon: 'i-carbon-folder-details' }
 };
 
 const props = withDefaults(
@@ -331,13 +330,6 @@ defineExpose({ selectDirectory });
 
       <!-- 右侧：操作按钮 -->
       <div class="flex items-center">
-        <button
-          v-if="projectPath"
-          class="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/45 hover:text-foreground/75"
-          title="指定数据目录"
-          @click="setProjectDir">
-          <span class="i-carbon-folder-add inline-block h-3.5 w-3.5"></span>
-        </button>
         <button
           v-if="projectPath"
           class="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/45 hover:text-foreground/75"

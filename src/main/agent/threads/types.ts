@@ -42,7 +42,7 @@ export interface ThreadDefinition {
   /** 会话状态 */
   status: ThreadStatus;
 
-  /** 会话 ID（等于 threadId，workspace 以此命名） */
+  /** 会话 ID（等于 threadId） */
   sessionId: string;
 
   /** Agent 运行模式 */
@@ -91,8 +91,12 @@ export interface ThreadIndexEntry {
   runStatus: ThreadRunStatus;
   createdAt: string;
   updatedAt: string;
-  /** 该 Thread 的工作空间绝对路径（= workspacesDir/{id}） */
+  /** Agent 业务工作区路径（= agents/{agentId}/workspace），也是工具默认 cwd */
   workspacePath: string;
+  /** Agent 业务工作区路径（同 workspacePath，显式字段便于前端消除歧义） */
+  agentWorkspacePath: string;
+  /** 当前 Thread 的会话产物目录（= agents/{agentId}/sessions/{threadId}） */
+  sessionPath: string;
   /** Agent Home 目录路径（用于前端展示 Agent 持久化数据） */
   agentHomePath: string;
   /** 任务级别的模型覆盖（优先于 Agent 默认模型） */

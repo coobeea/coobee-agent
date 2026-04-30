@@ -9,8 +9,8 @@ import { ThreadStore } from '@main/agent/threads/ThreadStore';
 import { createLogger } from '@main/common/logger';
 import fs from 'fs-extra';
 import path from 'path';
-import { Env } from '@main/common/env';
 import type { UpdateThreadParams } from '@main/agent/threads/types';
+import { ensureAgentRuntimeLayout, migrateLegacyThreadWorkspace } from '@main/agent/context/AgentRuntimeLayout';
 import type { ApiResponse, DeleteThreadRespVO, UpdateThreadReqVO, UpdateThreadRespVO } from '@shared/api/thread-types';
 import type { ThreadRuntimeType, ThreadStatus } from '@shared/events/thread';
 
@@ -181,9 +181,14 @@ export function registerThreadRoutes(router: Router): void {
         return;
       }
 
-      // 从 session 文件读取完整对话历史
-      const workspacePath = path.join(Env.paths.workspacesDir, threadId);
-      const messages = await extractMessagesFromSession(workspacePath, thread.sessionId);
+      // 从 Agent Home 内的 session 目录读取完整对话历史
+      const layout = await ensureAgentRuntimeLayout({
+        agentId: thread.agentId,
+        sessionId: thread.sessionId,
+        agentHomePath: thread.agentHomePath
+      });
+      await migrateLegacyThreadWorkspace(thread.sessionId, layout.sessionDir);
+      const messages = await extractMessagesFromSession(layout.sessionDir);
 
       ctx.body = {
         success: true,
@@ -333,11 +338,8 @@ export function registerThreadRoutes(router: Router): void {
  *
  * @returns 完整的对话消息列表（用户 + AI）
  */
-async function extractMessagesFromSession(
-  workspacePath: string,
-  _sessionId: string
-): Promise<Array<Record<string, unknown>>> {
-  const historyFile = path.join(workspacePath, 'history.jsonl');
+async function extractMessagesFromSession(sessionDir: string): Promise<Array<Record<string, unknown>>> {
+  const historyFile = path.join(sessionDir, 'history.jsonl');
 
   log.debug(`[extractMessagesFromSession] historyFile: ${historyFile}, exists: ${await fs.pathExists(historyFile)}`);
 

@@ -7,7 +7,13 @@ import { AgentContextResolver, type ResolveParams } from '../AgentContextResolve
 import type { AgentDefinition } from '../../agents/types';
 
 const fsMocks = vi.hoisted(() => ({
-  mkdir: vi.fn(async () => undefined)
+  existsSync: vi.fn<(filePath: string) => boolean>(() => false),
+  mkdir: vi.fn<() => Promise<void>>(async () => undefined),
+  readdir: vi.fn<() => Promise<string[]>>(async () => []),
+  rename: vi.fn<() => Promise<void>>(async () => undefined),
+  cp: vi.fn<() => Promise<void>>(async () => undefined),
+  rm: vi.fn<() => Promise<void>>(async () => undefined),
+  rmdir: vi.fn<() => Promise<void>>(async () => undefined)
 }));
 
 type MockAgentStore = {
@@ -32,10 +38,21 @@ vi.mock('@main/common/logger', () => ({
 
 vi.mock('node:fs', () => ({
   default: {
+    existsSync: fsMocks.existsSync,
     promises: {
       mkdir: fsMocks.mkdir
     }
-  }
+  },
+  existsSync: fsMocks.existsSync
+}));
+
+vi.mock('node:fs/promises', () => ({
+  mkdir: fsMocks.mkdir,
+  readdir: fsMocks.readdir,
+  rename: fsMocks.rename,
+  cp: fsMocks.cp,
+  rm: fsMocks.rm,
+  rmdir: fsMocks.rmdir
 }));
 
 vi.mock('@main/agent/agents/AgentStore', () => {
@@ -53,9 +70,9 @@ vi.mock('@main/agent/agents/AgentStore', () => {
 });
 
 vi.mock('@main/agent/agents/AgentHomeManager', () => ({
-  AgentHomeManager: vi.fn().mockImplementation(() => ({
-    initHome: vi.fn((agentId: string) => `/mock/home/agents/${agentId}`)
-  }))
+  AgentHomeManager: vi.fn().mockImplementation(function (this: { initHome: (agentId: string) => string }) {
+    this.initHome = vi.fn((agentId: string) => `/mock/home/agents/${agentId}`);
+  })
 }));
 
 vi.mock('@main/common/env', () => ({
@@ -63,6 +80,7 @@ vi.mock('@main/common/env', () => ({
     paths: {
       userHome: '/mock/home',
       userAgentsDir: '/mock/home/agents',
+      threadsDir: '/mock/home/threads',
       home: '/mock/system/home',
       temp: '/tmp'
     }
@@ -82,8 +100,14 @@ describe('AgentContextResolver', () => {
     const store = await getMockAgentStore();
     store._clearMockAgents();
 
-    fsMocks.mkdir.mockClear();
+    vi.clearAllMocks();
+    fsMocks.existsSync.mockReturnValue(false);
     fsMocks.mkdir.mockResolvedValue(undefined);
+    fsMocks.readdir.mockResolvedValue([]);
+    fsMocks.rename.mockResolvedValue(undefined);
+    fsMocks.cp.mockResolvedValue(undefined);
+    fsMocks.rm.mockResolvedValue(undefined);
+    fsMocks.rmdir.mockResolvedValue(undefined);
   });
 
   describe('参数验证', () => {
@@ -156,11 +180,12 @@ describe('AgentContextResolver', () => {
       expect(context.agentId).toBe('agent-123');
       expect(context.agentName).toBe('Test Agent');
       expect(context.agentHomePath).toBe('/mock/home/agents/agent-123');
-      expect(context.dataDirectory).toBe('/custom/data/dir');
+      expect(context.dataDirectory).toBe('/mock/home/agents/agent-123/workspace');
       expect(context.effectiveModel).toBe('openai/gpt-4');
       expect(context.sessionId).toBe('session-456');
-      expect(context.sessionDir).toBe('/custom/data/dir/sessions/session-456');
-      expect(fsMocks.mkdir).toHaveBeenCalledWith('/custom/data/dir', { recursive: true });
+      expect(context.sessionDir).toBe('/mock/home/agents/agent-123/sessions/session-456');
+      expect(context.agentSkillsPath).toBe('/mock/home/agents/agent-123/skills');
+      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-123/workspace', { recursive: true });
     });
 
     it('应该使用默认 dataDirectory', async () => {
@@ -186,11 +211,12 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      expect(context.dataDirectory).toBe('/mock/home/data/agent-789');
-      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/data/agent-789', { recursive: true });
+      expect(context.dataDirectory).toBe('/mock/home/agents/agent-789/workspace');
+      expect(context.sessionDir).toBe('/mock/home/agents/agent-789/sessions/session-111');
+      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-789/workspace', { recursive: true });
     });
 
-    it('创建 dataDirectory 失败时应该抛出错误', async () => {
+    it('创建运行目录失败时应该抛出错误', async () => {
       const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-mkdir-fail',
@@ -211,7 +237,46 @@ describe('AgentContextResolver', () => {
           agentId: 'agent-mkdir-fail',
           sessionId: 'session-mkdir-fail'
         })
-      ).rejects.toThrow('Failed to create dataDirectory');
+      ).rejects.toThrow('permission denied');
+    });
+
+    it('应该一次性迁移旧 data 和 workspaces 目录内容到新布局', async () => {
+      const store = await getMockAgentStore();
+      const mockAgent: AgentDefinition = {
+        id: 'agent-migrate',
+        name: 'Test Agent',
+        description: 'Test',
+        instructions: '',
+        model: 'openai/gpt-4',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'user',
+        version: 1
+      };
+      store._setMockAgent(mockAgent);
+
+      fsMocks.existsSync.mockImplementation((filePath: string) =>
+        ['/mock/home/data/agent-migrate', '/mock/home/workspaces/session-migrate'].includes(filePath)
+      );
+      fsMocks.readdir
+        .mockResolvedValueOnce(['records.json'])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(['history.jsonl'])
+        .mockResolvedValueOnce([]);
+
+      await resolver.resolve({
+        agentId: 'agent-migrate',
+        sessionId: 'session-migrate'
+      });
+
+      expect(fsMocks.rename).toHaveBeenCalledWith(
+        '/mock/home/data/agent-migrate/records.json',
+        '/mock/home/agents/agent-migrate/workspace/records.json'
+      );
+      expect(fsMocks.rename).toHaveBeenCalledWith(
+        '/mock/home/workspaces/session-migrate/history.jsonl',
+        '/mock/home/agents/agent-migrate/sessions/session-migrate/history.jsonl'
+      );
     });
 
     it('应该使用 modelOverride', async () => {
@@ -362,8 +427,8 @@ describe('AgentContextResolver', () => {
     });
   });
 
-  describe('路径安全验证', () => {
-    it('应该接受合法的 workspace 路径', async () => {
+  describe('工作区路径', () => {
+    it('应该忽略外部 workspace 参数，使用 Agent workspace', async () => {
       const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-valid-path',
@@ -386,10 +451,10 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      expect(context.workspacePath).toBe('/mock/home/workspace/project');
+      expect(context.workspacePath).toBe('/mock/home/agents/agent-valid-path/workspace');
     });
 
-    it('应该拒绝路径遍历攻击', async () => {
+    it('不应该让路径遍历参数改变 Agent workspace', async () => {
       const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-attack',
@@ -412,8 +477,7 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      // 不安全的路径应该被设置为 undefined
-      expect(context.workspacePath).toBeUndefined();
+      expect(context.workspacePath).toBe('/mock/home/agents/agent-attack/workspace');
     });
   });
 

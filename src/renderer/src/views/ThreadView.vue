@@ -36,7 +36,7 @@ const currentThread = computed(() => {
   return threadsStore.threads.find((t) => t.id === threadId.value);
 });
 
-// 目录切换：智能体目录 / 任务工作目录
+// 目录切换：智能体目录 / 业务工作区
 type DirectoryMode = 'agent-home' | 'workspace';
 const directoryMode = ref<DirectoryMode>('agent-home');
 
@@ -54,11 +54,19 @@ provide('directoryMode', directoryMode);
 provide('toggleDirectoryMode', toggleDirectoryMode);
 
 // 根据当前模式更新显示的目录路径
-function updateProjectPathForMode(thread: { agentHomePath?: string; workspacePath?: string }): void {
+function getAgentWorkspacePath(thread: { agentWorkspacePath?: string; workspacePath?: string }): string {
+  return thread.agentWorkspacePath || thread.workspacePath || '';
+}
+
+function updateProjectPathForMode(thread: {
+  agentHomePath?: string;
+  agentWorkspacePath?: string;
+  workspacePath?: string;
+}): void {
   if (directoryMode.value === 'agent-home') {
-    projectPath.value = thread.agentHomePath || thread.workspacePath || '';
+    projectPath.value = thread.agentHomePath || '';
   } else {
-    projectPath.value = thread.workspacePath || thread.agentHomePath || '';
+    projectPath.value = getAgentWorkspacePath(thread);
   }
 }
 

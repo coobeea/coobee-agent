@@ -109,7 +109,6 @@ class EnvClass {
     userExtensionsDir: string;
     builtinAgentsDir: string;
     agentsMdPath: string;
-    workspacesDir: string;
     threadsDir: string;
     userAgentsDir: string;
   } {
@@ -148,7 +147,6 @@ class EnvClass {
       userExtensionsDir: path.join(_userHome, 'extensions'),
       builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
       agentsMdPath: path.join(_userHome, 'agents.md'),
-      workspacesDir: path.join(_userHome, 'workspaces'),
       threadsDir: path.join(_userHome, 'threads'),
       userAgentsDir: path.join(_userHome, 'agents'),
 
@@ -199,12 +197,8 @@ class EnvClass {
     return upgradeDir;
   }
 
-  async getAgentWorkspaceDir(sessionId: string): Promise<string> {
-    const dir = path.join(this.paths.workspacesDir, sessionId);
-    if (!fs.existsSync(dir)) {
-      await mkdirp(dir);
-    }
-    return dir;
+  async getAgentWorkspaceDir(_sessionId: string): Promise<string> {
+    throw new Error('[Env] getAgentWorkspaceDir is deprecated. Use AgentRuntimeLayout for Agent workspaces.');
   }
 
   async getAgentHomeDir(agentId: string): Promise<string> {

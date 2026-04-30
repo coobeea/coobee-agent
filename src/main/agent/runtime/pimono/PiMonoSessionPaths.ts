@@ -13,8 +13,8 @@ export interface SessionMigrationLogger {
 }
 
 /**
- * PiMono 的 sessionDir 在 AgentExecutor 链路里传入的是 workspace 根目录。
- * 真正的 SDK 会话文件需要收纳到 workspace/sessions/，避免和 history/events/context 混在一起。
+ * PiMono 的 SDK 会话文件统一收纳到 sessionDir/sessions/，
+ * 避免和 history/events/context 混在同一层。
  */
 export function resolvePiMonoSessionRoot(cwd: string, options: SessionPathOptions): string {
   if (!options.sessionDir) {
@@ -24,17 +24,7 @@ export function resolvePiMonoSessionRoot(cwd: string, options: SessionPathOption
     );
   }
 
-  const configuredSessionDir = options.sessionDir;
-
-  if (
-    options.workspaceRoot &&
-    options.sessionDir &&
-    path.resolve(options.sessionDir) === path.resolve(options.workspaceRoot)
-  ) {
-    return path.join(configuredSessionDir, 'sessions');
-  }
-
-  return configuredSessionDir;
+  return path.join(options.sessionDir, 'sessions');
 }
 
 export function isLegacyPiMonoSessionFile(fileName: string, sessionId?: string): boolean {

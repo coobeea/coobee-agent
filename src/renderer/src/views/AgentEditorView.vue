@@ -87,13 +87,17 @@ function getMetadataString(metadata: Record<string, unknown> | undefined, key: s
   return typeof value === 'string' ? value : '';
 }
 
+function omitDeprecatedMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> {
+  const { dataDirectory: _dataDirectory, ...rest } = metadata || {};
+  return rest;
+}
+
 function buildAgentMetadata(promptSnapshot: string[] = starterPrompts.value): Record<string, unknown> {
-  const metadata = form.value.metadata || {};
+  const metadata = omitDeprecatedMetadata(form.value.metadata);
   return {
     ...metadata,
     greeting: getMetadataString(metadata, 'greeting'),
-    starterPrompts: [...promptSnapshot],
-    dataDirectory: getMetadataString(metadata, 'dataDirectory')
+    starterPrompts: [...promptSnapshot]
   };
 }
 
@@ -203,21 +207,6 @@ const removeStarterPrompt = (index: number): void => {
   starterPromptsDirty.value = true;
   scheduleStarterPromptsSave();
 };
-
-// 选择数据目录
-async function selectDataDirectory(): Promise<void> {
-  try {
-    const result = await window.api?.openDirectory();
-    if (result) {
-      form.value.metadata = {
-        ...buildAgentMetadata(),
-        dataDirectory: result
-      };
-    }
-  } catch (err) {
-    console.error('[AgentEditorView] selectDataDirectory error:', err);
-  }
-}
 
 // 第2步：人格文件
 type PersonalityFile = 'IDENTITY.md' | 'SOUL.md' | 'USER.md' | 'NOTES.md' | 'HEARTBEAT.md' | 'AGENTS.md';
@@ -389,10 +378,9 @@ onMounted(async () => {
           asrEnabled: res.asrEnabled ?? false,
           ttsEnabled: res.ttsEnabled ?? false,
           metadata: {
-            ...(res.metadata || {}),
+            ...omitDeprecatedMetadata(res.metadata),
             greeting: getMetadataString(res.metadata, 'greeting'),
-            starterPrompts: loadedStarterPrompts,
-            dataDirectory: getMetadataString(res.metadata, 'dataDirectory')
+            starterPrompts: loadedStarterPrompts
           }
         };
 
@@ -413,7 +401,7 @@ onMounted(async () => {
           enableThinking: agent.enableThinking ?? false,
           asrEnabled: agent.asrEnabled ?? false,
           ttsEnabled: agent.ttsEnabled ?? false,
-          metadata: { greeting: '', starterPrompts: [], dataDirectory: '' }
+          metadata: { greeting: '', starterPrompts: [] }
         };
         starterPrompts.value = [];
         starterPromptsDirty.value = false;
@@ -864,9 +852,13 @@ onUnmounted(() => {
                   <p class="flex items-start gap-2 mt-3 pt-2 border-t border-primary/20">
                     <span class="i-carbon-idea text-primary shrink-0 mt-0.5"></span>
                     <span
-                      >系统会自动为每个智能体初始化数据目录（<code class="text-xs px-1 py-0.5 rounded bg-background/60"
-                        >~/.coobee-agent/data/{'{agentId}'}</code
-                      >），您也可以自定义为其他位置</span
+                      >系统会自动把业务工作区固定在智能体目录内（<code
+                        class="text-xs px-1 py-0.5 rounded bg-background/60"
+                        >agents/{'{agentId}'}/workspace</code
+                      >），会话产物固定写入
+                      <code class="text-xs px-1 py-0.5 rounded bg-background/60"
+                        >agents/{'{agentId}'}/sessions</code
+                      ></span
                     >
                   </p>
                 </div>
@@ -874,48 +866,20 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 数据目录选择 -->
+          <!-- 数据目录说明 -->
           <div class="rounded-xl border border-border/40 bg-card p-6 shadow-sm space-y-4 selectable">
             <div class="space-y-2">
               <label class="text-sm font-medium flex items-center gap-2">
                 <span class="i-carbon-folder-details text-primary"></span>
-                数据目录路径
-                <span class="text-xs font-normal text-muted-foreground">（可选，留空使用默认位置）</span>
+                业务工作区
+                <span class="text-xs font-normal text-muted-foreground">（系统固定维护）</span>
               </label>
-              <div class="flex gap-2">
-                <input
-                  v-if="form.metadata"
-                  type="text"
-                  placeholder="留空使用默认位置，或自定义路径，例如：/Users/you/Documents/进销存数据"
-                  class="flex-1 rounded-lg border border-input bg-background px-4 py-2.5 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  :value="(form.metadata.dataDirectory as string) || ''"
-                  @input="
-                    (e) => {
-                      if (form.metadata) form.metadata.dataDirectory = (e.target as HTMLInputElement).value;
-                    }
-                  " />
-                <button
-                  type="button"
-                  class="shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                  @click="selectDataDirectory">
-                  <span class="i-carbon-folder-open"></span>
-                  浏览选择
-                </button>
-              </div>
-            </div>
-
-            <!-- 预览当前设置 -->
-            <div
-              v-if="form.metadata?.dataDirectory"
-              class="rounded-lg bg-primary/5 border border-primary/20 p-4 selectable">
-              <div class="flex items-center gap-2 text-sm">
-                <span class="i-carbon-folder-details text-primary"></span>
-                <span class="font-medium text-foreground">当前数据目录：</span>
-              </div>
-              <code
-                class="block mt-2 text-xs font-mono text-primary bg-background/60 px-3 py-2 rounded border border-primary/20">
-                {{ form.metadata.dataDirectory }}
-              </code>
+              <p class="text-sm text-muted-foreground">
+                工具执行、脚本输出、索引和报告都会写入智能体目录下的
+                <code class="text-xs px-1 py-0.5 rounded bg-background/60">workspace</code
+                >，不再支持在智能体配置中自定义
+                <code class="text-xs px-1 py-0.5 rounded bg-background/60">dataDirectory</code>。
+              </p>
             </div>
           </div>
         </div>

@@ -291,13 +291,13 @@ export interface AgentRuntimeOptions {
   /**
    * 会话存储根目录
    *
-   * 各 Runtime 在此目录下以 sessionId 建立子目录存放会话文件。
+   * 当前 Thread 的会话产物目录：agents/{agentId}/sessions/{threadId}。
    * 文件会话必须由 Executor 层显式注入，缺失时直接报错。
    *
    * 示例：
-   *   sessionDir = '~/Library/Application Support/coobee-ai/sessions'
-   *   → OpenAI: {sessionDir}/{sessionId}/messages.jsonl
-   *   → PiMono: {sessionDir}/{sessionId}/（SDK 自行管理内部结构）
+   *   sessionDir = '.home/agents/{agentId}/sessions/{threadId}'
+   *   → OpenAI: {sessionDir}/sessions/session.jsonl
+   *   → PiMono: {sessionDir}/sessions/（SDK 自行管理内部结构）
    */
   sessionDir: string;
 
@@ -310,7 +310,7 @@ export interface AgentRuntimeOptions {
    * 以 JSON 文件写入此目录，用于调试和 Prompt 优化。
    *
    * 文件命名格式：{ISO 时间戳}.json（自然排序 = 时间顺序）
-   * 由 AgentEnvInjector.prepareAgentEnv() 准备为 {workspace}/contexts/
+   * 由 AgentEnvInjector.prepareAgentEnv() 准备为 sessionDir。
    */
   contextDir?: string;
   /**

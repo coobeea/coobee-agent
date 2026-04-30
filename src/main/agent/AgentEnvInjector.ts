@@ -29,7 +29,7 @@ import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
 import type { AgentMode, SkillDefinition, ThinkingLevel, ToolDefinition } from './runtime/types';
-import { AgentContextResolver } from './context/AgentContextResolver';
+import { AgentContextResolver, type AgentContext } from './context/AgentContextResolver';
 import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 
 const log = createLogger('ai');
@@ -65,24 +65,40 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     const { Env } = await import('@main/common/env');
     const { sessionId, mode, agentId, agentName } = options;
 
-    // 1. 获取/创建工作空间
-    const workspace = options.workspaceRoot || (await Env.getAgentWorkspaceDir(sessionId));
-
-    // 2. 初始化 Agent Home（如果有 agentId）
+    // 1. 初始化 Agent Home 与运行目录布局（如果有 agentId）
     let agentHome: string | undefined;
     let homeManager: AgentHomeManager | undefined;
+    let workspace = options.workspaceRoot;
+    let sessionDir = options.workspaceRoot;
+    let contextDir = options.workspaceRoot;
+    let agentContext: AgentContext | undefined;
+
     if (agentId) {
       homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
       agentHome = homeManager.initHome(agentId);
+
+      const resolver = AgentContextResolver.getInstance();
+      agentContext = await resolver.resolve({
+        agentId,
+        sessionId
+      });
+      agentHome = agentContext.agentHomePath;
+      workspace = agentContext.agentWorkspacePath;
+      sessionDir = agentContext.sessionDir;
+      contextDir = agentContext.sessionDir;
     }
 
-    // 3. 构建 AgentEnv（传入 agentHome 用于加载 Agent 级 Skill）
+    if (!workspace || !sessionDir || !contextDir) {
+      throw new Error(`[EnvInjector] agentId or workspaceRoot is required: sessionId=${sessionId}`);
+    }
+
+    // 2. 构建 AgentEnv（传入 agentHome 用于加载 Agent 级 Skill）
     const agentEnv = await buildAgentEnv(sessionId, workspace, agentHome);
     if (options.thinkingLevel) {
       agentEnv.thinkingLevel = options.thinkingLevel;
     }
 
-    // 4. 设置 AgentEnv 的 agentId、agentName 和 agentHome
+    // 3. 设置 AgentEnv 的 agentId、agentName 和 agentHome
     if (agentId && agentHome) {
       agentEnv.agentId = agentId;
       agentEnv.agentHome = agentHome;
@@ -91,42 +107,34 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       }
     }
 
-    // 6. P1 重构：使用 AgentContextResolver 解析运行时上下文
     let agentDefinedSkills: string[] | undefined;
     let excludeTools: string[] = [];
     if (agentId) {
-      try {
-        // 使用 AgentContextResolver 统一解析路径和上下文
-        const resolver = AgentContextResolver.getInstance();
-        const context = await resolver.resolve({
-          agentId,
-          sessionId,
-          workspace: workspace
-        });
+      if (!agentContext) {
+        throw new Error(`[EnvInjector] Agent context missing: ${agentId}`);
+      }
 
-        // 注入 dataDirectory（由 resolver 统一处理默认值）
-        agentEnv.dataDirectory = context.dataDirectory;
-        log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
+      // 注入 dataDirectory（固定为 Agent workspace）
+      agentEnv.dataDirectory = agentContext.dataDirectory;
+      agentEnv.sessionDir = agentContext.sessionDir;
+      log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
 
-        // 读取 Agent 定义以获取 skills 配置
-        const { AgentStore } = await import('./agents/AgentStore');
-        const store = await AgentStore.getInstance();
-        const agentDef = await store.get(agentId);
-        if (agentDef) {
-          agentDefinedSkills = agentDef.skills;
-          excludeTools = agentDef.excludeTools || [];
-          log.debug(`[EnvInjector] Agent defined skills: ${agentDefinedSkills?.join(', ') || '(none)'}`);
-        }
-      } catch (error) {
-        log.warn(`[EnvInjector] Failed to resolve agent context for ${agentId}:`, error);
+      // 读取 Agent 定义以获取 skills 配置
+      const { AgentStore } = await import('./agents/AgentStore');
+      const store = await AgentStore.getInstance();
+      const agentDef = await store.get(agentId);
+      if (agentDef) {
+        agentDefinedSkills = agentDef.skills;
+        excludeTools = agentDef.excludeTools || [];
+        log.debug(`[EnvInjector] Agent defined skills: ${agentDefinedSkills?.join(', ') || '(none)'}`);
       }
     }
 
     const prepared: PreparedAgentEnv = {
       workspace,
-      sessionDir: workspace,
+      sessionDir,
       workspaceRoot: workspace,
-      contextDir: workspace,
+      contextDir,
       appendInstructions: [],
       skills: []
     };
@@ -230,7 +238,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
         agentId: agentId || undefined,
         agentName,
         agentMode: mode,
-        dataDirectory: agentEnv.dataDirectory
+        dataDirectory: agentEnv.dataDirectory,
+        sessionDir
       });
       prepared.sandboxContext = toolCtx;
     }
@@ -265,6 +274,9 @@ function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
   if (env.dataDirectory) {
     vars.COOBEE_DATA_DIRECTORY = env.dataDirectory;
   }
+  if (env.sessionDir) {
+    vars.COOBEE_SESSION_DIR = env.sessionDir;
+  }
   return vars;
 }
 
@@ -277,6 +289,7 @@ interface AgentContextInfo {
   agentMode?: import('./runtime/types').AgentMode;
   parentSessionId?: string;
   dataDirectory?: string;
+  sessionDir?: string;
 }
 
 /**
@@ -372,9 +385,9 @@ async function buildToolExecutionContext(
     tasksDir: path.join(workspace, 'tasks'),
 
     // 系统空间
-    sessionsDir: path.join(workspace, 'sessions'),
-    contextsDir: path.join(workspace, 'contexts'),
-    eventsDir: path.join(workspace, 'events'),
+    sessionsDir: path.join(agentInfo?.sessionDir || workspace, 'sessions'),
+    contextsDir: agentInfo?.sessionDir || workspace,
+    eventsDir: agentInfo?.sessionDir || workspace,
 
     // 系统路径
     userHome,

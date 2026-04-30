@@ -10,7 +10,7 @@
  *   POST   /gateway/chat/threads/:id/messages — 发送消息并流式返回（SSE）
  *
  * 数据流：
- *   1. 文件持久化: workspaces/{threadId}/sessions/*.jsonl（消息、上下文、事件）
+ *   1. 文件持久化: agents/{agentId}/sessions/{threadId}/sessions/*.jsonl（消息、上下文、事件）
  *   2. WebSocket 广播: 通过 EventBus → WebSocket 推送到 Electron 前端（实时监听）
  *   3. SSE 流式返回: 通过 HTTP Response 返回给 API 客户端（本路由）
  *

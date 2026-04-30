@@ -147,7 +147,7 @@ describe('ThreadStore 增强字段', () => {
     expect(updated!.ttsEnabled).toBe(true);
   });
 
-  it('list 返回的索引条目包含 runStatus 和 workspacePath', async () => {
+  it('list 返回的索引条目包含 runStatus、workspacePath 和 sessionPath', async () => {
     const store = new ThreadStore(tmpDir, workspacesDir);
     await store.create({ title: 'A', agentId: 'a1', agentMode: 'chat' });
     await store.create({ title: 'B', agentId: 'a2' });
@@ -155,13 +155,17 @@ describe('ThreadStore 增强字段', () => {
     const list = await store.listAsync();
     expect(list).toHaveLength(2);
     expect(list[0].runStatus).toBe('idle');
-    expect(list[0].workspacePath).toBe(path.join(workspacesDir, list[0].id));
+    expect(list[0].workspacePath).toBe(path.join(tmpDir, '..', 'agents', list[0].agentId, 'workspace'));
+    expect(list[0].agentWorkspacePath).toBe(list[0].workspacePath);
+    expect(list[0].sessionPath).toBe(path.join(tmpDir, '..', 'agents', list[0].agentId, 'sessions', list[0].id));
     expect(list[0].runtimeType).toBeUndefined();
     expect(list[0].enableThinking).toBeUndefined();
     expect(list[0].asrEnabled).toBeUndefined();
     expect(list[0].ttsEnabled).toBeUndefined();
     expect(list[1].runStatus).toBe('idle');
-    expect(list[1].workspacePath).toBe(path.join(workspacesDir, list[1].id));
+    expect(list[1].workspacePath).toBe(path.join(tmpDir, '..', 'agents', list[1].agentId, 'workspace'));
+    expect(list[1].agentWorkspacePath).toBe(list[1].workspacePath);
+    expect(list[1].sessionPath).toBe(path.join(tmpDir, '..', 'agents', list[1].agentId, 'sessions', list[1].id));
   });
 
   it('list 兼容入口委托到异步批量读取', async () => {
@@ -193,7 +197,7 @@ describe('ThreadStore 增强字段', () => {
     expect(loaded!.ttsEnabled).toBeUndefined();
   });
 
-  it('向后兼容：加载缺少新字段的旧 JSON 文件', async () => {
+  it('加载缺少运行时字段的旧 JSON 文件时补齐索引默认值', async () => {
     const store = new ThreadStore(tmpDir, workspacesDir);
 
     // 手动写入旧格式的 JSON
@@ -202,6 +206,8 @@ describe('ThreadStore 增强字段', () => {
       title: 'Old Thread',
       agentId: 'default',
       status: 'active',
+      sessionId: '999999999999999999',
+      agentHomePath: path.join(tmpDir, '..', 'agents', 'default'),
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z'
     };

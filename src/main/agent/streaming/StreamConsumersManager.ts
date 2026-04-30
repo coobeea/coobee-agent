@@ -23,9 +23,8 @@ export class StreamConsumersManager {
   /**
    * 初始化所有消费者
    *
-   * @param workspacesDir - workspaces 根目录路径
    */
-  init(workspacesDir: string): void {
+  init(): void {
     if (this.initialized) {
       log.warn('[StreamConsumersManager] Already initialized');
       return;
@@ -38,12 +37,12 @@ export class StreamConsumersManager {
       log.info('[StreamConsumersManager] StreamMonitor started');
 
       // 2. 启动事件写入器
-      this.eventWriter = new EventWriter(workspacesDir);
+      this.eventWriter = new EventWriter();
       this.eventWriter.start();
       log.info('[StreamConsumersManager] EventWriter started');
 
       // 3. 启动历史聚合写入器
-      this.historyWriter = new HistoryWriter(workspacesDir);
+      this.historyWriter = new HistoryWriter();
       this.historyWriter.start();
       log.info('[StreamConsumersManager] HistoryWriter started');
 
@@ -86,14 +85,14 @@ export class StreamConsumersManager {
    * @param content - 用户消息内容
    * @param timestamp - 时间戳（可选，默认当前时间）
    */
-  writeUserMessage(sessionId: string, content: string, timestamp?: string): void {
+  writeUserMessage(sessionId: string, content: string, timestamp?: string, agentId?: string): void {
     if (!this.initialized) {
       log.warn('[StreamConsumersManager] Not initialized, cannot write user message');
       return;
     }
 
     try {
-      this.historyWriter?.writeUserMessage(sessionId, content, timestamp);
+      this.historyWriter?.writeUserMessage(sessionId, content, timestamp, agentId);
     } catch (err) {
       log.error(`[StreamConsumersManager] Failed to write user message for session ${sessionId}:`, err);
     }

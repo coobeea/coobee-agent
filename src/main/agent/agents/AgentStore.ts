@@ -201,7 +201,7 @@ export class AgentStore {
     const model = normalizeModelSpec(params.model);
 
     // P1 重构：移除路径初始化逻辑，由 AgentContextResolver 在运行时处理
-    // dataDirectory 现在只作为可选的用户配置存储在 metadata 中
+    // dataDirectory 旧 metadata 字段已废弃；运行期业务工作区由 AgentRuntimeLayout 统一决定
     const metadata = params.metadata || {};
 
     const definitionBase: AgentDefinition = {

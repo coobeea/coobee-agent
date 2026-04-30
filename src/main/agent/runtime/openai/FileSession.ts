@@ -4,7 +4,7 @@
  * 实现 SDK Session 接口 + JSONL 文件存储。
  * 每行存储一个 SessionItem（包含序号、类型、SDK 原始数据和可选元数据）。
  *
- * 存储路径：{basePath}/sessions/{sessionId}/messages.jsonl
+ * 存储路径：{sessionDir}/sessions/session.jsonl
  *
  * 核心能力：
  *   - getItems()：智能上下文构建（找到最后 summary → 返回总结上下文 + 后续消息）
@@ -32,7 +32,7 @@ export class FileSession implements Session {
 
   /**
    * @param sessionId 会话 ID
-   * @param sessionDir 会话存储根目录（指向 workspace/sessions/）。
+   * @param sessionDir 会话产物根目录（agents/{agentId}/sessions/{threadId}）。
    */
   constructor(
     private readonly sessionId: string,

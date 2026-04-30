@@ -19,7 +19,7 @@ describe('PiMonoSessionPaths', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('AgentExecutor 传入 workspace 根目录时，PiMono 会话文件收纳到 sessions 子目录', () => {
+  it('PiMono 会话文件统一收纳到 sessionDir/sessions 子目录', () => {
     expect(
       resolvePiMonoSessionRoot('/tmp/cwd', {
         sessionDir: tmpDir,
@@ -29,7 +29,7 @@ describe('PiMonoSessionPaths', () => {
     ).toBe(path.join(tmpDir, 'sessions'));
   });
 
-  it('显式传入独立 sessionDir 时保持原目录，兼容直接使用 Runtime 的场景', () => {
+  it('显式传入独立 sessionDir 时也收纳到 sessions 子目录', () => {
     const sessionDir = path.join(tmpDir, 'custom-sessions');
 
     expect(
@@ -38,7 +38,7 @@ describe('PiMonoSessionPaths', () => {
         workspaceRoot: tmpDir,
         sessionId: 'thread-1'
       })
-    ).toBe(sessionDir);
+    ).toBe(path.join(sessionDir, 'sessions'));
   });
 
   it('缺少 sessionDir 时直接报错，不再写入 .coobee-test', () => {

@@ -7,6 +7,10 @@ import { EventWriter } from '../consumers/EventWriter';
 import { HistoryWriter } from '../consumers/HistoryWriter';
 import { StreamEventType, type StreamEvent } from '../types';
 
+const layoutState = vi.hoisted(() => ({
+  tmpDir: ''
+}));
+
 vi.mock('@main/common/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -22,11 +26,18 @@ vi.mock('@main/common/logger', () => ({
   }
 }));
 
+vi.mock('@main/agent/context/AgentRuntimeLayout', () => ({
+  resolveThreadRuntimeLayoutSync: vi.fn((sessionId: string) => ({
+    sessionDir: `${layoutState.tmpDir}/${sessionId}`
+  }))
+}));
+
 describe('stream consumer writers', () => {
   let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-consumer-writers-'));
+    layoutState.tmpDir = tmpDir;
     eventBus.removeAllListeners(StreamEventType.MESSAGE);
   });
 
@@ -36,7 +47,7 @@ describe('stream consumer writers', () => {
   });
 
   it('EventWriter 异步写入 events.jsonl 并在 clearSession 时 flush', async () => {
-    const writer = new EventWriter(tmpDir);
+    const writer = new EventWriter();
     writer.start();
 
     eventBus.emit(StreamEventType.MESSAGE, makeEvent('thread-1', 'text:delta', 'hello'));
@@ -52,7 +63,7 @@ describe('stream consumer writers', () => {
   });
 
   it('HistoryWriter 按 run 写入一条 assistant v2 和 user message', async () => {
-    const writer = new HistoryWriter(tmpDir);
+    const writer = new HistoryWriter();
     writer.start();
 
     writer.writeUserMessage('thread-1', 'hi');
@@ -96,7 +107,7 @@ describe('stream consumer writers', () => {
   });
 
   it('HistoryWriter 多 turn 聚合为一条 assistant v2 并累加 usage 和工具调用', async () => {
-    const writer = new HistoryWriter(tmpDir);
+    const writer = new HistoryWriter();
     writer.start();
 
     eventBus.emit(StreamEventType.MESSAGE, makeEvent('thread-1', 'run:start', ''));
@@ -182,7 +193,7 @@ describe('stream consumer writers', () => {
   });
 
   it('HistoryWriter 在 run:error 和 stop 时收口未完成 run', async () => {
-    const errorWriter = new HistoryWriter(tmpDir);
+    const errorWriter = new HistoryWriter();
     errorWriter.start();
 
     eventBus.emit(StreamEventType.MESSAGE, makeEvent('thread-error', 'run:start', ''));
@@ -202,7 +213,7 @@ describe('stream consumer writers', () => {
     });
     expect(errorLine.turns[0]).toMatchObject({ status: 'error', content: 'partial' });
 
-    const interruptedWriter = new HistoryWriter(tmpDir);
+    const interruptedWriter = new HistoryWriter();
     interruptedWriter.start();
 
     eventBus.emit(StreamEventType.MESSAGE, makeEvent('thread-interrupted', 'run:start', ''));

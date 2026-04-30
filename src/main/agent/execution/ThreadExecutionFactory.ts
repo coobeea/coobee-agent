@@ -62,7 +62,6 @@ export class ThreadExecutionFactory {
       agentId: agent.id,
       instructions: agent.instructions,
       modelOverride,
-      workspaceRoot: thread.metadata?.workspacePath as string | undefined,
       mode: thread.agentMode ?? 'agent',
       runtimeType: params.runtimeType ?? thread.runtimeType ?? agent.runtimeType ?? 'pi-mono',
       enableThinking: thread.enableThinking ?? agent.enableThinking ?? false,

@@ -381,10 +381,14 @@ class AgentExecutor {
 
     try {
       if (!isLightweight) {
-        const { Env } = await import('@main/common/env');
         workspaceDir = request.workspaceRoot;
         if (!workspaceDir) {
-          workspaceDir = await Env.getAgentWorkspaceDir(sessionId);
+          if (!request.agentId) {
+            throw new Error(`[AgentExecutor] agentId is required to resolve runtime workspace: sessionId=${sessionId}`);
+          }
+          const { ensureAgentRuntimeLayout } = await import('./context/AgentRuntimeLayout');
+          const layout = await ensureAgentRuntimeLayout({ agentId: request.agentId, sessionId });
+          workspaceDir = layout.agentWorkspacePath;
         }
 
         // 加载任务级 Extension（如果存在）
@@ -408,7 +412,7 @@ class AgentExecutor {
         workspaceDir = preparedEnv.workspace;
 
         // 写入用户消息到 history.jsonl
-        streamConsumersManager.writeUserMessage(sessionId, message);
+        streamConsumersManager.writeUserMessage(sessionId, message, undefined, request.agentId);
       }
 
       // === Extension Hooks: message_received + run_started + prepare_run_input ===

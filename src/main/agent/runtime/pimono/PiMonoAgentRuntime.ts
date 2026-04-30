@@ -346,8 +346,8 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   /**
    * 解析当前运行使用的 session 根目录
    *
-   * AgentExecutor 传入的 `sessionDir` 是 workspace 根目录；PiMono SDK 的会话
-   * 文件统一放到 workspace/sessions/，避免落在 workspace 根目录。
+   * AgentExecutor 传入的 `sessionDir` 是当前 Thread 的会话产物目录；
+   * PiMono SDK 的会话文件统一放到 sessionDir/sessions/。
    */
   private getSessionRoot(cwd: string, options: AgentRuntimeOptions): string {
     return resolvePiMonoSessionRoot(cwd, options);

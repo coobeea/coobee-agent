@@ -38,7 +38,7 @@ export const ReadyAgentSystemHook: LifecycleHook = {
       const { streamConsumersManager } = await import('@main/agent/streaming/StreamConsumersManager');
 
       // 0. 初始化流式消费者管理器（必须在最开始，因为后续执行需要监听器）
-      streamConsumersManager.init(Env.paths.workspacesDir);
+      streamConsumersManager.init();
       log.info('[ReadyAgentSystemHook] Stream consumers initialized');
 
       // 1. 注册内置工具到 ToolRegistry

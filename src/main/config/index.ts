@@ -13,7 +13,7 @@
  *
  *   const agentDir = Agents.builtin;
  *   const modelDir = Workers.models;
- *   const workspace = await Threads.getWorkspaceDir(threadId);
+ *   // Agent runtime paths are resolved by AgentRuntimeLayout.
  */
 
 // 业务配置模块

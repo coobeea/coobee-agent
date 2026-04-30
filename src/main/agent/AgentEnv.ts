@@ -71,6 +71,8 @@ export interface AgentEnv {
   // --- 数据目录 ---
   /** Agent 专属的数据目录（持久化业务数据） */
   dataDirectory?: string;
+  /** 当前会话运行产物目录 */
+  sessionDir?: string;
 
   // --- Agent Home ---
   /** Agent 定义 ID（关联了 AgentDefinition 时存在） */
@@ -103,7 +105,7 @@ export interface AgentEnv {
  * 从全局 Env 构建 Agent 安全环境子集
  *
  * @param sessionId 会话 ID
- * @param workspace Agent 工作空间路径（由 Env.getAgentWorkspaceDir 返回）
+ * @param workspace Agent 工作区路径（agents/{agentId}/workspace）
  * @param agentHome Agent Home 路径（可选，用于加载 Agent 级 Skill）
  */
 export async function buildAgentEnv(sessionId: string, workspace: string, agentHome?: string): Promise<AgentEnv> {
@@ -235,8 +237,9 @@ ${env.agentName ? `- name: ${env.agentName}` : ''}
 
 Paths:
 ${env.dataDirectory ? `- data_directory: ${env.dataDirectory} (persistent business data)` : ''}
+${env.sessionDir ? `- session_dir: ${env.sessionDir} (current conversation artifacts)` : ''}
 ${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)` : ''}
-- workspace: ${env.workspace} (temporary files for the current task)
+- workspace: ${env.workspace} (tool cwd and durable business workspace)
 - config: ${env.configDir}
 - skill_search_paths:${skillPathsList}
 - agents_definitions: ${env.userAgentsDir}
@@ -244,7 +247,7 @@ ${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-l
 File usage:
 ${env.dataDirectory ? '- Save durable business data, records, reports, and knowledge documents in data_directory.' : ''}
 - Use agent_home only for Agent identity, memory, preferences, rules, and configuration.
-- Use workspace for temporary task files and intermediate outputs.
-- Do not manually edit system-managed workspace files: sessions/, history.jsonl, events.jsonl, context.jsonl.
+- Use workspace/data_directory for tool outputs, generated reports, indexes, and intermediate files.
+- Do not manually edit system-managed session files: session_dir/history.jsonl, session_dir/events.jsonl, session_dir/context.jsonl, session_dir/sessions/.
 </runtime_environment>`;
 }

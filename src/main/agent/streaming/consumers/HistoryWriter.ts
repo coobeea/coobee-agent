@@ -12,6 +12,7 @@
 import path from 'node:path';
 import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
+import { resolveThreadRuntimeLayoutSync } from '@main/agent/context/AgentRuntimeLayout';
 import {
   StreamEventType,
   type HistoryAssistantMessageV2,
@@ -76,12 +77,7 @@ export class HistoryWriter {
   private currentRuns = new Map<string, RunState>();
   private userMessages = new Map<string, string>(); // 暂存用户消息
   private writer = new AsyncJsonlWriter('HistoryWriter');
-  private workspacesDir: string;
   private initialized = false;
-
-  constructor(workspacesDir: string) {
-    this.workspacesDir = workspacesDir;
-  }
 
   /**
    * 启动监听
@@ -122,8 +118,8 @@ export class HistoryWriter {
     const { sessionId, message } = event;
 
     // 初始化会话
-    if (!this.historyFiles.has(sessionId)) {
-      this.initializeSession(sessionId);
+    if (!this.historyFiles.has(sessionId) && !this.initializeSession(sessionId, getAgentIdFromMessage(message))) {
+      return;
     }
 
     // 根据消息类型分发处理
@@ -181,12 +177,19 @@ export class HistoryWriter {
   /**
    * 初始化会话
    */
-  private initializeSession(sessionId: string): void {
-    const workspacePath = path.join(this.workspacesDir, sessionId);
-    const historyFile = path.join(workspacePath, 'history.jsonl');
+  private initializeSession(sessionId: string, agentId?: string): boolean {
+    let historyFile: string;
+    try {
+      const layout = resolveThreadRuntimeLayoutSync(sessionId, agentId);
+      historyFile = path.join(layout.sessionDir, 'history.jsonl');
+    } catch (error) {
+      log.error(`[HistoryWriter] Failed to resolve session path for ${sessionId}:`, error);
+      return false;
+    }
 
     this.historyFiles.set(sessionId, historyFile);
     log.debug(`[HistoryWriter] Initialized session: ${sessionId}`);
+    return true;
   }
 
   /** 开始一次用户请求对应的 assistant 聚合记录 */
@@ -412,10 +415,10 @@ export class HistoryWriter {
   /**
    * 写入用户消息（需要外部调用，因为用户消息不在 stream 中）
    */
-  writeUserMessage(sessionId: string, content: string, timestamp?: string): void {
+  writeUserMessage(sessionId: string, content: string, timestamp?: string, agentId?: string): void {
     const historyFile = this.historyFiles.get(sessionId);
     if (!historyFile) {
-      this.initializeSession(sessionId);
+      if (!this.initializeSession(sessionId, agentId)) return;
     }
 
     const message: AggregatedMessage = {
@@ -489,6 +492,10 @@ export class HistoryWriter {
       this.finalizeRun(sessionId, status);
     }
   }
+}
+
+function getAgentIdFromMessage(message: StreamMessage): string | undefined {
+  return message.source?.type === 'agent' ? message.source.id : undefined;
 }
 
 function emptyUsage(): UsageRecord {
