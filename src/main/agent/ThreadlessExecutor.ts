@@ -9,6 +9,15 @@ export interface ThreadlessExecutionOptions {
   lightweight?: boolean;
   maxTurns?: number;
   sessionId?: string;
+  /**
+   * 本次请求的附加系统约束，会被追加到 Agent 默认 instructions 之后。
+   * 用于“一句话润色”等 preset 场景，不修改 Agent 配置本身。
+   */
+  instructions?: string;
+  /**
+   * 覆盖 Agent 默认模型（provider/model 或 model id）。
+   */
+  modelOverride?: string;
 }
 
 export interface ThreadlessMessageParams extends ThreadlessExecutionOptions {
@@ -71,6 +80,15 @@ export class ThreadlessExecutor {
       throw new Error(`Agent "${params.agentId}" not found`);
     }
 
+    // 合成最终 instructions：保留 agent 自身，本次 instructions 追加为一次性约束。
+    const extraInstructions = params.instructions?.trim();
+    const baseInstructions = agentDef.instructions ?? '';
+    const mergedInstructions = extraInstructions
+      ? baseInstructions
+        ? `${baseInstructions}\n\n${extraInstructions}`
+        : extraInstructions
+      : baseInstructions;
+
     return {
       sessionId: params.sessionId ?? `threadless-agent-${params.agentId}-${generateSnowflakeId()}`,
       message: params.message,
@@ -80,8 +98,8 @@ export class ThreadlessExecutor {
       runtimeType: params.runtimeType ?? 'pi-mono',
       sessionMode: 'memory',
       maxTurns: params.maxTurns ?? 1,
-      instructions: agentDef.instructions,
-      modelOverride: agentDef.model
+      instructions: mergedInstructions,
+      modelOverride: params.modelOverride ?? agentDef.model
     };
   }
 }

@@ -630,8 +630,9 @@ onUnmounted(() => {
               <label class="text-sm font-medium">描述 <span class="text-red-500">*</span></label>
               <textarea
                 v-model="form.description"
+                v-ai-polish="{ label: '描述', placeholder: '简短描述该智能体的用途', context: '智能体编辑：描述字段' }"
                 rows="3"
-                placeholder="简短描述该智能体的用途..."
+                placeholder="简短描述该智能体的用途…输入后长按 Ctrl 可 AI 润色"
                 class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"></textarea>
             </div>
 
