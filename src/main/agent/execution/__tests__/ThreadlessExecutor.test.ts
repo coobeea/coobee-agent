@@ -76,4 +76,19 @@ describe('ThreadlessExecutor', () => {
 
     await expect(ThreadlessExecutor.run('agent-1', 'hello')).resolves.toBe('hello world');
   });
+
+  it('忽略 Agent 上的旧版模型组配置', async () => {
+    mocks.getAgent.mockResolvedValue({
+      id: 'agent-1',
+      instructions: 'You are helpful',
+      model: '@group:default'
+    });
+    mockStream([{ type: 'text:delta', content: 'hi' }], { output: 'hi' });
+
+    const gen = ThreadlessExecutor.stream('agent-1', 'hello');
+    await gen.next();
+    await gen.next();
+
+    expect(mocks.stream.mock.calls[0][0].modelOverride).toBeUndefined();
+  });
 });

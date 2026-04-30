@@ -13,6 +13,7 @@ import { createLogger } from '@main/common/logger';
 import type { CreateAgentParams } from './types';
 import type { AgentStore } from './AgentStore';
 import type { AgentHomeManager } from './AgentHomeManager';
+import { isLegacyModelGroupSpec, normalizeModelSpec } from '../provider/ModelSpec';
 
 const log = createLogger('agent-import-export');
 
@@ -207,6 +208,11 @@ export class AgentImportExport {
         return { success: false, error: 'agent.json 缺少必填字段: name 或 description' };
       }
 
+      const normalizedModel = normalizeModelSpec(agentConfig.model);
+      if (isLegacyModelGroupSpec(agentConfig.model)) {
+        warnings.push('导入包包含旧版模型分组配置，已改为使用全局默认模型');
+      }
+
       // 4. 处理 ID 冲突
       let finalAgentId = agentConfig.id;
       if (await this.agentStore.has(agentConfig.id)) {
@@ -222,7 +228,7 @@ export class AgentImportExport {
         name: agentConfig.name,
         description: agentConfig.description,
         instructions: agentConfig.instructions || '你是一个智能助手。',
-        model: agentConfig.model,
+        model: normalizedModel,
         runtimeType: agentConfig.runtimeType,
         enableThinking: agentConfig.enableThinking,
         asrEnabled: agentConfig.asrEnabled,

@@ -1,4 +1,5 @@
 import type { AgentExecuteRequest } from '../AgentExecutor';
+import { normalizeModelSpec } from '../provider/ModelSpec';
 import type { AgentRuntimeKind } from '../runtime/types';
 
 export interface CreateThreadExecutionRequestParams {
@@ -53,12 +54,14 @@ export class ThreadExecutionFactory {
       }
     }
 
+    const modelOverride = normalizeModelSpec(thread.overrideModel) || normalizeModelSpec(agent.model);
+
     return {
       sessionId: thread.id,
       message: params.message,
       agentId: agent.id,
       instructions: agent.instructions,
-      modelOverride: thread.overrideModel || agent.model,
+      modelOverride,
       workspaceRoot: thread.metadata?.workspacePath as string | undefined,
       mode: thread.agentMode ?? 'agent',
       runtimeType: params.runtimeType ?? thread.runtimeType ?? agent.runtimeType ?? 'pi-mono',

@@ -1,6 +1,7 @@
 import { agentExecutor } from './AgentExecutor';
 import type { AgentExecuteRequest } from './AgentExecutor';
 import type { AgentMode, AgentRuntimeKind, AgentStreamChunk, AgentExecutionResult } from './runtime/types';
+import { normalizeModelSpec } from './provider/ModelSpec';
 import { generateSnowflakeId } from '../utils/SnowflakeIdGenerator';
 
 export interface ThreadlessExecutionOptions {
@@ -15,7 +16,7 @@ export interface ThreadlessExecutionOptions {
    */
   instructions?: string;
   /**
-   * 覆盖 Agent 默认模型（provider/model 或 model id）。
+   * 覆盖 Agent 默认模型（provider/model）。
    */
   modelOverride?: string;
 }
@@ -89,6 +90,8 @@ export class ThreadlessExecutor {
         : extraInstructions
       : baseInstructions;
 
+    const modelOverride = normalizeModelSpec(params.modelOverride) || normalizeModelSpec(agentDef.model);
+
     return {
       sessionId: params.sessionId ?? `threadless-agent-${params.agentId}-${generateSnowflakeId()}`,
       message: params.message,
@@ -99,7 +102,7 @@ export class ThreadlessExecutor {
       sessionMode: 'memory',
       maxTurns: params.maxTurns ?? 1,
       instructions: mergedInstructions,
-      modelOverride: params.modelOverride ?? agentDef.model
+      modelOverride
     };
   }
 }

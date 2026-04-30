@@ -19,6 +19,12 @@ const currentStep = ref(1);
 const totalSteps = 4;
 const DEFAULT_RUNTIME_TYPE: AgentRuntimeType = 'pi-mono';
 const agentRuntimeTypes = ['pi-mono', 'openai', 'claude'] as const satisfies readonly AgentRuntimeType[];
+const stepItems = [
+  { step: 1, label: '基本信息' },
+  { step: 2, label: '数据目录' },
+  { step: 3, label: '人格设置' },
+  { step: 4, label: '技能设置' }
+];
 
 // 第1步：基本信息
 const form = ref<CreateAgentParams>({
@@ -274,22 +280,63 @@ const personalityFiles = ref<Record<PersonalityFile, string>>({
 });
 
 // 第4步：技能选择
-const availableSkills = [
-  { id: 'web-search', name: '网络搜索', description: '允许智能体搜索互联网获取最新信息', icon: 'i-carbon-search' },
-  { id: 'file-system', name: '文件系统', description: '允许智能体读取和写入本地文件', icon: 'i-carbon-document' },
-  { id: 'code-execution', name: '代码执行', description: '允许智能体在沙箱中执行代码', icon: 'i-carbon-code' },
-  { id: 'terminal', name: '终端访问', description: '允许智能体执行命令行指令', icon: 'i-carbon-terminal' }
-];
+const newSkillId = ref('');
 
-const toggleSkill = (skillId: string): void => {
-  const skills = form.value.skills || [];
-  const index = skills.indexOf(skillId);
-  if (index > -1) {
-    form.value.skills = skills.filter((id) => id !== skillId);
-  } else {
-    form.value.skills = [...skills, skillId];
+function normalizeSkillIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  return value.reduce<string[]>((skills, item) => {
+    if (typeof item !== 'string') return skills;
+
+    const skill = item.trim();
+    if (!skill || seen.has(skill)) return skills;
+
+    seen.add(skill);
+    skills.push(skill);
+    return skills;
+  }, []);
+}
+
+function parseSkillInput(value: string): string[] {
+  return value
+    .split(/[\n,，;；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const configuredSkills = computed(() => normalizeSkillIds(form.value.skills));
+
+function setSkills(skills: string[]): void {
+  form.value.skills = normalizeSkillIds(skills);
+}
+
+function addSkill(): void {
+  const incomingSkills = parseSkillInput(newSkillId.value);
+  if (incomingSkills.length === 0) return;
+
+  const currentSkills = normalizeSkillIds(form.value.skills);
+  const nextSkills = normalizeSkillIds([...currentSkills, ...incomingSkills]);
+
+  if (nextSkills.length === currentSkills.length) {
+    messageStore.warning('这些技能已经添加过了');
+    return;
   }
-};
+
+  setSkills(nextSkills);
+  newSkillId.value = '';
+}
+
+function handleSkillEnter(event: KeyboardEvent): void {
+  if (event.isComposing) return;
+
+  event.preventDefault();
+  addSkill();
+}
+
+function removeSkill(skillId: string): void {
+  setSkills(configuredSkills.value.filter((id) => id !== skillId));
+}
 
 // 自动生成 ID (仅在创建模式下，且用户没有手动修改过 ID 时)
 const idManuallyEdited = ref(false);
@@ -335,7 +382,7 @@ onMounted(async () => {
           name: res.name,
           description: res.description,
           instructions: res.instructions || '',
-          skills: res.skills || [],
+          skills: normalizeSkillIds(res.skills),
           model: res.model || '',
           runtimeType: normalizeRuntimeType(res.runtimeType),
           enableThinking: res.enableThinking ?? false,
@@ -360,7 +407,7 @@ onMounted(async () => {
           name: agent.name,
           description: agent.description,
           instructions: '',
-          skills: agent.skills || [],
+          skills: normalizeSkillIds(agent.skills),
           model: agent.model || '',
           runtimeType: normalizeRuntimeType(agent.runtimeType),
           enableThinking: agent.enableThinking ?? false,
@@ -423,6 +470,10 @@ const prevStep = (): void => {
   }
 };
 
+function goToStep(step: number): void {
+  currentStep.value = Math.min(Math.max(step, 1), totalSteps);
+}
+
 const submitting = ref(false);
 
 const handleSubmit = async (): Promise<void> => {
@@ -453,6 +504,7 @@ const handleSubmit = async (): Promise<void> => {
     clearStarterPromptsSaveTimer();
 
     form.value.runtimeType = normalizeRuntimeType(form.value.runtimeType);
+    form.value.skills = normalizeSkillIds(form.value.skills);
     const metadata = buildAgentMetadata();
 
     console.log('[AgentEditorView] Submitting agent:', {
@@ -555,42 +607,25 @@ onUnmounted(() => {
       </div>
 
       <!-- 步骤指示器 -->
-      <div class="flex items-center gap-2 text-sm font-medium">
-        <div class="flex items-center gap-2" :class="currentStep >= 1 ? 'text-primary' : 'text-muted-foreground'">
-          <div
-            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-            :class="currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
-            >1</div
-          >
-          <span>基本信息</span>
-        </div>
-        <div class="h-px w-8 bg-border"></div>
-        <div class="flex items-center gap-2" :class="currentStep >= 2 ? 'text-primary' : 'text-muted-foreground'">
-          <div
-            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-            :class="currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
-            >2</div
-          >
-          <span>数据目录</span>
-        </div>
-        <div class="h-px w-8 bg-border"></div>
-        <div class="flex items-center gap-2" :class="currentStep >= 3 ? 'text-primary' : 'text-muted-foreground'">
-          <div
-            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-            :class="currentStep >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
-            >3</div
-          >
-          <span>人格设置</span>
-        </div>
-        <div class="h-px w-8 bg-border"></div>
-        <div class="flex items-center gap-2" :class="currentStep >= 4 ? 'text-primary' : 'text-muted-foreground'">
-          <div
-            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-            :class="currentStep >= 4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
-            >4</div
-          >
-          <span>技能设置</span>
-        </div>
+      <div class="flex items-center gap-2 overflow-x-auto text-sm font-medium">
+        <template v-for="item in stepItems" :key="item.step">
+          <button
+            type="button"
+            class="flex shrink-0 items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted/60"
+            :class="currentStep >= item.step ? 'text-primary' : 'text-muted-foreground hover:text-foreground'"
+            :aria-current="currentStep === item.step ? 'step' : undefined"
+            @click="goToStep(item.step)">
+            <span
+              class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+              :class="
+                currentStep >= item.step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              ">
+              {{ item.step }}
+            </span>
+            <span>{{ item.label }}</span>
+          </button>
+          <div v-if="item.step < totalSteps" class="h-px w-8 shrink-0 bg-border"></div>
+        </template>
       </div>
     </header>
 
@@ -893,16 +928,17 @@ onUnmounted(() => {
           </div>
 
           <!-- Tab Navigation -->
-          <div class="flex gap-2 border-b border-border">
+          <div class="flex gap-1 overflow-x-auto border-b border-border pb-px">
             <button
               v-for="tab in personalityTabs"
               :key="tab.key"
-              class="px-4 py-2.5 text-sm font-medium transition-colors relative"
+              class="relative shrink-0 whitespace-nowrap px-2.5 py-2 text-[11px] font-medium transition-colors sm:px-3 sm:text-xs"
               :class="
                 currentPersonalityTab === tab.key ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               "
+              :title="tab.label"
               @click="currentPersonalityTab = tab.key">
-              {{ tab.label }}
+              {{ tab.label.replace('.md', '') }}
               <div
                 v-if="currentPersonalityTab === tab.key"
                 class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
@@ -935,37 +971,60 @@ onUnmounted(() => {
         <div v-show="currentStep === 4" class="space-y-6">
           <div class="space-y-1 selectable">
             <h2 class="text-xl font-semibold tracking-tight">技能设置</h2>
-            <p class="text-sm text-muted-foreground">为智能体配备外部工具和技能，扩展其能力边界。</p>
+            <p class="text-sm text-muted-foreground">管理当前智能体已配置的技能。</p>
           </div>
 
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 selectable">
-            <div
-              v-for="skill in availableSkills"
-              :key="skill.id"
-              class="relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all"
-              :class="
-                (form.skills || []).includes(skill.id)
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border/40 bg-card hover:border-border hover:bg-card/80'
-              "
-              @click="toggleSkill(skill.id)">
-              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <span :class="skill.icon" class="text-xl"></span>
+          <div class="rounded-xl border border-border/40 bg-card p-6 shadow-sm selectable">
+            <div class="flex flex-wrap items-start justify-between gap-3 border-b border-border/40 pb-4">
+              <div class="space-y-1">
+                <h3 class="text-sm font-semibold text-foreground">已配置技能</h3>
+                <p class="text-xs text-muted-foreground">当前智能体会加载这里列出的全部技能。</p>
               </div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-sm font-medium text-foreground">{{ skill.name }}</h3>
-                  <div
-                    class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors"
-                    :class="
-                      (form.skills || []).includes(skill.id)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-input bg-background'
-                    ">
-                    <span v-if="(form.skills || []).includes(skill.id)" class="i-carbon-checkmark text-xs"></span>
-                  </div>
-                </div>
-                <p class="mt-1 text-xs text-muted-foreground line-clamp-2">{{ skill.description }}</p>
+              <span
+                class="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                {{ configuredSkills.length }} 个技能
+              </span>
+            </div>
+
+            <div class="mt-4 flex gap-2">
+              <input
+                v-model="newSkillId"
+                type="text"
+                placeholder="添加技能 ID"
+                class="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                @keydown.enter="handleSkillEnter" />
+              <button
+                type="button"
+                :disabled="!newSkillId.trim()"
+                class="shrink-0 rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50"
+                @click="addSkill">
+                添加
+              </button>
+            </div>
+
+            <div v-if="configuredSkills.length === 0" class="mt-6 rounded-lg border border-dashed border-border p-8">
+              <div class="flex flex-col items-center text-center text-muted-foreground">
+                <span class="i-carbon-cube h-8 w-8 opacity-40"></span>
+                <p class="mt-3 text-sm">当前没有配置技能</p>
+              </div>
+            </div>
+
+            <div v-else class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div
+                v-for="skill in configuredSkills"
+                :key="skill"
+                class="group flex min-w-0 items-center gap-3 rounded-lg border border-border/55 bg-background px-3 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5">
+                <span class="i-carbon-cube h-4 w-4 shrink-0 text-primary/70"></span>
+                <span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground" :title="skill">
+                  {{ skill }}
+                </span>
+                <button
+                  type="button"
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-80 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                  title="移除技能"
+                  @click="removeSkill(skill)">
+                  <span class="i-carbon-close h-3.5 w-3.5"></span>
+                </button>
               </div>
             </div>
           </div>

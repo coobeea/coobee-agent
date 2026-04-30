@@ -22,6 +22,7 @@ import { createLogger } from '@main/common/logger';
 import { generateSnowflakeId } from '@main/utils/SnowflakeIdGenerator';
 import { ThreadEventTypes } from '@shared/events/thread';
 import type { ThreadMessageAction, ThreadMessageEventPayload } from '@shared/events/thread';
+import { normalizeModelSpec } from '../provider/ModelSpec';
 import type {
   ThreadDefinition,
   ThreadIndexEntry,
@@ -91,6 +92,8 @@ export class ThreadStore {
     const agent = await agentStore.get(params.agentId);
     const agentName = agent?.name;
 
+    const overrideModel = normalizeModelSpec(params.overrideModel);
+
     const definition: ThreadDefinition = {
       id,
       title: params.title,
@@ -103,7 +106,7 @@ export class ThreadStore {
       agentHomePath, // ✅ 填充 Agent Home 路径
       createdAt: now,
       updatedAt: now,
-      overrideModel: params.overrideModel,
+      overrideModel,
       runtimeType: params.runtimeType,
       enableThinking: params.enableThinking,
       asrEnabled: params.asrEnabled,
@@ -292,7 +295,6 @@ export class ThreadStore {
       ...(params.title !== undefined && { title: params.title }),
       ...(params.status !== undefined && { status: params.status }),
       ...(params.runStatus !== undefined && { runStatus: params.runStatus }),
-      ...(params.overrideModel !== undefined && { overrideModel: params.overrideModel || undefined }),
       ...(params.runtimeType !== undefined && { runtimeType: params.runtimeType }),
       ...(params.enableThinking !== undefined && { enableThinking: params.enableThinking }),
       ...(params.asrEnabled !== undefined && { asrEnabled: params.asrEnabled }),
@@ -300,6 +302,15 @@ export class ThreadStore {
       ...(params.metadata !== undefined && { metadata: params.metadata }),
       updatedAt: new Date().toISOString()
     };
+
+    if (params.overrideModel !== undefined) {
+      const overrideModel = normalizeModelSpec(params.overrideModel);
+      if (overrideModel) {
+        updated.overrideModel = overrideModel;
+      } else {
+        delete updated.overrideModel;
+      }
+    }
 
     await this.writeDefinition(updated);
 

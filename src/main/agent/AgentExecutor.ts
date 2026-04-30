@@ -60,7 +60,7 @@ export interface AgentExecuteRequest {
   instructions?: string;
 
   // === 运行时控制 ===
-  /** 模型覆盖（provider/model 或 model id） */
+  /** 模型覆盖（provider/model） */
   modelOverride?: string;
   /** 是否启用思维链；false 时显式关闭，true 时使用全局默认思考级别 */
   enableThinking?: boolean;

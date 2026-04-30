@@ -5,7 +5,7 @@
  * 基础的智能体 CRUD 界面：列表展示、搜索、排序、编辑、删除
  */
 
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAgentsStore } from '@/stores/agents';
 import { useThreadsStore } from '@/stores/threads';
@@ -28,6 +28,7 @@ const confirmDeleteId = ref<string | null>(null);
 
 /** 导入中 */
 const importing = ref(false);
+const importingFile = ref<{ name: string; size: number } | null>(null);
 
 /** 创建任务中 */
 const creatingTask = ref<string | null>(null);
@@ -133,8 +134,25 @@ function formatTime(iso: string): string {
   }
 }
 
+/** 格式化文件大小 */
+function formatFileSize(size: number): string {
+  if (!Number.isFinite(size) || size <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = size;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+
+  const digits = unitIndex === 0 || value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
 /** 打开文件选择器 */
 function openFileSelector(): void {
+  if (importing.value) return;
   fileInputRef.value?.click();
 }
 
@@ -152,7 +170,9 @@ async function handleFileSelect(event: Event): Promise<void> {
     return;
   }
 
+  importingFile.value = { name: file.name, size: file.size };
   importing.value = true;
+  await nextTick();
 
   try {
     const result = await importAgent(file);
@@ -177,6 +197,7 @@ async function handleFileSelect(event: Event): Promise<void> {
     messageStore.error(err instanceof Error ? err.message : '导入失败');
   } finally {
     importing.value = false;
+    importingFile.value = null;
     input.value = '';
   }
 }
@@ -209,6 +230,37 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
 
 <template>
   <div class="flex h-full flex-col bg-background text-foreground">
+    <Teleport to="body">
+      <div
+        v-if="importing"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-overlay/45 px-4 backdrop-blur-sm"
+        role="status"
+        aria-live="polite">
+        <div class="w-full max-w-sm rounded-lg border border-border bg-background p-5 shadow-2xl" @click.stop>
+          <div class="flex items-start gap-4">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <span class="i-carbon-renew h-5 w-5 animate-spin"></span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h2 class="text-sm font-semibold text-foreground">正在导入智能体</h2>
+              <p class="mt-1 text-xs leading-5 text-muted-foreground">
+                正在上传并解析导入包，文件较大时可能需要一些时间，请保持窗口打开。
+              </p>
+              <div v-if="importingFile" class="mt-4 rounded-md border border-border/70 bg-muted/40 px-3 py-2">
+                <div class="flex items-center gap-2 text-xs text-foreground">
+                  <span class="i-carbon-package shrink-0 text-muted-foreground"></span>
+                  <span class="truncate" :title="importingFile.name">{{ importingFile.name }}</span>
+                </div>
+                <div v-if="formatFileSize(importingFile.size)" class="mt-1 text-xs text-muted-foreground">
+                  {{ formatFileSize(importingFile.size) }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- 顶栏 -->
     <header
       class="flex h-14 shrink-0 items-center justify-between border-b border-border/40 bg-surface/60 px-6 backdrop-blur">
@@ -366,19 +418,18 @@ async function handleExport(agentId: string, agentName: string, event: MouseEven
               </div>
 
               <!-- 技能标签 -->
-              <div v-if="agent.skills && agent.skills.length > 0" class="flex items-center gap-1 flex-wrap">
+              <div
+                v-if="agent.skills && agent.skills.length > 0"
+                class="flex max-h-24 items-start gap-1 overflow-y-auto">
                 <span class="i-carbon-tool text-xs text-muted-foreground shrink-0"></span>
-                <span
-                  v-for="skill in agent.skills.slice(0, 2)"
-                  :key="skill"
-                  class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                  {{ skill }}
-                </span>
-                <span
-                  v-if="agent.skills.length > 2"
-                  class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                  +{{ agent.skills.length - 2 }}
-                </span>
+                <div class="flex flex-1 flex-wrap gap-1">
+                  <span
+                    v-for="skill in agent.skills"
+                    :key="skill"
+                    class="rounded bg-secondary/50 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                    {{ skill }}
+                  </span>
+                </div>
               </div>
             </div>
 

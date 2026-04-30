@@ -135,6 +135,31 @@ describe('AgentStore 异步列表', () => {
     });
   });
 
+  it('create/update 会清理旧版模型组配置', async () => {
+    const store = new AgentStore(userDir, homesDir);
+
+    const created = await store.create({
+      id: 'legacy-model-agent',
+      name: 'Legacy Model Agent',
+      description: 'legacy model',
+      instructions: 'hello',
+      model: '@group:default'
+    });
+
+    expect(created.model).toBeUndefined();
+    expect((await store.listAsync()).find((agent) => agent.id === 'legacy-model-agent')?.model).toBeUndefined();
+
+    const filePath = path.join(userDir, 'legacy-model-agent.json');
+    expect(fs.readFileSync(filePath, 'utf-8')).not.toContain('@group:default');
+
+    const withModel = await store.update('legacy-model-agent', { model: 'ollama/gemma4:e4b' });
+    expect(withModel?.model).toBe('ollama/gemma4:e4b');
+
+    const cleared = await store.update('legacy-model-agent', { model: '@group:default' });
+    expect(cleared?.model).toBeUndefined();
+    expect(fs.readFileSync(filePath, 'utf-8')).not.toContain('@group:default');
+  });
+
   it('update 会合并 metadata，避免快捷问题局部保存覆盖其他配置', async () => {
     const store = new AgentStore(userDir, homesDir);
 

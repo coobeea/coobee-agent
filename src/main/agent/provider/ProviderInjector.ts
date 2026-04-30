@@ -13,6 +13,7 @@
 import { Models, Providers } from '@main/config';
 import type { ProviderConfig } from './types';
 import { resolveApiKey } from './ApiKeyResolver';
+import { normalizeModelSpec } from './ModelSpec';
 
 interface ProviderConfigurableBuilder {
   fromProviderConfig(config: ProviderConfig, modelId?: string): unknown;
@@ -42,7 +43,8 @@ export class ProviderInjector {
   private applyProviderConfig(builder: ProviderConfigurableBuilder, modelOverride?: string): void {
     try {
       // 解析模型（优先使用 modelOverride，否则使用全局默认）
-      const modelSpec = modelOverride || Models.getDefaultModel();
+      const normalizedOverride = normalizeModelSpec(modelOverride);
+      const modelSpec = normalizedOverride || Models.getDefaultModel();
       const resolved = Models.resolveModel(modelSpec);
       if (!resolved) {
         console.warn(`[ProviderInjector] 无法解析模型: ${modelSpec}`);
@@ -69,7 +71,7 @@ export class ProviderInjector {
 
       // 如果是显式传入了覆盖参数（如 threadModelOverride），则强制更新 builder 的 model
       // 注意：只传递模型 ID，不包含 provider 前缀，因为 OpenAI 兼容 API 只接受模型 ID
-      if (modelOverride) {
+      if (normalizedOverride) {
         builder.model(resolved.model.id);
       }
     } catch (err) {

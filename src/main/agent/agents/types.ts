@@ -17,7 +17,7 @@ export interface AgentIndexEntry {
   updatedAt: string;
   /** 关联的技能 */
   skills?: string[];
-  /** 使用的模型 ID 或模型组引用（@group:xxx） */
+  /** 使用的模型 ID（provider/model），旧版模型组引用会被视为未选择 */
   model?: string;
   /** 默认 Runtime 选择 */
   runtimeType?: AgentRuntimeKind;
@@ -44,7 +44,7 @@ export interface AgentDefinition {
   excludeTools?: string[];
   /** 关联的技能 */
   skills?: string[];
-  /** 使用的模型 */
+  /** 使用的模型 ID（provider/model） */
   model?: string;
   /** 默认 Runtime 选择 */
   runtimeType?: AgentRuntimeKind;

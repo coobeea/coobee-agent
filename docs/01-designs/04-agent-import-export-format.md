@@ -64,7 +64,7 @@ agent-{name}.zip
   "name": "我的智能助手",
   "description": "一个专注于代码开发的智能助手",
   "instructions": "你是一个专业的代码助手...",
-  "model": "@group:default",
+  "model": "",
   "skills": [],
   "excludeTools": [],
   "createdBy": "user",

@@ -45,7 +45,7 @@ export interface ThreadlessRunReqVO {
   maxTurns?: number;
   /** 自定义 sessionId（不提供时自动生成） */
   sessionId?: string;
-  /** 覆盖 Agent 默认模型（provider/model 或 model id） */
+  /** 覆盖 Agent 默认模型（provider/model） */
   modelOverride?: string;
   /** 提示词变量（预留，未来用于模板渲染） */
   promptVars?: Record<string, unknown>;

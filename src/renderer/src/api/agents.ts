@@ -174,18 +174,38 @@ export interface ImportResult {
 }
 
 /**
- * 导入智能体 ZIP 文件
+ * 导入智能体 ZIP 文件（multipart/form-data 直传二进制）
  * @param file ZIP 文件对象
  */
 export async function importAgent(file: File): Promise<ApiResponse<ImportResult>> {
-  // 读取文件为 Base64
-  const buffer = await file.arrayBuffer();
-  const uint8Array = new Uint8Array(buffer);
-  const base64 = btoa(String.fromCharCode(...uint8Array));
+  const formData = new FormData();
+  formData.append('file', file, file.name);
 
-  return apiClient.post<ImportResult>('/gateway/agents/import', {
-    zipData: base64
-  });
+  const baseUrl = configManager.getBaseUrl();
+  try {
+    const response = await fetch(`${baseUrl}/gateway/agents/import`, {
+      method: 'POST',
+      body: formData
+      // 注意：不要手动设置 Content-Type，浏览器会自动填入带 boundary 的 multipart/form-data
+    });
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      return (await response.json()) as ApiResponse<ImportResult>;
+    }
+
+    const text = await response.text();
+    return {
+      success: false,
+      code: `HTTP_${response.status}`,
+      error: text || `导入失败：HTTP ${response.status}`
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
 }
 
 /**

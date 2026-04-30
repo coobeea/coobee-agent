@@ -18,6 +18,7 @@
 
 import path from 'node:path';
 import { createLogger } from '@main/common/logger';
+import { normalizeModelSpec } from '../provider/ModelSpec';
 
 const log = createLogger('context-resolver');
 
@@ -182,7 +183,7 @@ export class AgentContextResolver {
     }
 
     // 4.4 有效模型
-    const effectiveModel = this.normalizeModel(params.modelOverride) || agent.model;
+    const effectiveModel = normalizeModelSpec(params.modelOverride) || normalizeModelSpec(agent.model);
 
     // 4.5 会话目录
     const sessionDir = path.join(dataDirectory, 'sessions', params.sessionId);
@@ -274,18 +275,6 @@ export class AgentContextResolver {
       log.warn('[ContextResolver] Path validation failed:', err);
       return false;
     }
-  }
-
-  /**
-   * 规范化模型字符串
-   *
-   * 空字符串视为 undefined
-   */
-  private normalizeModel(model: string | undefined): string | undefined {
-    if (!model || !model.trim()) {
-      return undefined;
-    }
-    return model.trim();
   }
 }
 

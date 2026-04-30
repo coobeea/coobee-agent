@@ -14,15 +14,40 @@
  */
 
 import type Router from '@koa/router';
+import type Koa from 'koa';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { app } from 'electron';
+import multer from '@koa/multer';
 import { createLogger } from '@main/common/logger';
 import { AgentStore } from '@main/agent/agents/AgentStore';
 import { AgentImportExport } from '@main/agent/agents/AgentImportExport';
 import type { AgentDefinition, AgentIndexEntry, CreateAgentParams, UpdateAgentParams } from '@main/agent/agents/types';
 import type { AgentRuntimeKind } from '@main/agent/runtime/types';
 import type { ApiResponse } from '@shared/api';
+
+const IMPORT_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
+const IMPORT_UPLOAD_MAX_MB = IMPORT_UPLOAD_MAX_BYTES / 1024 / 1024;
+
+/**
+ * 智能体导入包上传中间件
+ * - 使用磁盘存储（multer 会直接落盘到临时目录，免去手动 base64 解码）
+ * - 限制单文件 ≤ 200MB，避免被异常大文件拖垮
+ * - 仅接受单个字段 `file`，与前端 FormData append('file', zip) 对齐
+ */
+const importUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, os.tmpdir());
+    },
+    filename: (_req, _file, cb) => {
+      cb(null, `agent-import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.zip`);
+    }
+  }),
+  limits: { fileSize: IMPORT_UPLOAD_MAX_BYTES }
+});
+const importUploadSingle = importUpload.single('file');
 
 const log = createLogger('gateway-http-agents');
 
@@ -31,6 +56,80 @@ const AGENT_RUNTIME_TYPES = new Set<AgentRuntimeKind>(['pi-mono', 'openai', 'cla
 function isAgentRuntimeKind(value: unknown): value is AgentRuntimeKind {
   return typeof value === 'string' && AGENT_RUNTIME_TYPES.has(value as AgentRuntimeKind);
 }
+
+interface MulterLikeError extends Error {
+  code?: string;
+  field?: string;
+}
+
+function isMulterLikeError(err: unknown): err is MulterLikeError {
+  if (!(err instanceof Error)) return false;
+  const candidate = err as MulterLikeError;
+  return candidate.name === 'MulterError' && typeof candidate.code === 'string';
+}
+
+export function createImportUploadErrorResponse(err: unknown): { status: number; response: ApiResponse } {
+  if (isMulterLikeError(err)) {
+    switch (err.code) {
+      case 'LIMIT_FILE_SIZE':
+        return {
+          status: 413,
+          response: {
+            success: false,
+            code: err.code,
+            error: `智能体导入包不能超过 ${IMPORT_UPLOAD_MAX_MB}MB，请选择更小的 ZIP 文件`
+          }
+        };
+      case 'LIMIT_UNEXPECTED_FILE':
+        return {
+          status: 400,
+          response: {
+            success: false,
+            code: err.code,
+            error: '请使用 multipart/form-data 字段 "file" 上传一个 ZIP 文件，且一次只能上传一个文件'
+          }
+        };
+      case 'LIMIT_FILE_COUNT':
+        return {
+          status: 400,
+          response: {
+            success: false,
+            code: err.code,
+            error: '一次只能上传一个智能体 ZIP 文件'
+          }
+        };
+      default:
+        return {
+          status: 400,
+          response: {
+            success: false,
+            code: err.code,
+            error: err.message || '上传数据不符合要求，请重新选择 ZIP 文件'
+          }
+        };
+    }
+  }
+
+  return {
+    status: 400,
+    response: {
+      success: false,
+      code: 'INVALID_MULTIPART_UPLOAD',
+      error: err instanceof Error ? err.message : '上传数据格式无效，请重新选择 ZIP 文件'
+    }
+  };
+}
+
+const handleImportUpload: Koa.Middleware = async (ctx, next) => {
+  try {
+    await importUploadSingle(ctx, next);
+  } catch (err) {
+    const { status, response } = createImportUploadErrorResponse(err);
+    ctx.status = status;
+    ctx.body = response;
+    log.warn(`[agents.import] Upload rejected: ${response.code ?? 'UPLOAD_ERROR'} ${response.error}`, err);
+  }
+};
 
 function collectAgentRunConfig(body: Record<string, unknown>): {
   updates?: Pick<CreateAgentParams, 'runtimeType' | 'enableThinking' | 'asrEnabled' | 'ttsEnabled'>;
@@ -483,29 +582,29 @@ export function registerAgentRoutes(router: Router): void {
   });
 
   // ==================== IMPORT ====================
+  //
+  // 采用 multipart/form-data 直传二进制，字段名固定为 `file`。
+  // multer 会把上传文件落盘到系统临时目录，ctx.request.file.path 为落盘后的临时 zip 路径。
 
-  router.post('/agents/import', async (ctx) => {
-    const body = ctx.request.body as Record<string, unknown> | undefined;
-    const zipData = body?.zipData as string | undefined; // Base64 编码的 ZIP 文件
+  router.post('/agents/import', handleImportUpload, async (ctx) => {
+    const uploaded = ctx.request.file;
 
-    if (!zipData) {
+    if (!uploaded || !uploaded.path) {
       ctx.status = 400;
       const response: ApiResponse = {
         success: false,
-        error: 'zipData is required (base64 encoded ZIP file)'
+        error: 'file is required (multipart/form-data field name: "file")'
       };
       ctx.body = response;
       return;
     }
 
-    let tempZipPath: string | null = null;
+    const tempZipPath = uploaded.path;
+    log.info(
+      `[agents.import] Received upload: name=${uploaded.originalname ?? 'unknown'}, size=${uploaded.size ?? 0}, path=${tempZipPath}`
+    );
 
     try {
-      // 将 Base64 数据解码为 Buffer 并保存到临时文件
-      const buffer = Buffer.from(zipData, 'base64');
-      tempZipPath = path.join(app.getPath('temp'), `agent-import-${Date.now()}.zip`);
-      fs.writeFileSync(tempZipPath, buffer);
-
       const store = AgentStore.getInstance();
       const importExport = new AgentImportExport(store, store.getHomeManager(), app.getVersion());
 
@@ -536,7 +635,7 @@ export function registerAgentRoutes(router: Router): void {
       };
       ctx.body = response;
     } finally {
-      // 清理临时 ZIP 文件
+      // 清理 multer 落盘的临时 ZIP 文件
       if (tempZipPath && fs.existsSync(tempZipPath)) {
         try {
           fs.unlinkSync(tempZipPath);

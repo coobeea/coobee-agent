@@ -224,6 +224,32 @@ describe('AgentContextResolver', () => {
 
       expect(context.effectiveModel).toBe('openai/gpt-4');
     });
+
+    it('应该忽略旧版模型组配置', async () => {
+      const store = await getMockAgentStore();
+      const mockAgent: AgentDefinition = {
+        id: 'agent-legacy-model',
+        name: 'Test Agent',
+        description: 'Test',
+        instructions: '',
+        model: '@group:default',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'user',
+        version: 1
+      };
+      store._setMockAgent(mockAgent);
+
+      const params: ResolveParams = {
+        agentId: 'agent-legacy-model',
+        sessionId: 'session-legacy',
+        modelOverride: '@group:default'
+      };
+
+      const context = await resolver.resolve(params);
+
+      expect(context.effectiveModel).toBeUndefined();
+    });
   });
 
   describe('缓存机制', () => {

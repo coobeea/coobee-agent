@@ -19,6 +19,7 @@ import { createLogger } from '@main/common/logger';
 import { Env } from '@main/common/env';
 import { AgentHomeManager } from './AgentHomeManager';
 import type { AgentDefinition, AgentIndexEntry, CreateAgentParams, UpdateAgentParams } from './types';
+import { normalizeModelSpec } from '../provider/ModelSpec';
 
 const log = createLogger('agent-store');
 
@@ -26,8 +27,9 @@ const log = createLogger('agent-store');
 function toIndexEntry(def: AgentDefinition, homeManager: AgentHomeManager): AgentIndexEntry {
   const agentHomePath = homeManager.getHomePath(def.id);
   const workspacePath = path.join(agentHomePath, 'workspace');
+  const model = normalizeModelSpec(def.model);
 
-  return {
+  const entry: AgentIndexEntry = {
     id: def.id,
     name: def.name,
     description: def.description,
@@ -35,7 +37,6 @@ function toIndexEntry(def: AgentDefinition, homeManager: AgentHomeManager): Agen
     version: def.version,
     updatedAt: def.updatedAt,
     skills: def.skills,
-    model: def.model,
     runtimeType: def.runtimeType,
     enableThinking: def.enableThinking,
     asrEnabled: def.asrEnabled,
@@ -43,6 +44,25 @@ function toIndexEntry(def: AgentDefinition, homeManager: AgentHomeManager): Agen
     agentHomePath,
     workspacePath
   };
+
+  if (model) {
+    entry.model = model;
+  }
+
+  return entry;
+}
+
+function normalizeAgentDefinition(def: AgentDefinition): AgentDefinition {
+  const model = normalizeModelSpec(def.model);
+  if (model === def.model) {
+    return def;
+  }
+
+  const { model: _legacyModel, ...rest } = def;
+  if (model) {
+    return { ...rest, model };
+  }
+  return rest;
 }
 
 export class AgentStore {
@@ -179,19 +199,19 @@ export class AgentStore {
     }
 
     const now = new Date().toISOString();
+    const model = normalizeModelSpec(params.model);
 
     // P1 重构：移除路径初始化逻辑，由 AgentContextResolver 在运行时处理
     // dataDirectory 现在只作为可选的用户配置存储在 metadata 中
     const metadata = params.metadata || {};
 
-    const definition: AgentDefinition = {
+    const definitionBase: AgentDefinition = {
       id: params.id,
       name: params.name,
       description: params.description,
       instructions: params.instructions || '', // 初始化为空，用户将在工作空间中填写
       excludeTools: params.excludeTools,
       skills: params.skills,
-      model: params.model,
       runtimeType: params.runtimeType ?? 'pi-mono',
       enableThinking: params.enableThinking ?? false,
       asrEnabled: params.asrEnabled ?? false,
@@ -202,6 +222,7 @@ export class AgentStore {
       version: 1,
       metadata
     };
+    const definition = model ? { ...definitionBase, model } : definitionBase;
 
     // 创建工作空间（仅创建 Agent home 目录）
     this.homeManager.initHome(params.id);
@@ -235,7 +256,7 @@ export class AgentStore {
 
     try {
       const raw = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(raw) as AgentDefinition;
+      return normalizeAgentDefinition(JSON.parse(raw) as AgentDefinition);
     } catch (err) {
       log.warn(`[AgentStore] Failed to read agent ${agentId}:`, err);
       return null;
@@ -265,7 +286,6 @@ export class AgentStore {
       ...(params.instructions !== undefined && { instructions: params.instructions }),
       ...(params.excludeTools !== undefined && { excludeTools: params.excludeTools }),
       ...(params.skills !== undefined && { skills: params.skills }),
-      ...(params.model !== undefined && { model: params.model }),
       ...(params.runtimeType !== undefined && { runtimeType: params.runtimeType }),
       ...(params.enableThinking !== undefined && { enableThinking: params.enableThinking }),
       ...(params.asrEnabled !== undefined && { asrEnabled: params.asrEnabled }),
@@ -274,6 +294,15 @@ export class AgentStore {
       updatedAt: new Date().toISOString(),
       version: existing.version + 1
     };
+
+    if (params.model !== undefined) {
+      const model = normalizeModelSpec(params.model);
+      if (model) {
+        updated.model = model;
+      } else {
+        delete updated.model;
+      }
+    }
 
     // 写文件
     this.writeDefinition(updated);
@@ -360,14 +389,14 @@ export class AgentStore {
   /** 写入 Agent 定义 */
   private writeDefinition(def: AgentDefinition): void {
     const filePath = path.join(this.userDir, `${def.id}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(def, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(normalizeAgentDefinition(def), null, 2), 'utf-8');
   }
 
   private async readAgentDefinitionFile(dir: string, file: string): Promise<AgentDefinition | null> {
     try {
       const filePath = path.join(dir, file);
       const raw = await fsp.readFile(filePath, 'utf-8');
-      return JSON.parse(raw) as AgentDefinition;
+      return normalizeAgentDefinition(JSON.parse(raw) as AgentDefinition);
     } catch (err) {
       log.warn(`[AgentStore] Failed to load ${file}:`, err);
       return null;

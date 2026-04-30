@@ -315,15 +315,14 @@ async function handleCreate(): Promise<void> {
           </div>
 
           <!-- 技能标签 -->
-          <div v-if="agent.skills && agent.skills.length > 0" class="mt-1.5 flex flex-wrap items-center gap-1">
+          <div
+            v-if="agent.skills && agent.skills.length > 0"
+            class="mt-1.5 flex max-h-16 flex-wrap items-center gap-1 overflow-y-auto">
             <span
-              v-for="skill in agent.skills.slice(0, 2)"
+              v-for="skill in agent.skills"
               :key="skill"
               class="rounded-sm bg-primary/6 px-1 py-px text-[9px] text-primary/60">
               {{ skill }}
-            </span>
-            <span v-if="agent.skills.length > 2" class="text-[9px] text-gray-400">
-              +{{ agent.skills.length - 2 }}
             </span>
           </div>
 

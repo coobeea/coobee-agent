@@ -116,11 +116,56 @@ describe('ThreadExecutionFactory', () => {
     });
 
     expect(request).toMatchObject({
+      modelOverride: 'provider/model-b',
       runtimeType: 'claude',
       enableThinking: true,
       asrEnabled: false,
       ttsEnabled: true
     });
+  });
+
+  it('忽略旧版模型组配置，避免覆盖全局默认模型', async () => {
+    threadGet.mockResolvedValue({
+      id: 'thread-1',
+      title: '已有标题',
+      agentId: 'agent-1',
+      agentMode: 'agent',
+      overrideModel: '@group:default'
+    });
+    agentGet.mockResolvedValue({
+      id: 'agent-1',
+      instructions: 'system prompt',
+      model: '@group:default'
+    });
+
+    const request = await new ThreadExecutionFactory().createRequest({
+      threadId: 'thread-1',
+      message: 'hello'
+    });
+
+    expect(request.modelOverride).toBeUndefined();
+  });
+
+  it('Thread 旧版模型组覆盖无效时回退到 Agent 有效模型', async () => {
+    threadGet.mockResolvedValue({
+      id: 'thread-1',
+      title: '已有标题',
+      agentId: 'agent-1',
+      agentMode: 'agent',
+      overrideModel: '@group:default'
+    });
+    agentGet.mockResolvedValue({
+      id: 'agent-1',
+      instructions: 'system prompt',
+      model: 'provider/model-b'
+    });
+
+    const request = await new ThreadExecutionFactory().createRequest({
+      threadId: 'thread-1',
+      message: 'hello'
+    });
+
+    expect(request.modelOverride).toBe('provider/model-b');
   });
 
   it('显式 runtimeType 参数优先于 Thread 保存值', async () => {
