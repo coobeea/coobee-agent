@@ -37,7 +37,7 @@ describe('Agent Home Sessions Index', () => {
   });
 
   it('创建 thread 时应自动追加到 agent home 的 sessions.jsonl', async () => {
-    const store = new ThreadStore(threadsDir, workspacesDir);
+    const store = new ThreadStore(threadsDir);
     await store.init();
 
     // 模拟 Env.paths.userAgentsDir
@@ -82,7 +82,7 @@ describe('Agent Home Sessions Index', () => {
   });
 
   it('创建多个 thread 时应追加到同一个文件', async () => {
-    const store = new ThreadStore(threadsDir, workspacesDir);
+    const store = new ThreadStore(threadsDir);
     await store.init();
 
     const originalEnvGetter = Object.getOwnPropertyDescriptor((await import('@main/common/env')).Env, 'paths');
@@ -123,7 +123,7 @@ describe('Agent Home Sessions Index', () => {
   });
 
   it('不同 agent 的 sessions 应分别存储', async () => {
-    const store = new ThreadStore(threadsDir, workspacesDir);
+    const store = new ThreadStore(threadsDir);
     await store.init();
 
     const originalEnvGetter = Object.getOwnPropertyDescriptor((await import('@main/common/env')).Env, 'paths');

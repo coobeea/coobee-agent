@@ -40,7 +40,7 @@ export class ThreadStore {
   private static instance: ThreadStore | null = null;
 
   private readonly threadsDir: string;
-  constructor(threadsDir: string, _deprecatedWorkspacesDir?: string) {
+  constructor(threadsDir: string) {
     this.threadsDir = threadsDir;
   }
 

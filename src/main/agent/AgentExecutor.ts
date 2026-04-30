@@ -381,13 +381,14 @@ class AgentExecutor {
 
     try {
       if (!isLightweight) {
+        if (!request.agentId) {
+          throw new Error(`[AgentExecutor] agentId is required: sessionId=${sessionId}`);
+        }
+        const agentId = request.agentId;
         workspaceDir = request.workspaceRoot;
         if (!workspaceDir) {
-          if (!request.agentId) {
-            throw new Error(`[AgentExecutor] agentId is required to resolve runtime workspace: sessionId=${sessionId}`);
-          }
           const { ensureAgentRuntimeLayout } = await import('./context/AgentRuntimeLayout');
-          const layout = await ensureAgentRuntimeLayout({ agentId: request.agentId, sessionId });
+          const layout = await ensureAgentRuntimeLayout({ agentId, sessionId });
           workspaceDir = layout.agentWorkspacePath;
         }
 
@@ -404,7 +405,7 @@ class AgentExecutor {
           sessionId,
           mode,
           workspaceRoot: workspaceDir,
-          agentId: request.agentId,
+          agentId,
           agentName,
           thinkingLevel: request.enableThinking === false ? 'off' : undefined,
           hasRequestTools: false
@@ -412,7 +413,7 @@ class AgentExecutor {
         workspaceDir = preparedEnv.workspace;
 
         // 写入用户消息到 history.jsonl
-        streamConsumersManager.writeUserMessage(sessionId, message, undefined, request.agentId);
+        streamConsumersManager.writeUserMessage(sessionId, message, undefined, agentId);
       }
 
       // === Extension Hooks: message_received + run_started + prepare_run_input ===

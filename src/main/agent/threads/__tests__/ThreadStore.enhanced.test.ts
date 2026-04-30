@@ -79,7 +79,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('create 默认填充 sessionId = id, agentMode = agent, runStatus = idle，运行配置默认继承 Agent', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     const thread = await store.create({ title: 'Test', agentId: 'default' });
 
     expect(thread.sessionId).toBe(thread.id);
@@ -92,7 +92,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('create 支持写入 Thread 级运行配置覆盖', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     const thread = await store.create({
       title: 'Test',
       agentId: 'default',
@@ -109,7 +109,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('create 支持自定义 agentMode', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     const thread = await store.create({
       title: 'Chat Task',
       agentId: 'chat-1',
@@ -120,7 +120,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('update 可以修改 runStatus', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     const thread = await store.create({ title: 'Task', agentId: 'a1' });
 
     const updated = await store.update(thread.id, { runStatus: 'running' });
@@ -131,7 +131,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('update 可以修改 Thread 级运行配置', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     const thread = await store.create({ title: 'Task', agentId: 'a1' });
 
     const updated = await store.update(thread.id, {
@@ -148,7 +148,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('list 返回的索引条目包含 runStatus、workspacePath 和 sessionPath', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     await store.create({ title: 'A', agentId: 'a1', agentMode: 'chat' });
     await store.create({ title: 'B', agentId: 'a2' });
 
@@ -169,7 +169,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('list 兼容入口委托到异步批量读取', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     await store.create({ title: 'A', agentId: 'a1' });
     await store.create({ title: 'B', agentId: 'a2' });
 
@@ -179,7 +179,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('get 返回包含所有新字段的完整定义', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
     const created = await store.create({
       title: 'Full',
       agentId: 'a1',
@@ -198,7 +198,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('加载缺少运行时字段的旧 JSON 文件时补齐索引默认值', async () => {
-    const store = new ThreadStore(tmpDir, workspacesDir);
+    const store = new ThreadStore(tmpDir);
 
     // 手动写入旧格式的 JSON
     const oldThread = {
@@ -221,7 +221,7 @@ describe('ThreadStore 增强字段', () => {
   });
 
   it('持久化到磁盘后重新加载保持新字段', async () => {
-    const store1 = new ThreadStore(tmpDir, workspacesDir);
+    const store1 = new ThreadStore(tmpDir);
     const created = await store1.create({
       title: 'Persist Test',
       agentId: 'a1',
@@ -230,7 +230,7 @@ describe('ThreadStore 增强字段', () => {
     await store1.update(created.id, { runStatus: 'running' });
 
     // 用新 store 实例重新加载
-    const store2 = new ThreadStore(tmpDir, workspacesDir);
+    const store2 = new ThreadStore(tmpDir);
     const loaded = await store2.get(created.id);
     expect(loaded!.runStatus).toBe('running');
     expect(loaded!.agentMode).toBe('chat');

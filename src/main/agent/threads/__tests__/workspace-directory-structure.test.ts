@@ -53,7 +53,7 @@ describe('Workspace 目录结构', () => {
     tmpDir = fs.mkdtempSync(path.join('/tmp', 'workspace-test-'));
     workspacesDir = path.join(tmpDir, 'workspaces');
     fs.mkdirSync(workspacesDir, { recursive: true });
-    store = new ThreadStore(path.join(tmpDir, 'threads.json'), workspacesDir);
+    store = new ThreadStore(path.join(tmpDir, 'threads.json'));
   });
 
   afterEach(() => {
