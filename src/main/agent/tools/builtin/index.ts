@@ -20,7 +20,6 @@ import { memoryTool } from './memory';
 import { searchTool } from './search';
 import { globTool } from './glob';
 import { skillListTool } from './skill_list';
-import { taskPlanTool } from './task-plan';
 import { todoWriteTool } from './todo-write';
 import { emitEventTool } from './emit-event';
 
@@ -34,7 +33,6 @@ export { memoryTool } from './memory';
 export { searchTool } from './search';
 export { globTool } from './glob';
 export { skillListTool } from './skill_list';
-export { taskPlanTool } from './task-plan';
 export { todoWriteTool } from './todo-write';
 export { emitEventTool } from './emit-event';
 
@@ -57,7 +55,6 @@ export { emitEventTool } from './emit-event';
  *   --- 发现 ---
  *   skill_list      — Skill 发现，低风险
  *   --- 任务管理 ---
- *   task_plan           — 任务计划管理，低风险
  *   todo_write          — 会话级 TODO 管理，低风险
  *   --- 事件 ---
  *   emit_event          — 向 UI 发送事件（打开预览、通知等），低风险
@@ -78,7 +75,6 @@ export const builtinTools: ToolDefinition[] = [
   searchTool,
   globTool,
   skillListTool,
-  taskPlanTool,
   todoWriteTool,
   emitEventTool
 ];

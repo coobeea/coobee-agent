@@ -11,6 +11,7 @@ const sandboxContext: ToolExecutionContext = {
   sessionId: 'test-session',
   threadId: 'test-session',
   cwd: '/tmp/workspace',
+  sessionDir: '/tmp/workspace/sessions/test-session',
   sessionsDir: '/tmp/workspace/sessions',
   contextsDir: '/tmp/workspace/contexts',
   eventsDir: '/tmp/workspace/events',

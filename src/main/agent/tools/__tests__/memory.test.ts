@@ -52,6 +52,7 @@ function makeSessionContext(workspaceRoot: string, agentId?: string): ToolExecut
     sessionId: 'test-session',
     threadId: 'test-session',
     cwd: workspaceRoot,
+    sessionDir: path.join(workspaceRoot, 'sessions', 'test-session'),
     sessionsDir: path.join(workspaceRoot, 'sessions'),
     contextsDir: path.join(workspaceRoot, 'contexts'),
     eventsDir: path.join(workspaceRoot, 'events'),

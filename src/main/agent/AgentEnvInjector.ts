@@ -388,6 +388,7 @@ async function buildToolExecutionContext(
     tasksDir: path.join(workspace, 'tasks'),
 
     // 系统空间（严格走 AgentRuntimeLayout，禁止回退到 workspace）
+    sessionDir: agentInfo.sessionDir,
     sessionsDir: path.join(agentInfo.sessionDir, 'sessions'),
     contextsDir: agentInfo.sessionDir,
     eventsDir: agentInfo.sessionDir,

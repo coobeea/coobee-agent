@@ -14,8 +14,6 @@ import { z } from 'zod';
 import type { ToolDefinition, ToolStreamUpdate, ToolResult, ToolExecutionContext } from '../types';
 import { ToolCategory } from '../types';
 import { resolveToolPath, formatFileError, checkAborted } from '../pipeline';
-import { withFileLock } from './file-lock';
-import { backupBeforeWrite } from './file-backup';
 import { canWrite } from '../security/sensitive-paths';
 import { scanScriptContent } from '../security/command-scanner';
 
@@ -86,16 +84,9 @@ export const writeTool: ToolDefinition = {
     yield { type: 'progress', content: `Writing to ${filePath}...`, percentage: 0 };
 
     try {
-      // 文件级互斥锁（防止多 Agent 竞态写入）
-      await withFileLock(absolutePath, async () => {
-        // 写入前备份（已有文件才备份，新建文件跳过）
-        if (context?.workspaceRoot) {
-          backupBeforeWrite(absolutePath, context.workspaceRoot);
-        }
-        // 确保父目录存在
-        await mkdir(dirname(absolutePath), { recursive: true });
-        await writeFile(absolutePath, content, 'utf-8');
-      });
+      // 确保父目录存在
+      await mkdir(dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, content, 'utf-8');
 
       const lineCount = content.split('\n').length;
       const byteSize = Buffer.byteLength(content, 'utf-8');

@@ -6,13 +6,9 @@
  *   - 追踪已完成/进行中/待办的步骤
  *   - 向用户展示当前进度
  *
- * 与 task_plan 的区别：
- *   - todo_write: 会话级、轻量、in-memory + 可选持久化，用于单 Agent 自我管理
- *   - task_plan: 持久化到磁盘、面向多 Agent 委托的结构化计划
- *
  * 存储策略：
  *   - 主要存储在内存中（sessionTodos Map），会话结束自动清理
- *   - 可选持久化到 {workspace}/.todos/{sessionId}.json（用于断点恢复）
+ *   - 落盘到 {sessionDir}/todos.json（用于断点恢复），sessionDir 已按 sessionId 隔离
  *
  * 分类：Observability | 风险：低（只管理自己的 TODO）
  */
@@ -151,8 +147,8 @@ export const todoWriteTool: ToolDefinition = {
 
     list.updatedAt = now;
 
-    // 可选持久化
-    persistTodos(list, context?.workspaceRoot);
+    // 落盘到 session 目录
+    persistTodos(list, context?.sessionDir);
 
     // 构建输出
     const statusEmoji: Record<TodoStatus, string> = {
@@ -188,18 +184,17 @@ export const todoWriteTool: ToolDefinition = {
   }
 };
 
-// ==================== 持久化（可选） ====================
+// ==================== 持久化 ====================
 
-/** 持久化 TODO 列表到 workspace（用于断点恢复） */
-function persistTodos(list: TodoList, workspaceRoot?: string): void {
-  if (!workspaceRoot) return;
+/** 持久化 TODO 列表到 session 目录（用于断点恢复） */
+function persistTodos(list: TodoList, sessionDir?: string): void {
+  if (!sessionDir) return;
 
   try {
-    const todosDir = path.join(workspaceRoot, '.todos');
-    if (!fs.existsSync(todosDir)) {
-      fs.mkdirSync(todosDir, { recursive: true });
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
     }
-    const filePath = path.join(todosDir, `${list.sessionId}.json`);
+    const filePath = path.join(sessionDir, 'todos.json');
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf-8');
   } catch {
     // 持久化失败不影响主流程

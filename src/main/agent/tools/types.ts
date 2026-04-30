@@ -159,13 +159,21 @@ export interface ToolExecutionContext extends SandboxContext {
 
   // === 系统空间 ===
 
-  /** 会话存储目录 — {workspace}/sessions/ */
+  /**
+   * 当前会话的运行目录
+   *
+   * 等于 `.home/agents/{agentId}/sessions/{sessionId}`，
+   * history.jsonl、events.jsonl、context.jsonl、todos.json 等会话产物统一落在这个目录下。
+   */
+  sessionDir: string;
+
+  /** 子会话目录 — {sessionDir}/sessions/ */
   sessionsDir: string;
 
-  /** 上下文快照目录 — {workspace}/contexts/ */
+  /** 上下文快照目录 — 当前等于 {sessionDir} */
   contextsDir: string;
 
-  /** 事件记录目录 — {workspace}/events/ */
+  /** 事件记录目录 — 当前等于 {sessionDir} */
   eventsDir: string;
 
   // === 系统路径（必填，避免工具动态 import Env） ===
