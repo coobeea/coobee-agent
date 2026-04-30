@@ -19,3 +19,4 @@ runtime/**/.gitkeep
 test-results/
 .test-home
 __pycache__/
+**/07-agents/*
