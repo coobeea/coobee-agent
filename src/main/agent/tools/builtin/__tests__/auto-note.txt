@@ -1,0 +1,1 @@
+This note is created automatically by fixture-write-file.py

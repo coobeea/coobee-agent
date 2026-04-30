@@ -1,0 +1,1 @@
+hello from __tests__/data cwd with subdir prefix
