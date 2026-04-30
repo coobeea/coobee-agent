@@ -57,7 +57,7 @@ vi.mock('node:fs/promises', () => ({
 import { readFile, writeFile, mkdir, stat, open } from 'node:fs/promises';
 import { readTool, writeTool, editTool, execTool, builtinTools } from '../builtin';
 import { resolveSandboxPath } from '../../sandbox';
-import { createTestToolContext } from '../../testing/TestToolContext';
+import { createTestToolContext } from './TestToolContext';
 
 /** 测试用 context：允许 /tmp 目录下的操作 */
 const tmpContext = createTestToolContext({ workspaceRoot: '/tmp' });
