@@ -198,7 +198,7 @@ class EnvClass {
   }
 
   async getAgentWorkspaceDir(_sessionId: string): Promise<string> {
-    throw new Error('[Env] getAgentWorkspaceDir is deprecated. Use AgentRuntimeLayout for Agent workspaces.');
+    throw new Error('[Env] getAgentWorkspaceDir is deprecated. Use AgentRuntimeLayout for Agent projects.');
   }
 
   async getAgentHomeDir(agentId: string): Promise<string> {

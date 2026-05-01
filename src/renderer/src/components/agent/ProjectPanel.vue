@@ -5,7 +5,7 @@
  * 显示项目目录的文件树，通过 HTTP API 获取目录结构。
  * 支持目录展开/折叠、文件类型图标、手动刷新、文件选中。
  * 自动监听文件变化并刷新树。
- * 支持切换显示"智能体目录"或"业务工作区"。
+ * 支持切换显示"智能体目录"、"任务目录"或"项目目录"。
  */
 import { ref, watch, provide, onUnmounted, inject, computed, type Ref } from 'vue';
 import { useOpenFiles } from '@/composables/useOpenFiles';
@@ -180,7 +180,7 @@ async function handlePaste(event: KeyboardEvent): Promise<void> {
         return;
       }
 
-      logStore.info('user', '粘贴文件到工作区', { targetDir, filePaths });
+      logStore.info('user', '粘贴文件到目录', { targetDir, filePaths });
 
       // 复制所有文件/目录
       for (const sourcePath of filePaths) {
@@ -250,7 +250,7 @@ watch(
     // 创建新订阅
     if (newThreadId) {
       unwatchFiles = watchThreadFiles(newThreadId, (payload: WorkspaceFileChangedPayload) => {
-        logStore.debug('event', `检测到工作区文件变化: ${payload.files.join(', ')}`);
+        logStore.debug('event', `检测到目录文件变化: ${payload.files.join(', ')}`);
         // 自动刷新文件树，保持展开状态
         loadTree(false);
       });

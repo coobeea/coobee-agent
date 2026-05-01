@@ -3,7 +3,7 @@ import path from 'path';
 import { Env } from '@main/common/env';
 
 /**
- * Thread/Agent 工作空间配置管理
+ * Thread/Agent 会话配置管理
  *
  * 提供两个核心目录的管理：
  *   1. threads/    - Thread 元数据存储（JSON 文件，持久化 Thread 定义）
@@ -12,7 +12,7 @@ import { Env } from '@main/common/env';
  *
  * Thread 与 Workspace 的关系：
  *   - Thread 是会话的逻辑定义（存储在 threads/{threadId}.json）
- *   - Agent workspace 是业务工作区：agents/{agentId}/workspace
+ *   - Agent project 是业务项目目录：agents/{agentId}/project
  *   - Session dir 是会话产物目录：agents/{agentId}/sessions/{threadId}
  */
 class ThreadsConfig {

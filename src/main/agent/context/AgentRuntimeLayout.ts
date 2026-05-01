@@ -10,6 +10,9 @@ export interface AgentRuntimeLayout {
   agentId: string;
   sessionId: string;
   agentHomePath: string;
+  agentProjectPath: string;
+  projectPath: string;
+  /** @deprecated Use agentProjectPath/projectPath. */
   agentWorkspacePath: string;
   dataDirectory: string;
   sessionRoot: string;
@@ -35,7 +38,7 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
   }
 
   const agentHomePath = options.agentHomePath || path.join(options.userAgentsDir || Env.paths.userAgentsDir, agentId);
-  const agentWorkspacePath = path.join(agentHomePath, 'workspace');
+  const agentProjectPath = path.join(agentHomePath, 'project');
   const sessionRoot = path.join(agentHomePath, 'sessions');
   const sessionDir = path.join(sessionRoot, sessionId);
 
@@ -43,8 +46,10 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
     agentId,
     sessionId,
     agentHomePath,
-    agentWorkspacePath,
-    dataDirectory: agentWorkspacePath,
+    agentProjectPath,
+    projectPath: agentProjectPath,
+    agentWorkspacePath: agentProjectPath,
+    dataDirectory: agentProjectPath,
     sessionRoot,
     sessionDir,
     sessionFilesDir: path.join(sessionDir, 'sessions'),
@@ -54,9 +59,10 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
 
 export async function ensureAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptions): Promise<AgentRuntimeLayout> {
   const layout = createAgentRuntimeLayout(options);
+  await migrateLegacyAgentWorkspaceDirectory(layout.agentId, layout.agentHomePath, layout.agentProjectPath);
   await Promise.all([
     fsp.mkdir(layout.agentHomePath, { recursive: true }),
-    fsp.mkdir(layout.agentWorkspacePath, { recursive: true }),
+    fsp.mkdir(layout.agentProjectPath, { recursive: true }),
     fsp.mkdir(layout.sessionRoot, { recursive: true }),
     fsp.mkdir(layout.sessionDir, { recursive: true }),
     fsp.mkdir(layout.sessionFilesDir, { recursive: true }),
@@ -67,8 +73,9 @@ export async function ensureAgentRuntimeLayout(options: ResolveAgentRuntimeLayou
 
 export function ensureAgentRuntimeLayoutSync(options: ResolveAgentRuntimeLayoutOptions): AgentRuntimeLayout {
   const layout = createAgentRuntimeLayout(options);
+  migrateLegacyAgentWorkspaceDirectorySync(layout.agentId, layout.agentHomePath, layout.agentProjectPath);
   fs.mkdirSync(layout.agentHomePath, { recursive: true });
-  fs.mkdirSync(layout.agentWorkspacePath, { recursive: true });
+  fs.mkdirSync(layout.agentProjectPath, { recursive: true });
   fs.mkdirSync(layout.sessionRoot, { recursive: true });
   fs.mkdirSync(layout.sessionDir, { recursive: true });
   fs.mkdirSync(layout.sessionFilesDir, { recursive: true });
@@ -101,9 +108,87 @@ export async function migrateLegacyAgentDataDirectory(agentId: string, targetDir
   await moveDirectoryEntries(legacyDir, targetDir, 'agent data');
 }
 
+export async function migrateLegacyAgentWorkspaceDirectory(
+  agentId: string,
+  agentHomePath: string,
+  targetDir: string
+): Promise<void> {
+  const legacyDir = path.join(agentHomePath, 'workspace');
+  await moveDirectoryStrict(legacyDir, targetDir, `agent project (${agentId})`);
+}
+
+export function migrateLegacyAgentWorkspaceDirectorySync(
+  agentId: string,
+  agentHomePath: string,
+  targetDir: string
+): void {
+  const legacyDir = path.join(agentHomePath, 'workspace');
+  moveDirectoryStrictSync(legacyDir, targetDir, `agent project (${agentId})`);
+}
+
 export async function migrateLegacyThreadWorkspace(sessionId: string, targetDir: string): Promise<void> {
   const legacyDir = path.join(Env.paths.userHome, 'workspaces', sessionId);
   await moveDirectoryEntries(legacyDir, targetDir, 'thread workspace');
+}
+
+async function moveDirectoryStrict(sourceDir: string, targetDir: string, label: string): Promise<void> {
+  if (path.resolve(sourceDir) === path.resolve(targetDir)) return;
+  if (!fs.existsSync(sourceDir)) return;
+
+  const sourceEntries = await fsp.readdir(sourceDir);
+  if (sourceEntries.length === 0) {
+    await fsp.rm(sourceDir, { recursive: true, force: true });
+    return;
+  }
+
+  if (fs.existsSync(targetDir)) {
+    const targetEntries = await fsp.readdir(targetDir);
+    if (targetEntries.length > 0) {
+      throw new Error(
+        `[AgentRuntimeLayout] Cannot migrate ${label}: both legacy workspace and project directories contain files. legacy=${sourceDir}, project=${targetDir}`
+      );
+    }
+    await fsp.rm(targetDir, { recursive: true, force: true });
+  }
+
+  try {
+    await fsp.rename(sourceDir, targetDir);
+  } catch (error) {
+    await fsp.mkdir(path.dirname(targetDir), { recursive: true });
+    await fsp.cp(sourceDir, targetDir, { recursive: true });
+    await fsp.rm(sourceDir, { recursive: true, force: true });
+    log.warn(`[AgentRuntimeLayout] Copied ${label} after rename failed: ${sourceDir} -> ${targetDir}`, error);
+  }
+}
+
+function moveDirectoryStrictSync(sourceDir: string, targetDir: string, label: string): void {
+  if (path.resolve(sourceDir) === path.resolve(targetDir)) return;
+  if (!fs.existsSync(sourceDir)) return;
+
+  const sourceEntries = fs.readdirSync(sourceDir);
+  if (sourceEntries.length === 0) {
+    fs.rmSync(sourceDir, { recursive: true, force: true });
+    return;
+  }
+
+  if (fs.existsSync(targetDir)) {
+    const targetEntries = fs.readdirSync(targetDir);
+    if (targetEntries.length > 0) {
+      throw new Error(
+        `[AgentRuntimeLayout] Cannot migrate ${label}: both legacy workspace and project directories contain files. legacy=${sourceDir}, project=${targetDir}`
+      );
+    }
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+
+  try {
+    fs.renameSync(sourceDir, targetDir);
+  } catch (error) {
+    fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+    fs.cpSync(sourceDir, targetDir, { recursive: true });
+    fs.rmSync(sourceDir, { recursive: true, force: true });
+    log.warn(`[AgentRuntimeLayout] Copied ${label} after rename failed: ${sourceDir} -> ${targetDir}`, error);
+  }
 }
 
 async function moveDirectoryEntries(sourceDir: string, targetDir: string, label: string): Promise<void> {

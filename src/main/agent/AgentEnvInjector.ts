@@ -2,7 +2,7 @@
  * Agent 环境注入器
  *
  * 在 Runtime 构建前准备运行时环境：
- *   1. 获取/创建 Agent 工作空间
+ *   1. 获取/创建 Agent 项目目录
  *   2. 扫描并加载 Skill（仅 agent 模式）
  *   3. 根据 Agent 配置收集 Skills（仅 agent 模式）
  *   4. 准备运行时路径 + Skill 发现提示 + Agent 发现提示（仅 agent 模式）
@@ -38,7 +38,7 @@ export interface PrepareAgentEnvOptions {
   sessionId: string;
   mode: AgentMode;
   /**
-   * Agent 模式下 workspaceRoot 由 AgentRuntimeLayout 推导，传入值仅作参考（最终会被 Agent workspace 覆盖）。
+   * Agent 模式下 workspaceRoot 由 AgentRuntimeLayout 推导，传入值仅作参考（最终会被 Agent project 覆盖）。
    */
   workspaceRoot?: string;
   /**
@@ -76,7 +76,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       throw new Error(`[EnvInjector] agentId is required: sessionId=${sessionId}`);
     }
 
-    // 1. 解析 Agent 运行时布局（Agent Home / workspace / sessionDir 由 AgentRuntimeLayout 统一决定）
+    // 1. 解析 Agent 运行时布局（Agent Home / project / sessionDir 由 AgentRuntimeLayout 统一决定）
     const homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
     const resolver = AgentContextResolver.getInstance();
     const agentContext: AgentContext = await resolver.resolve({
@@ -84,7 +84,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       sessionId
     });
     const agentHome = agentContext.agentHomePath;
-    const workspace = agentContext.agentWorkspacePath;
+    const project = agentContext.agentProjectPath;
+    const workspace = project;
     const sessionDir = agentContext.sessionDir;
     const contextDir = agentContext.sessionDir;
 
@@ -107,7 +108,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       agentEnv.agentName = agentName;
     }
 
-    // 注入 dataDirectory（固定为 Agent workspace）
+    // 注入 dataDirectory（固定为 Agent project）
     agentEnv.dataDirectory = agentContext.dataDirectory;
     agentEnv.sessionDir = agentContext.sessionDir;
     log.debug(`[EnvInjector] Injected dataDirectory: ${agentEnv.dataDirectory}`);
@@ -150,17 +151,11 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       // 🔕 执行协议注入已禁用（过于复杂）
       // const executionProtocol = buildExecutionProtocol(skillManager);
       const runtimePathsBlock = formatRuntimePaths(agentEnv);
-      // 🔕 简化 Skill 发现提示 - 只保留基本使用说明
-      const skillDiscoveryHint =
-        skillManager.size > 0
-          ? `<skill_discovery>\n` +
-            `You have ${skillManager.size} Skills available. Use the \`skill_list\` tool to discover them.\n\n` +
-            `**How to use Skills**:\n` +
-            `1. Use \`skill_list\` to find available skills\n` +
-            `2. Use \`read\` tool to read the skill's SKILL.md file (path provided by skill_list)\n` +
-            `3. Follow the instructions in the SKILL.md file\n` +
-            `</skill_discovery>`
-          : '';
+      // Skill 发现提示（双档策略）：
+      //   - 固有技能包（agent.skills 声明的 skill）：名称 + 描述 + SKILL.md 相对路径 固化到上下文
+      //   - 其他扫描到的技能：仅提示可通过 skill_list 工具按需发现
+      //   - 附加硬约束：必须先 read SKILL.md、脚本必须通过 exec 执行、禁止幻觉
+      const skillDiscoveryHint = buildSkillDiscoveryHint(skillManager, agentDefinedSkills, agentHome);
       // 收集 Extension 注入的指令（运行时注入，对所有 Agent 生效）
       const extensionInstructions = collectExtensionInstructions();
       const promptAssembly = new PromptAssemblyService();
@@ -169,7 +164,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
         agentHome,
         agentId,
         agentHomeManager: homeManager,
-        workspace,
+        project,
         skillDiscoveryHint,
         extensionInstructions
       });
@@ -223,11 +218,11 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
 
       // 8. 构建工具执行上下文（由 Runtime 的 convertTools 注入到每个工具）
       //    包含沙箱信息 + Agent/Session 上下文
-      //    注意：当前不区分 projectDir 和 workspace，统一使用 workspace
+      //    注意：当前 tool cwd 固定为 Agent project
       //    如果未来需要支持"一个 Agent 操作多个项目目录"，应在 Builder 中增加 projectDir() 方法
       const effectiveCwd = workspace;
       if (!effectiveCwd) {
-        throw new Error('[EnvInjector] workspace is undefined, cannot build tool execution context');
+        throw new Error('[EnvInjector] project is undefined, cannot build tool execution context');
       }
       const envVars = buildSkillEnvVars(agentEnv);
       const toolCtx = await buildToolExecutionContext(effectiveCwd, sessionId, envVars, {
@@ -240,7 +235,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       prepared.sandboxContext = toolCtx;
     }
 
-    log.info(`[EnvInjector] Prepared: sessionId=${sessionId}, mode=${mode}, workspace=${workspace}`);
+    log.info(`[EnvInjector] Prepared: sessionId=${sessionId}, mode=${mode}, project=${project}`);
     return prepared;
   } catch (error) {
     log.error(`[EnvInjector] Failed to prepare runtime env: ${formatUnknownError(error)}`);
@@ -255,7 +250,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
  *
  * Skill 脚本通过这些变量获取运行时上下文：
  *   - COOBEE_CONFIG_DIR     — 配置目录（读取 skills.json5 等）
- *   - COOBEE_WORKSPACE      — 工作空间目录
+ *   - COOBEE_PROJECT        — Agent 项目目录（工具 cwd）
+ *   - COOBEE_WORKSPACE      — 已废弃，等同 COOBEE_PROJECT
  *   - COOBEE_SESSION_ID     — 当前会话 ID
  *   - COOBEE_USER_HOME      — 应用主目录
  *   - COOBEE_DATA_DIRECTORY — Agent 持久业务数据目录（如果存在）
@@ -263,6 +259,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
 function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
   const vars: Record<string, string> = {
     COOBEE_CONFIG_DIR: env.configDir,
+    COOBEE_PROJECT: env.project,
     COOBEE_WORKSPACE: env.workspace,
     COOBEE_SESSION_ID: env.sessionId,
     COOBEE_USER_HOME: env.userHome
@@ -384,7 +381,7 @@ async function buildToolExecutionContext(
     // 工作目录
     cwd,
 
-    // 工作空间目录
+    // 项目目录派生的任务目录
     tasksDir: path.join(workspace, 'tasks'),
 
     // 系统空间（严格走 AgentRuntimeLayout，禁止回退到 workspace）
@@ -437,6 +434,89 @@ function collectExtensionInstructions(): string[] {
 
 function compactPaths(paths: Array<string | undefined>): string[] {
   return paths.filter((item): item is string => typeof item === 'string' && item.length > 0);
+}
+
+// ==================== Skill 发现提示构建 ====================
+
+/**
+ * 构建 <skill_discovery> 段内容
+ *
+ * 双档策略：
+ *   1. 固有技能包：agent.skills 显式声明、且能在 SkillManager 中找到的 skill，
+ *      名称 + 描述 + SKILL.md 相对路径 直接固化到上下文；
+ *   2. 其他扫描到但未绑定的 skill：仅给出数量提示，让 LLM 按需通过 skill_list 发现。
+ *
+ * 并附加三条硬约束，防止 LLM 把 skill 名当 function tool 直接调用造成幻觉。
+ */
+function buildSkillDiscoveryHint(
+  skillManager: SkillManager,
+  agentDefinedSkills: string[] | undefined,
+  agentHome: string
+): string {
+  if (skillManager.size === 0) {
+    return '';
+  }
+
+  const boundDefs = (agentDefinedSkills || [])
+    .map((name) => skillManager.getByName(name))
+    .filter((s): s is SkillDefinition => !!s);
+
+  // 在 agent home 下的 skill 统一以 AGENT_HOME/ 相对路径表达（覆盖 agent 私有和会话临时两种来源）；
+  // 其他来源（system / extension / marketplace）路径在 agent home 外，保留绝对路径。
+  const agentHomePrefix = agentHome ? agentHome + path.sep : '';
+  const formatSkillPath = (filePath: string | undefined): string => {
+    if (!filePath) return '';
+    if (agentHomePrefix && filePath.startsWith(agentHomePrefix)) {
+      const rel = filePath.slice(agentHome.length + 1); // 去掉 agentHome 前缀和分隔符
+      return `AGENT_HOME/${rel}`;
+    }
+    return filePath;
+  };
+
+  const lines: string[] = ['<skill_discovery>'];
+
+  if (boundDefs.length > 0) {
+    lines.push(`## Bound Skills (${boundDefs.length})`);
+    lines.push('');
+    lines.push('These skills are bound to this agent. Their metadata is listed below;');
+    lines.push('read the referenced SKILL.md file before using any of them.');
+    lines.push(
+      'Paths starting with `AGENT_HOME/` are relative to the agent_home absolute path declared in `<runtime_environment>`; resolve them by joining AGENT_HOME with the remainder. All other paths are absolute and must be used as-is.'
+    );
+    lines.push('');
+    for (const def of boundDefs) {
+      const displayPath = formatSkillPath(def.filePath);
+      const desc = (def.description || '').trim() || '(no description)';
+      const pathHint = displayPath ? ` — \`${displayPath}\`` : '';
+      lines.push(`- **${def.name}** — ${desc}${pathHint}`);
+    }
+    lines.push('');
+  }
+
+  const otherCount = Math.max(0, skillManager.size - boundDefs.length);
+  if (otherCount > 0) {
+    lines.push(`## Other Skills (${otherCount})`);
+    lines.push('');
+    lines.push(
+      `There are ${otherCount} additional skills available. Use the \`skill_list\` tool to discover them on demand.`
+    );
+    lines.push('');
+  }
+
+  lines.push('## How to Use a Skill');
+  lines.push('');
+  lines.push(
+    '1. **Read SKILL.md first.** Use the `read` tool on the path above (or a path returned by `skill_list`) before acting on any skill. Never skip this step.'
+  );
+  lines.push(
+    '2. **Execute scripts via `exec`.** Skill scripts (python/shell/etc.) must be invoked through the `exec` tool as shell commands. Skill names and script filenames are NOT function tools — calling them directly will fail with "Tool not found".'
+  );
+  lines.push(
+    '3. **No hallucination.** Never claim a skill has been invoked or a step has been completed unless you actually called the corresponding tool and received a successful result.'
+  );
+
+  lines.push('</skill_discovery>');
+  return lines.join('\n');
 }
 
 function formatUnknownError(error: unknown): string {

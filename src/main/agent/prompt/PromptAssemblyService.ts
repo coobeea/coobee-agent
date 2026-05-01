@@ -25,13 +25,19 @@ export interface PromptAssemblyParams {
   agentHome?: string;
   agentId?: string;
   agentHomeManager?: AgentHomeManager;
+  project?: string;
+  /** @deprecated Use project. */
   workspace?: string;
   skillDiscoveryHint?: string;
   extensionInstructions?: string[];
   limits?: {
     agentHomeChars?: number;
     agentsMdChars?: number;
+    projectTotalChars?: number;
+    projectFileChars?: number;
+    /** @deprecated Use projectTotalChars. */
     workspaceTotalChars?: number;
+    /** @deprecated Use projectFileChars. */
     workspaceFileChars?: number;
   };
 }
@@ -39,13 +45,16 @@ export interface PromptAssemblyParams {
 const DEFAULT_LIMITS = {
   agentHomeChars: 10_000,
   agentsMdChars: 50_000,
-  workspaceTotalChars: 6_000,
-  workspaceFileChars: 3_000
+  projectTotalChars: 6_000,
+  projectFileChars: 3_000
 };
 
 export class PromptAssemblyService {
   assemble(params: PromptAssemblyParams): PromptBlock[] {
     const limits = { ...DEFAULT_LIMITS, ...params.limits };
+    const project = params.project || params.workspace;
+    const projectTotalChars = limits.projectTotalChars ?? limits.workspaceTotalChars ?? DEFAULT_LIMITS.projectTotalChars;
+    const projectFileChars = limits.projectFileChars ?? limits.workspaceFileChars ?? DEFAULT_LIMITS.projectFileChars;
     const blocks: PromptBlock[] = [];
 
     this.addBlock(blocks, 'runtime_paths', 'Runtime paths', params.runtimePathsBlock);
@@ -65,10 +74,10 @@ export class PromptAssemblyService {
     );
     this.addBlock(
       blocks,
-      'workspace_context',
-      'Workspace context files',
-      this.readWorkspaceContextFiles(params.workspace, limits.workspaceTotalChars, limits.workspaceFileChars),
-      params.workspace
+      'project_context',
+      'Project context files',
+      this.readProjectContextFiles(project, projectTotalChars, projectFileChars),
+      project
     );
     this.addBlock(blocks, 'skill_discovery', 'Skill discovery', params.skillDiscoveryHint);
 
@@ -118,15 +127,15 @@ export class PromptAssemblyService {
     return truncate(`<agent_rules path="${agentMdPath}">\n${agentContent}\n</agent_rules>`, maxChars);
   }
 
-  private readWorkspaceContextFiles(
-    workspace: string | undefined,
+  private readProjectContextFiles(
+    project: string | undefined,
     maxTotalChars: number,
     maxPerFileChars: number
   ): string | undefined {
-    if (!workspace) return undefined;
+    if (!project) return undefined;
 
     try {
-      const entries = fs.readdirSync(workspace, { withFileTypes: true });
+      const entries = fs.readdirSync(project, { withFileTypes: true });
       const mdFiles = entries
         .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
         .map((entry) => entry.name)
@@ -139,7 +148,7 @@ export class PromptAssemblyService {
 
       for (const file of mdFiles) {
         if (totalLen >= maxTotalChars) break;
-        const filePath = path.join(workspace, file);
+        const filePath = path.join(project, file);
         const content = readText(filePath);
         if (!content) continue;
 
@@ -151,13 +160,13 @@ export class PromptAssemblyService {
       if (sections.length === 0) return undefined;
 
       return truncate(
-        `<workspace_context>
-Session-persistent context files from the workspace root.
+        `<project_context>
+Agent-persistent context files from the project root.
 These were created in previous conversation turns and auto-loaded for continuity.
-You may update or add new files in the workspace root to persist information across turns.
+You may update or add new files in the project root to persist information across turns.
 
 ${sections.join('\n\n---\n\n')}
-</workspace_context>`,
+</project_context>`,
         maxTotalChars
       );
     } catch {

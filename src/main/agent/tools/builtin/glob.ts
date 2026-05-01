@@ -44,7 +44,7 @@ const SKIP_DIRS = new Set([
 export const globTool: ToolDefinition = {
   name: 'glob',
   description:
-    'Find files by name pattern in the workspace.\n' +
+    'Find files by name pattern in the project.\n' +
     'Returns matching file paths with size and modification time.\n' +
     'Supports glob patterns: *.ts, **/*.test.ts, package.json, src/**/*.vue',
   category: ToolCategory.FileSystem,
@@ -56,7 +56,7 @@ export const globTool: ToolDefinition = {
     searchPath: z
       .string()
       .optional()
-      .describe('Base directory to search in (relative to workspace). Defaults to workspace root.'),
+      .describe('Base directory to search in (relative to project). Defaults to project root.'),
     maxResults: z.number().optional().describe(`Maximum results to return. Defaults to ${DEFAULT_MAX_RESULTS}`)
   }),
 
@@ -70,7 +70,7 @@ export const globTool: ToolDefinition = {
 
     const workspace = context?.workspaceRoot;
     if (!workspace) {
-      return { success: false, llmContent: 'Error: workspace not available.' };
+      return { success: false, llmContent: 'Error: project not available.' };
     }
 
     const pattern = params.pattern as string;

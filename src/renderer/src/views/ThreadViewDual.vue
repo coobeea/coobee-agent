@@ -78,6 +78,8 @@ provide('toggleDirectoryMode', toggleDirectoryMode);
 async function updateProjectPathForMode(thread: {
   agentId?: string;
   agentHomePath?: string;
+  agentProjectPath?: string;
+  projectPath?: string;
   agentWorkspacePath?: string;
   workspacePath?: string;
   sessionPath?: string;
@@ -89,9 +91,9 @@ async function updateProjectPathForMode(thread: {
     // = .home/agents/{agentId}/sessions/{threadId}
     projectPath.value = thread.sessionPath || '';
   } else if (rightTab.value === 'project') {
-    // 项目目录：Agent 级跨任务共享的业务工作区
-    // = .home/agents/{agentId}/workspace
-    projectPath.value = thread.agentWorkspacePath || thread.workspacePath || '';
+    // 项目目录：Agent 级跨任务共享的业务项目目录
+    // = .home/agents/{agentId}/project
+    projectPath.value = thread.agentProjectPath || thread.projectPath || thread.agentWorkspacePath || thread.workspacePath || '';
   }
 }
 

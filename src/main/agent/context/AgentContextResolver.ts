@@ -6,7 +6,7 @@
  *   - 解析数据目录（dataDirectory）
  *   - 解析会话目录（sessionDir）
  *   - 解析有效模型（effectiveModel）
- *   - 解析 Agent workspace（工具 cwd）与 session 目录
+ *   - 解析 Agent project（工具 cwd）与 session 目录
  *
  * 目标：
  *   - 消除 AgentStore、ThreadStore、AgentEnvInjector 中的路径逻辑重复
@@ -46,10 +46,16 @@ export interface AgentContext {
   /** Agent 专属的数据目录（持久化业务数据） */
   dataDirectory: string;
 
-  /** Agent 业务工作区，也是工具默认 cwd */
+  /** Agent 业务项目目录，也是工具默认 cwd */
+  projectPath: string;
+
+  /** Agent 业务项目目录，也是工具默认 cwd */
+  agentProjectPath: string;
+
+  /** @deprecated Use projectPath/agentProjectPath. */
   workspacePath: string;
 
-  /** Agent 业务工作区，也是工具默认 cwd */
+  /** @deprecated Use projectPath/agentProjectPath. */
   agentWorkspacePath: string;
 
   /** Agent 私有技能目录 */
@@ -178,7 +184,7 @@ export class AgentContextResolver {
       sessionId: params.sessionId,
       agentHomePath
     });
-    await migrateLegacyAgentDataDirectory(params.agentId, layout.agentWorkspacePath);
+    await migrateLegacyAgentDataDirectory(params.agentId, layout.agentProjectPath);
     await migrateLegacyThreadWorkspace(params.sessionId, layout.sessionDir);
 
     // 4.4 有效模型
@@ -190,8 +196,10 @@ export class AgentContextResolver {
       agentName: agent.name,
       agentHomePath: layout.agentHomePath,
       dataDirectory: layout.dataDirectory,
-      workspacePath: layout.agentWorkspacePath,
-      agentWorkspacePath: layout.agentWorkspacePath,
+      projectPath: layout.agentProjectPath,
+      agentProjectPath: layout.agentProjectPath,
+      workspacePath: layout.agentProjectPath,
+      agentWorkspacePath: layout.agentProjectPath,
       agentSkillsPath: layout.agentSkillsPath,
       effectiveModel,
       sessionDir: layout.sessionDir,
@@ -213,7 +221,7 @@ export class AgentContextResolver {
           dataDirectory: context.dataDirectory,
           sessionDir: context.sessionDir,
           effectiveModel: context.effectiveModel,
-          hasWorkspace: !!context.workspacePath
+          hasProject: !!context.projectPath
         },
         null,
         2

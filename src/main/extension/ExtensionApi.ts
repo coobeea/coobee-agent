@@ -119,9 +119,13 @@ function createExtensionServices(): ExtensionServices {
       }
     },
     paths: {
+      async getProject(sessionId) {
+        const { resolveThreadRuntimeLayoutSync } = await import('../agent/context/AgentRuntimeLayout');
+        return resolveThreadRuntimeLayoutSync(sessionId).agentProjectPath;
+      },
       async getWorkspace(sessionId) {
         const { resolveThreadRuntimeLayoutSync } = await import('../agent/context/AgentRuntimeLayout');
-        return resolveThreadRuntimeLayoutSync(sessionId).agentWorkspacePath;
+        return resolveThreadRuntimeLayoutSync(sessionId).agentProjectPath;
       },
       async getAgentHome(agentId) {
         // 这里先保持与主运行时一致的 home 路径来源；AgentsConfig 仍在单独收敛中。
@@ -149,8 +153,7 @@ function createExtensionServices(): ExtensionServices {
         return Env.paths.secretsDir;
       },
       async getWorkspacesDir() {
-        const { Threads } = await import('../config');
-        return Threads.workspaces;
+        throw new Error('[ExtensionServices.paths] getWorkspacesDir is deprecated. Use getProject(sessionId).');
       }
     },
     llm: {

@@ -140,7 +140,9 @@ export interface ExtensionServices {
   };
   /** 路径解析服务 */
   paths: {
-    /** 获取 Agent 工作空间目录 */
+    /** 获取 Agent 项目目录 */
+    getProject(sessionId: string): Promise<string>;
+    /** @deprecated Use getProject. */
     getWorkspace(sessionId: string): Promise<string>;
     /** 获取 Agent Home 目录 */
     getAgentHome(agentId: string): Promise<string>;
@@ -152,7 +154,7 @@ export interface ExtensionServices {
     getConfigDir(): Promise<string>;
     /** 获取 secrets 目录 */
     getSecretsDir(): Promise<string>;
-    /** 获取工作空间根目录 */
+    /** @deprecated 旧 Thread workspace 根目录不再作为运行期路径。 */
     getWorkspacesDir(): Promise<string>;
   };
   /** LLM 调用服务 */

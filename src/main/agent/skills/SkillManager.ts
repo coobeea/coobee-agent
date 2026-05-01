@@ -4,7 +4,7 @@
  * 职责：
  *   - 管理 Skill 搜索路径来源（系统内置、扩展、市场/用户、Agent 私有等）
  *   - 扫描目录下所有 SKILL.md 文件并解析 frontmatter
- *   - 支持多级搜索路径（系统内置 → Extension → 市场/用户 → Agent → Workspace），后到覆盖
+ *   - 支持多级搜索路径（系统内置 → Extension → 市场/用户 → Agent → Session），后到覆盖
  *   - 动态注册/注销（Extension 贡献）
  *   - 动态添加搜索路径
  *   - 查询（按名称、全量）
@@ -34,7 +34,7 @@ export interface InvalidateCacheOptions {
   immediate?: boolean;
 }
 
-export type SkillSearchPathKind = 'system' | 'extension' | 'marketplace' | 'agent' | 'workspace';
+export type SkillSearchPathKind = 'system' | 'extension' | 'marketplace' | 'agent' | 'session';
 
 export interface SkillSearchPathSource {
   /** 来源类型，用于运行时环境展示和诊断 */
@@ -52,7 +52,9 @@ export interface SkillSearchPathSource {
 }
 
 export interface BuildSkillSearchPathSourcesOptions {
-  /** 当前工作空间路径（可选） */
+  /** 当前会话目录（可选，用于会话临时 Skill） */
+  sessionDir?: string;
+  /** @deprecated Use sessionDir. */
   workspace?: string;
   /** Agent Home 路径（可选，用于 Agent 私有 Skill） */
   agentHome?: string;
@@ -304,7 +306,7 @@ export class SkillManager {
    *   2. extension     — Extension 注册贡献的 Skill
    *   3. marketplace   — 用户/市场安装的 Skill（.home/skills）
    *   4. agent         — Agent 私有 Skill（.home/agents/{agentId}/skills）
-   *   5. workspace     — 当前工作空间临时 Skill
+   *   5. session       — 当前会话/项目临时 Skill
    */
   static async buildDefaultSearchPathSources(
     options: BuildSkillSearchPathSourcesOptions = {}
@@ -355,11 +357,12 @@ export class SkillManager {
       });
     }
 
-    if (options.workspace) {
+    const sessionDir = options.sessionDir ?? options.workspace;
+    if (sessionDir) {
       sources.push({
-        kind: 'workspace',
-        label: 'workspace',
-        path: path.join(options.workspace, 'skills'),
+        kind: 'session',
+        label: 'session',
+        path: path.join(sessionDir, 'skills'),
         priority: 50
       });
     }
@@ -399,7 +402,7 @@ export class SkillManager {
    *
    * 按搜索路径顺序扫描，**后到覆盖**（同名目录后发现的覆盖先发现的）。
    * 搜索路径顺序应为低→高优先级。
-   * 例如：系统内置 → Extension → 市场/用户 → Agent → Workspace。
+   * 例如：系统内置 → Extension → 市场/用户 → Agent → Session。
    *
    * @param searchPaths Skill 搜索路径数组（低 → 高优先级）
    * @param secretsDir 可选的敏感信息目录路径（用于加载 skills.json5 中的配置）

@@ -5,11 +5,11 @@
  *
  * 存储结构：
  *   Agent 级（永久）：agents/{agentId}/memory/  — 由 memory-agent 扩展自动分类
- *   Session 级（随会话）：{workspace}/memory/   — 由 memory-thread 扩展自动写入
+ *   Session 级（随会话）：{project}/memory/   — 由 memory-thread 扩展自动写入
  *
  * scope:
  *   - "agent"   — 操作 Agent 级记忆（agents/{agentId}/memory/）
- *   - "session" — 操作 Session 级记忆（{workspace}/memory/）
+ *   - "session" — 操作 Session 级记忆（{project}/memory/）
  *   - 不指定    — search/list 同时搜两层，write 默认写 session
  *
  * 操作：
@@ -46,7 +46,7 @@ export const memoryTool: ToolDefinition = {
     'Search and manage Agent memory across two tiers.\n\n' +
     'Tiers:\n' +
     '- agent: persistent memory in agents/{agentId}/memory/ (auto-classified by memory-agent extension)\n' +
-    '- session: current session memory in {workspace}/memory/ (auto-written by memory-thread extension)\n\n' +
+    '- session: current session memory in {project}/memory/ (auto-written by memory-thread extension)\n\n' +
     'Actions:\n' +
     '- list: list memory files\n' +
     '- get: read a memory file\n' +
@@ -61,7 +61,7 @@ export const memoryTool: ToolDefinition = {
     scope: z
       .enum(['agent', 'session'])
       .optional()
-      .describe('Memory tier. "agent" = persistent cross-session, "session" = current workspace. Omit to search both.'),
+      .describe('Memory tier. "agent" = persistent cross-session, "session" = current project. Omit to search both.'),
     file: z
       .string()
       .optional()
@@ -92,7 +92,7 @@ export const memoryTool: ToolDefinition = {
     if (!roots.agentMemoryDir && !roots.sessionMemoryDir) {
       return {
         success: false,
-        llmContent: 'Error: Memory system not initialized (no workspace or agent home available)',
+        llmContent: 'Error: Memory system not initialized (no project or agent home available)',
         error: { code: 'NOT_INITIALIZED', message: 'Cannot resolve memory paths' }
       };
     }
@@ -122,7 +122,7 @@ export const memoryTool: ToolDefinition = {
         success: true,
         llmContent:
           `Memory files (${files.length} files):\n` +
-          `[agent] = persistent cross-session, [session] = current workspace\n\n` +
+          `[agent] = persistent cross-session, [session] = current project\n\n` +
           lines.join('\n')
       };
     }
@@ -142,7 +142,7 @@ export const memoryTool: ToolDefinition = {
       if (!memDir) {
         return {
           success: false,
-          llmContent: `Error: ${effectiveScope} memory is not available (missing ${effectiveScope === 'agent' ? 'agentId/userHome' : 'workspace'})`,
+          llmContent: `Error: ${effectiveScope} memory is not available (missing ${effectiveScope === 'agent' ? 'agentId/userHome' : 'project'})`,
           error: { code: 'NOT_AVAILABLE', message: `${effectiveScope} memory not available` }
         };
       }
@@ -211,7 +211,7 @@ export const memoryTool: ToolDefinition = {
       if (!memDir) {
         return {
           success: false,
-          llmContent: 'Error: session memory is not available (no workspace)',
+          llmContent: 'Error: session memory is not available (no project)',
           error: { code: 'NOT_AVAILABLE', message: 'Session memory not available' }
         };
       }

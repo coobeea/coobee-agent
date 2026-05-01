@@ -74,21 +74,22 @@ describe('PromptAssemblyService', () => {
     expect(blocks).toHaveLength(0);
   });
 
-  it('读取 workspace 根目录下的 Markdown 上下文文件并应用大小限制', () => {
+  it('读取 project 根目录下的 Markdown 上下文文件并应用大小限制', () => {
     fs.writeFileSync(path.join(tempDir, 'a.md'), 'A'.repeat(200), 'utf-8');
     fs.writeFileSync(path.join(tempDir, 'b.txt'), 'ignore', 'utf-8');
 
     const service = new PromptAssemblyService();
     const blocks = service.assemble({
-      workspace: tempDir,
+      project: tempDir,
       limits: {
-        workspaceTotalChars: 500,
-        workspaceFileChars: 40
+        projectTotalChars: 500,
+        projectFileChars: 40
       }
     });
 
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].id).toBe('workspace_context');
+    expect(blocks[0].id).toBe('project_context');
+    expect(blocks[0].content).toContain('<project_context>');
     expect(blocks[0].content).toContain('### a.md');
     expect(blocks[0].content).toContain('... (truncated)');
     expect(blocks[0].content).not.toContain('b.txt');

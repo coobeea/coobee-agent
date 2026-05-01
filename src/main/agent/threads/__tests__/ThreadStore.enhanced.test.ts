@@ -147,7 +147,7 @@ describe('ThreadStore 增强字段', () => {
     expect(updated!.ttsEnabled).toBe(true);
   });
 
-  it('list 返回的索引条目包含 runStatus、workspacePath 和 sessionPath', async () => {
+  it('list 返回的索引条目包含 runStatus、projectPath 和 sessionPath', async () => {
     const store = new ThreadStore(tmpDir);
     await store.create({ title: 'A', agentId: 'a1', agentMode: 'chat' });
     await store.create({ title: 'B', agentId: 'a2' });
@@ -155,16 +155,20 @@ describe('ThreadStore 增强字段', () => {
     const list = await store.listAsync();
     expect(list).toHaveLength(2);
     expect(list[0].runStatus).toBe('idle');
-    expect(list[0].workspacePath).toBe(path.join(tmpDir, '..', 'agents', list[0].agentId, 'workspace'));
-    expect(list[0].agentWorkspacePath).toBe(list[0].workspacePath);
+    expect(list[0].projectPath).toBe(path.join(tmpDir, '..', 'agents', list[0].agentId, 'project'));
+    expect(list[0].agentProjectPath).toBe(list[0].projectPath);
+    expect(list[0].workspacePath).toBe(list[0].projectPath);
+    expect(list[0].agentWorkspacePath).toBe(list[0].projectPath);
     expect(list[0].sessionPath).toBe(path.join(tmpDir, '..', 'agents', list[0].agentId, 'sessions', list[0].id));
     expect(list[0].runtimeType).toBeUndefined();
     expect(list[0].enableThinking).toBeUndefined();
     expect(list[0].asrEnabled).toBeUndefined();
     expect(list[0].ttsEnabled).toBeUndefined();
     expect(list[1].runStatus).toBe('idle');
-    expect(list[1].workspacePath).toBe(path.join(tmpDir, '..', 'agents', list[1].agentId, 'workspace'));
-    expect(list[1].agentWorkspacePath).toBe(list[1].workspacePath);
+    expect(list[1].projectPath).toBe(path.join(tmpDir, '..', 'agents', list[1].agentId, 'project'));
+    expect(list[1].agentProjectPath).toBe(list[1].projectPath);
+    expect(list[1].workspacePath).toBe(list[1].projectPath);
+    expect(list[1].agentWorkspacePath).toBe(list[1].projectPath);
     expect(list[1].sessionPath).toBe(path.join(tmpDir, '..', 'agents', list[1].agentId, 'sessions', list[1].id));
   });
 

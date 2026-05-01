@@ -353,13 +353,13 @@ export class ExtensionLoader {
   /**
    * 加载任务级 Extension
    *
-   * 在 Agent 任务启动时调用，只加载该任务 workspace 下的 Extension。
+   * 在 Agent 任务启动时调用，只加载该任务 project 下的 Extension。
    *
    * @param threadId 任务 ID (thread ID)
    */
   async loadWorkspaceExtensions(threadId: string, workspaceDir?: string): Promise<void> {
     const { resolveThreadRuntimeLayoutSync } = await import('@main/agent/context/AgentRuntimeLayout');
-    const workspace = workspaceDir || resolveThreadRuntimeLayoutSync(threadId).agentWorkspacePath;
+    const workspace = workspaceDir || resolveThreadRuntimeLayoutSync(threadId).agentProjectPath;
     const workspaceExtDir = path.join(workspace, 'extensions');
 
     // 如果目录不存在，直接返回

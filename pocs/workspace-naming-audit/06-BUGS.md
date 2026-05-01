@@ -1,0 +1,62 @@
+# workspace/project 命名收敛 V1 · 风险与 Bug 跟踪
+
+## 风险清单
+
+### R1 · 迁移覆盖用户数据
+
+**场景**：旧 `workspace/` 和新 `project/` 同时存在，迁移时覆盖目标目录。
+
+**规避**：
+
+- 预扫描阶段检测冲突。
+- 目标存在且非空时默认中止。
+- 不做静默 merge，除非后续专门设计目录合并策略。
+
+### R2 · 迁移时序过晚
+
+**场景**：Agent system 已经启动并创建了空 `project/`，随后迁移发现目标存在，导致迁移失败或数据不可见。
+
+**规避**：
+
+- 迁移放在最早 ready hook。
+- 迁移完成前不初始化 Agent system。
+
+### R3 · 内部 workspaceRoot 被误改
+
+**场景**：为了追求术语统一，把 sandbox/tool 的 `workspaceRoot` 机械改为 `projectRoot`，导致工具上下文、测试和运行时构建大面积破裂。
+
+**规避**：
+
+- V1 明确不改内部通用执行根目录术语。
+- 只改 LLM/用户可见语义和 Agent business dir。
+
+### R4 · `COOBEE_WORKSPACE` 兼容问题
+
+**场景**：旧 Skill 脚本读取 `COOBEE_WORKSPACE`，V1 如果直接删除会导致脚本失败。
+
+**规避**：
+
+- 新增 `COOBEE_PROJECT`。
+- 是否保留 `COOBEE_WORKSPACE` 作为短期 alias 由实现阶段决定；即使保留，也不在 prompt 文案中推荐。
+
+### R5 · Skill kind 改名漏掉字符串判断
+
+**场景**：存在 `kind === 'workspace'` 的动态判断，类型改了但运行时逻辑漏改。
+
+**规避**：
+
+- grep `'workspace'` 和 `"workspace"`，重点检查 `skills/`。
+- SkillManager 测试覆盖来源 kind 和 label。
+
+### R6 · 历史文档被过度机械替换
+
+**场景**：把历史 POC、prompt snapshot、旧日志里的 workspace 全部改成 project，破坏历史记录真实性。
+
+**规避**：
+
+- V1 只改活跃 Skill 文档和本 POC。
+- 历史 reference snapshot 不改。
+
+## 实施期间遇到的真实 Bug
+
+暂无。

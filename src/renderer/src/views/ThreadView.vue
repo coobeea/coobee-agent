@@ -36,7 +36,7 @@ const currentThread = computed(() => {
   return threadsStore.threads.find((t) => t.id === threadId.value);
 });
 
-// 目录切换：智能体目录 / 业务工作区
+// 目录切换：智能体目录 / 任务目录
 type DirectoryMode = 'agent-home' | 'workspace';
 const directoryMode = ref<DirectoryMode>('agent-home');
 
@@ -55,7 +55,7 @@ provide('toggleDirectoryMode', toggleDirectoryMode);
 
 // 根据当前模式更新显示的目录路径
 function getTaskWorkspacePath(thread: { sessionPath?: string }): string {
-  // 任务空间：当前 Thread 的会话产物目录
+  // 任务目录：当前 Thread 的会话产物目录
   // = .home/agents/{agentId}/sessions/{threadId}
   return thread.sessionPath || '';
 }

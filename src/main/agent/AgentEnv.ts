@@ -30,8 +30,10 @@ export interface AgentEnv {
   /** 应用版本 */
   appVersion: string;
 
-  // --- 工作空间 ---
-  /** 工作空间根目录 */
+  // --- 项目目录 ---
+  /** Agent 业务项目目录，也是工具默认 cwd */
+  project: string;
+  /** @deprecated Use project. */
   workspace: string;
   /** 当前会话 ID */
   sessionId: string;
@@ -105,17 +107,17 @@ export interface AgentEnv {
  * 从全局 Env 构建 Agent 安全环境子集
  *
  * @param sessionId 会话 ID
- * @param workspace Agent 工作区路径（agents/{agentId}/workspace）
+ * @param project Agent 项目目录（agents/{agentId}/project）
  * @param agentHome Agent Home 路径（可选，用于加载 Agent 级 Skill）
  */
-export async function buildAgentEnv(sessionId: string, workspace: string, agentHome?: string): Promise<AgentEnv> {
+export async function buildAgentEnv(sessionId: string, project: string, agentHome?: string): Promise<AgentEnv> {
   // 延迟导入 Env，避免测试环境循环依赖
   const { Env } = await import('@main/common/env');
   const { SkillManager } = await import('./skills');
 
-  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace, agentHome });
+  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace: project, agentHome });
   const skillPaths = SkillManager.searchPathsFromSources(skillPathSources);
-  const extensionPaths = await Env.getExtensionSearchPaths(workspace);
+  const extensionPaths = await Env.getExtensionSearchPaths(project);
 
   // Extension 系统信息
   let loadedExtensions: string[] = [];
@@ -169,8 +171,9 @@ export async function buildAgentEnv(sessionId: string, workspace: string, agentH
     isDev: Env.isDev,
     appVersion: Env.app?.version ?? '0.0.0',
 
-    // 工作空间
-    workspace,
+    // 项目目录
+    project,
+    workspace: project,
     sessionId,
 
     // 系统路径
@@ -239,7 +242,7 @@ Paths:
 ${env.dataDirectory ? `- data_directory: ${env.dataDirectory} (persistent business data)` : ''}
 ${env.sessionDir ? `- session_dir: ${env.sessionDir} (current conversation artifacts)` : ''}
 ${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)` : ''}
-- workspace: ${env.workspace} (tool cwd and durable business workspace)
+- project: ${env.project} (tool cwd and durable business project)
 - config: ${env.configDir}
 - skill_search_paths:${skillPathsList}
 - agents_definitions: ${env.userAgentsDir}
@@ -247,7 +250,7 @@ ${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-l
 File usage:
 ${env.dataDirectory ? '- Save durable business data, records, reports, and knowledge documents in data_directory.' : ''}
 - Use agent_home only for Agent identity, memory, preferences, rules, and configuration.
-- Use workspace/data_directory for tool outputs, generated reports, indexes, and intermediate files.
+- Use project (and data_directory when present) for tool outputs, generated reports, indexes, and intermediate files.
 - Do not manually edit system-managed session files: session_dir/history.jsonl, session_dir/events.jsonl, session_dir/context.jsonl, session_dir/sessions/.
 </runtime_environment>`;
 }

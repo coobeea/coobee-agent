@@ -389,7 +389,7 @@ class AgentExecutor {
         if (!workspaceDir) {
           const { ensureAgentRuntimeLayout } = await import('./context/AgentRuntimeLayout');
           const layout = await ensureAgentRuntimeLayout({ agentId, sessionId });
-          workspaceDir = layout.agentWorkspacePath;
+          workspaceDir = layout.agentProjectPath;
         }
 
         // 加载任务级 Extension（如果存在）

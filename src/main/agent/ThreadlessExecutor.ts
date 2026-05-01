@@ -10,7 +10,7 @@ export interface ThreadlessExecutionOptions {
   lightweight?: boolean;
   maxTurns?: number;
   sessionId?: string;
-  /** 显式工作区；不传时按本次一次性 sessionId 创建标准 workspace。 */
+  /** 显式项目目录；不传时按本次一次性 sessionId 创建标准 project。 */
   workspaceRoot?: string;
   /**
    * 本次请求的附加系统约束，会被追加到 Agent 默认 instructions 之后。
@@ -97,7 +97,7 @@ export class ThreadlessExecutor {
     const sessionId = params.sessionId ?? `threadless-agent-${params.agentId}-${generateSnowflakeId()}`;
     const { ensureAgentRuntimeLayout } = await import('./context/AgentRuntimeLayout');
     const layout = await ensureAgentRuntimeLayout({ agentId: agentDef.id, sessionId });
-    const workspaceRoot = params.workspaceRoot ?? layout.agentWorkspacePath;
+    const workspaceRoot = params.workspaceRoot ?? layout.agentProjectPath;
 
     return {
       sessionId,

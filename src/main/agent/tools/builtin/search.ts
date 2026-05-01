@@ -90,7 +90,7 @@ const BINARY_EXTENSIONS = new Set([
 export const searchTool: ToolDefinition = {
   name: 'search',
   description:
-    'Search file contents in the workspace using pattern matching (grep-like).\n' +
+    'Search file contents in the project using pattern matching (grep-like).\n' +
     'Returns matching lines with file path, line number, and context.\n' +
     'Use this to find code patterns, function definitions, TODOs, etc.',
   category: ToolCategory.Search,
@@ -100,7 +100,7 @@ export const searchTool: ToolDefinition = {
     searchPath: z
       .string()
       .optional()
-      .describe('Directory or file to search in (relative to workspace). Defaults to workspace root.'),
+      .describe('Directory or file to search in (relative to project). Defaults to project root.'),
     glob: z.string().optional().describe('File name filter glob (e.g. "*.ts", "*.{ts,tsx}", "package.json")'),
     caseSensitive: z.boolean().optional().describe('Case-sensitive search. Defaults to false (case-insensitive).'),
     maxResults: z.number().optional().describe(`Maximum total matches to return. Defaults to ${DEFAULT_MAX_RESULTS}`)
@@ -116,7 +116,7 @@ export const searchTool: ToolDefinition = {
 
     const workspace = context?.workspaceRoot;
     if (!workspace) {
-      return { success: false, llmContent: 'Error: workspace not available.' };
+      return { success: false, llmContent: 'Error: project not available.' };
     }
 
     const pattern = params.pattern as string;

@@ -114,7 +114,7 @@ export class ThreadStore {
 
     await this.writeDefinition(definition);
 
-    // 立即创建 Agent 运行目录结构（workspace、sessions/{threadId} 等）
+    // 立即创建 Agent 运行目录结构（project、sessions/{threadId} 等）
     await this.createRuntimeDirectories(definition);
 
     // P1 重构：移除 dataDirectory 初始化，由 AgentContextResolver 在运行时处理
@@ -459,8 +459,10 @@ function toIndexEntry(def: ThreadDefinition): ThreadIndexEntry {
     runStatus: def.runStatus ?? 'idle',
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
-    workspacePath: layout.agentWorkspacePath,
-    agentWorkspacePath: layout.agentWorkspacePath,
+    projectPath: layout.agentProjectPath,
+    agentProjectPath: layout.agentProjectPath,
+    workspacePath: layout.agentProjectPath,
+    agentWorkspacePath: layout.agentProjectPath,
     sessionPath: layout.sessionDir,
     agentHomePath: def.agentHomePath,
     overrideModel: def.overrideModel,

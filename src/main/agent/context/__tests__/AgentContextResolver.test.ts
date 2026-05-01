@@ -180,12 +180,14 @@ describe('AgentContextResolver', () => {
       expect(context.agentId).toBe('agent-123');
       expect(context.agentName).toBe('Test Agent');
       expect(context.agentHomePath).toBe('/mock/home/agents/agent-123');
-      expect(context.dataDirectory).toBe('/mock/home/agents/agent-123/workspace');
+      expect(context.dataDirectory).toBe('/mock/home/agents/agent-123/project');
+      expect(context.projectPath).toBe('/mock/home/agents/agent-123/project');
+      expect(context.agentProjectPath).toBe('/mock/home/agents/agent-123/project');
       expect(context.effectiveModel).toBe('openai/gpt-4');
       expect(context.sessionId).toBe('session-456');
       expect(context.sessionDir).toBe('/mock/home/agents/agent-123/sessions/session-456');
       expect(context.agentSkillsPath).toBe('/mock/home/agents/agent-123/skills');
-      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-123/workspace', { recursive: true });
+      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-123/project', { recursive: true });
     });
 
     it('应该使用默认 dataDirectory', async () => {
@@ -211,9 +213,9 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      expect(context.dataDirectory).toBe('/mock/home/agents/agent-789/workspace');
+      expect(context.dataDirectory).toBe('/mock/home/agents/agent-789/project');
       expect(context.sessionDir).toBe('/mock/home/agents/agent-789/sessions/session-111');
-      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-789/workspace', { recursive: true });
+      expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-789/project', { recursive: true });
     });
 
     it('创建运行目录失败时应该抛出错误', async () => {
@@ -271,7 +273,7 @@ describe('AgentContextResolver', () => {
 
       expect(fsMocks.rename).toHaveBeenCalledWith(
         '/mock/home/data/agent-migrate/records.json',
-        '/mock/home/agents/agent-migrate/workspace/records.json'
+        '/mock/home/agents/agent-migrate/project/records.json'
       );
       expect(fsMocks.rename).toHaveBeenCalledWith(
         '/mock/home/workspaces/session-migrate/history.jsonl',
@@ -427,8 +429,8 @@ describe('AgentContextResolver', () => {
     });
   });
 
-  describe('工作区路径', () => {
-    it('应该忽略外部 workspace 参数，使用 Agent workspace', async () => {
+  describe('项目目录路径', () => {
+    it('应该忽略外部 workspace 参数，使用 Agent project', async () => {
       const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-valid-path',
@@ -451,10 +453,11 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      expect(context.workspacePath).toBe('/mock/home/agents/agent-valid-path/workspace');
+      expect(context.projectPath).toBe('/mock/home/agents/agent-valid-path/project');
+      expect(context.workspacePath).toBe('/mock/home/agents/agent-valid-path/project');
     });
 
-    it('不应该让路径遍历参数改变 Agent workspace', async () => {
+    it('不应该让路径遍历参数改变 Agent project', async () => {
       const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-attack',
@@ -477,7 +480,8 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      expect(context.workspacePath).toBe('/mock/home/agents/agent-attack/workspace');
+      expect(context.projectPath).toBe('/mock/home/agents/agent-attack/project');
+      expect(context.workspacePath).toBe('/mock/home/agents/agent-attack/project');
     });
   });
 
