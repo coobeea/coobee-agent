@@ -404,13 +404,11 @@ class AgentExecutor {
         preparedEnv = await prepareAgentEnv({
           sessionId,
           mode,
-          workspaceRoot: workspaceDir,
           agentId,
           agentName,
-          thinkingLevel: request.enableThinking === false ? 'off' : undefined,
-          hasRequestTools: false
+          thinkingLevel: request.enableThinking === false ? 'off' : undefined
         });
-        workspaceDir = preparedEnv.projectDir;
+        workspaceDir = preparedEnv.env.projectDir;
 
         // 写入用户消息到 history.jsonl
         streamConsumersManager.writeUserMessage(sessionId, message, undefined, agentId);
@@ -630,9 +628,9 @@ class AgentExecutor {
     }
 
     if (preparedEnv) {
-      builder.sessionDir(preparedEnv.sessionDir);
-      builder.workspaceRoot(preparedEnv.workspaceRoot);
-      builder.contextDir(preparedEnv.contextDir);
+      builder.sessionDir(preparedEnv.env.sessionDir);
+      builder.workspaceRoot(preparedEnv.env.projectDir);
+      builder.contextDir(preparedEnv.env.sessionDir);
 
       if (preparedEnv.appendInstructions.length > 0) {
         builder.appendInstructions(...preparedEnv.appendInstructions);

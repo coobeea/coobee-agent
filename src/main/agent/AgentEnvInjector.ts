@@ -35,30 +35,41 @@ import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 const log = createLogger('ai');
 
 export interface PrepareAgentEnvOptions {
-  sessionId: string;
-  mode: AgentMode;
-  /**
-   * Agent 模式下 workspaceRoot 由 AgentRuntimeLayout 推导，传入值仅作参考（最终会被 Agent project 覆盖）。
-   */
-  workspaceRoot?: string;
-  /**
-   * Agent ID 必填。路径重定义后，运行时产物一律写入 `.home/agents/{agentId}/...`，
-   * 没有 agentId 的调用方需要先报错而不是落到 workspace 兜底。
-   */
+  // --- Agent 身份 ---
+  /** Agent 定义 ID（必填），运行时产物统一落在 \`.home/agents/{agentId}/...\` */
   agentId: string;
+  /** Agent 名称，未指定时默认使用 agentId */
   agentName?: string;
+
+  // --- 会话 ---
+  /** 当前会话 ID */
+  sessionId: string;
+
+  // --- 运行模式 ---
+  /** 运行模式：\`chat\` 仅基础环境，\`agent\` 注入 Skill + 工具 + 执行协议 */
+  mode: AgentMode;
+
+  // --- 模型 ---
+  /** 思维链级别，\`'off'\` 表示禁用思考 */
   thinkingLevel?: ThinkingLevel;
-  hasRequestTools?: boolean;
 }
 
 export interface PreparedAgentEnv {
-  projectDir: string;
-  sessionDir: string;
-  workspaceRoot: string;
-  contextDir: string;
+  /** Agent 可见的完整运行时环境（路径、系统、配置等） */
+  env: AgentEnv;
+
+  // --- 指令与 Skill ---
+  /** 追加到系统提示词的指令块（运行时路径、Skill 发现提示、Extension 指令等） */
   appendInstructions: string[];
+  /** Agent 配置中指定的 Skill 定义列表 */
   skills: SkillDefinition[];
+
+  // --- 工具 ---
+  /** 从 ToolRegistry 收集的工具定义（已应用 excludeTools 黑名单过滤） */
   tools?: ToolDefinition[];
+
+  // --- 执行沙箱 ---
+  /** 工具执行沙箱上下文（沙箱模式、可写路径、环境变量等） */
   sandboxContext?: ToolExecutionContext;
 }
 
@@ -81,9 +92,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     const agentHome = layout.agentHomePath;
     const projectDir = layout.agentProjectPath;
     const sessionDir = layout.sessionDir;
-    const contextDir = layout.sessionDir;
 
-    if (!projectDir || !sessionDir || !contextDir || !agentHome) {
+    if (!projectDir || !sessionDir || !agentHome) {
       throw new Error(
         `[EnvInjector] Failed to resolve agent runtime layout: agentId=${agentId}, sessionId=${sessionId}`
       );
@@ -111,10 +121,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     }
 
     const prepared: PreparedAgentEnv = {
-      projectDir,
-      sessionDir,
-      workspaceRoot: projectDir,
-      contextDir,
+      env: agentEnv,
       appendInstructions: [],
       skills: []
     };
@@ -178,27 +185,25 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
         log.debug(`[EnvInjector] No skills configured for agent ${agentId || '(unknown)'}`);
       }
 
-      // 8c. 收集工具（如果请求没有显式传入工具）
+      // 8c. 收集工具
       //     从 ToolRegistry 获取所有已注册的工具（builtin + Extension）
       //     过滤：应用 Agent 定义的 excludeTools 黑名单
-      if (!options.hasRequestTools) {
-        const { ToolRegistry } = await import('./tools/registry');
-        const allTools = ToolRegistry.getInstance().getAll();
+      const { ToolRegistry } = await import('./tools/registry');
+      const allTools = ToolRegistry.getInstance().getAll();
 
-        if (agentId && excludeTools.length > 0) {
-          log.info(`[EnvInjector] Agent ${agentId} excludes tools: ${excludeTools.join(', ')}`);
-        }
-
-        // 应用黑名单过滤
-        const excludeSet = new Set(excludeTools);
-        const filteredTools = allTools.filter((t) => !excludeSet.has(t.name));
-
-        prepared.tools = filteredTools;
-        log.info(
-          `[EnvInjector] Injected ${filteredTools.length} tools from ToolRegistry` +
-            (excludeTools.length > 0 ? ` (excluded ${excludeTools.length})` : '')
-        );
+      if (agentId && excludeTools.length > 0) {
+        log.info(`[EnvInjector] Agent ${agentId} excludes tools: ${excludeTools.join(', ')}`);
       }
+
+      // 应用黑名单过滤
+      const excludeSet = new Set(excludeTools);
+      const filteredTools = allTools.filter((t) => !excludeSet.has(t.name));
+
+      prepared.tools = filteredTools;
+      log.info(
+        `[EnvInjector] Injected ${filteredTools.length} tools from ToolRegistry` +
+          (excludeTools.length > 0 ? ` (excluded ${excludeTools.length})` : '')
+      );
 
       // 8. 构建工具执行上下文（由 Runtime 的 convertTools 注入到每个工具）
       //    包含沙箱信息 + Agent/Session 上下文
