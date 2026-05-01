@@ -9,7 +9,7 @@
  */
 import { ref, watch, provide, onUnmounted, inject, computed, type Ref } from 'vue';
 import { useOpenFiles } from '@/composables/useOpenFiles';
-import { watchThreadFiles, type WorkspaceFileChangedPayload } from '@/composables/useWorkspaceWatcher';
+import { watchThreadFiles, type ProjectFileChangedPayload } from '@/composables/useProjectWatcher';
 import { useLogStore } from '@/stores/log';
 import {
   getFileTree,
@@ -23,13 +23,13 @@ import FileTreeNodeVue from './FileTreeNode.vue';
 const logStore = useLogStore();
 
 // 从 ThreadView 注入目录模式
-type DirectoryMode = 'agent-home' | 'workspace' | 'project';
+type DirectoryMode = 'agent-home' | 'session' | 'project';
 const injectedDirectoryMode = inject<Ref<DirectoryMode>>('directoryMode', ref('agent-home'));
 const toggleDirectoryMode = inject<() => void>('toggleDirectoryMode', () => {});
 
 const DIRECTORY_META: Record<DirectoryMode, { title: string; icon: string }> = {
   'agent-home': { title: '智能体', icon: 'i-carbon-user-avatar' },
-  workspace: { title: '任务目录', icon: 'i-carbon-folder-shared' },
+  session: { title: '任务目录', icon: 'i-carbon-folder-shared' },
   project: { title: '项目目录', icon: 'i-carbon-folder-details' }
 };
 
@@ -249,7 +249,7 @@ watch(
 
     // 创建新订阅
     if (newThreadId) {
-      unwatchFiles = watchThreadFiles(newThreadId, (payload: WorkspaceFileChangedPayload) => {
+      unwatchFiles = watchThreadFiles(newThreadId, (payload: ProjectFileChangedPayload) => {
         logStore.debug('event', `检测到目录文件变化: ${payload.files.join(', ')}`);
         // 自动刷新文件树，保持展开状态
         loadTree(false);

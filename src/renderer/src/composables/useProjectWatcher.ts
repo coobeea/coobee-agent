@@ -1,7 +1,7 @@
 /**
- * Workspace 文件监控 WebSocket 组合式
+ * Project 文件监控 WebSocket 组合式
  *
- * 监听 Gateway 推送的 workspace.file-changed 事件，实时通知文件变化。
+ * 监听 Gateway 推送的 project.file-changed 事件，实时通知文件变化。
  * 用于：
  *   - 刷新文件树
  *   - 高亮变化的文件
@@ -12,18 +12,18 @@ import { gateway } from '@/plugins/gatewaySetup';
 
 // ==================== 类型定义 ====================
 
-export interface WorkspaceFileChangedPayload {
+export interface ProjectFileChangedPayload {
   threadId: string;
   files: string[];
   timestamp: number;
 }
 
-export type WorkspaceFileChangeHandler = (payload: WorkspaceFileChangedPayload) => void;
+export type ProjectFileChangeHandler = (payload: ProjectFileChangedPayload) => void;
 
 // ==================== 内部状态 ====================
 
 /** 文件变化回调列表（多个消费方可同时监听） */
-const fileChangeHandlers: Map<string, WorkspaceFileChangeHandler[]> = new Map();
+const fileChangeHandlers: Map<string, ProjectFileChangeHandler[]> = new Map();
 let unregisterFileChanged: (() => void) | null = null;
 let initialized = false;
 
@@ -40,25 +40,25 @@ function init(): void {
   unregisterFileChanged = gateway.on('workspace.file-changed', (payload) => {
     if (!payload) return;
 
-    const data = payload as WorkspaceFileChangedPayload;
+    const data = payload as ProjectFileChangedPayload;
     if (!data.threadId || !data.files || data.files.length === 0) return;
 
     // 调用该 threadId 的所有处理器
     const handlers = fileChangeHandlers.get(data.threadId);
     if (!handlers || handlers.length === 0) return;
 
-    console.log(`[useWorkspaceWatcher] 文件变化: ${data.threadId}, ${data.files.length} 个文件`);
+    console.log(`[useProjectWatcher] 文件变化: ${data.threadId}, ${data.files.length} 个文件`);
 
     for (const handler of handlers) {
       try {
         handler(data);
       } catch (err) {
-        console.error('[useWorkspaceWatcher] Handler error:', err);
+        console.error('[useProjectWatcher] Handler error:', err);
       }
     }
   });
 
-  console.log('[useWorkspaceWatcher] 初始化完成');
+  console.log('[useProjectWatcher] 初始化完成');
 }
 
 // ==================== 导出 API ====================
@@ -70,7 +70,7 @@ function init(): void {
  * @param handler - 文件变化处理函数
  * @returns 取消订阅函数
  */
-export function watchThreadFiles(threadId: string, handler: WorkspaceFileChangeHandler): () => void {
+export function watchThreadFiles(threadId: string, handler: ProjectFileChangeHandler): () => void {
   // 确保已初始化
   if (!initialized) init();
 
@@ -82,7 +82,7 @@ export function watchThreadFiles(threadId: string, handler: WorkspaceFileChangeH
   const handlers = fileChangeHandlers.get(threadId)!;
   handlers.push(handler);
 
-  console.log(`[useWorkspaceWatcher] 开始监听: ${threadId} (${handlers.length} 个处理器)`);
+  console.log(`[useProjectWatcher] 开始监听: ${threadId} (${handlers.length} 个处理器)`);
 
   // 返回取消订阅函数
   return () => {
@@ -96,14 +96,14 @@ export function watchThreadFiles(threadId: string, handler: WorkspaceFileChangeH
       fileChangeHandlers.delete(threadId);
     }
 
-    console.log(`[useWorkspaceWatcher] 停止监听: ${threadId}`);
+    console.log(`[useProjectWatcher] 停止监听: ${threadId}`);
   };
 }
 
 /**
  * 清理所有订阅（组件卸载时调用）
  */
-export function cleanupWorkspaceWatcher(): void {
+export function cleanupProjectWatcher(): void {
   if (unregisterFileChanged) {
     unregisterFileChanged();
     unregisterFileChanged = null;
@@ -112,7 +112,7 @@ export function cleanupWorkspaceWatcher(): void {
   fileChangeHandlers.clear();
   initialized = false;
 
-  console.log('[useWorkspaceWatcher] 清理完成');
+  console.log('[useProjectWatcher] 清理完成');
 }
 
 // 模块加载时自动初始化

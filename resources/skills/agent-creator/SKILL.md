@@ -332,10 +332,10 @@ write({
 
 **文件位置**：
 
-- 工作空间 Agent：`{workspace}/agents/{agentId}.json`
+- 会话级 Agent：`{project}/agents/{agentId}.json`
 - 用户 Agent：`{userDataDir}/agents/{agentId}.json`
 
-**优先使用工作空间**（除非用户明确要求全局可用）。
+**优先使用会话级**（除非用户明确要求全局可用）。
 
 ### Step 6：验证
 

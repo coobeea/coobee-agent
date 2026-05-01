@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-{workspace}/
+{project}/
 ├── tasks/                              # 任务目录（由主 Agent 管理）
 │   └── {taskId}/                       # 每个委托任务一个目录
 │       ├── agents/                     # 子 Agent 工作目录
@@ -23,7 +23,7 @@
 
 ### 关键变更说明
 
-- 子 Agent **不再创建**独立的顶级 workspace，而是嵌套在父 workspace 的 `tasks/{taskId}/agents/{agentId}/` 下
+- 子 Agent **不再创建**独立的顶级 project，而是嵌套在父 project 的 `tasks/{taskId}/agents/{agentId}/` 下
 - `delegate_to_agent` 工具会自动创建上述目录结构
 - `results/{agentId}.md` 由 `delegate_to_agent` 工具在子 Agent 完成后自动写入
 - `experiences/` 目录用于经验共享（见下文"经验共享"章节）

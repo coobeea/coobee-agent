@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * ThreadView — 任务工作区视图
+ * ThreadView — 任务视图
  *
- * 根据路由参数 :id 加载 Thread，展示三栏工作区（任务工作目录 | 工作台 | 对话）。
+ * 根据路由参数 :id 加载 Thread，展示二栏工作区（文件面板 | 对话）或三栏（文件面板 | 工作台 | 对话）。
  */
 
 import { ref, computed, watch, onMounted, provide } from 'vue';
@@ -37,7 +37,7 @@ const currentThread = computed(() => {
 });
 
 // 目录切换：智能体目录 / 任务目录
-type DirectoryMode = 'agent-home' | 'workspace';
+type DirectoryMode = 'agent-home' | 'session';
 const directoryMode = ref<DirectoryMode>('agent-home');
 
 // 提供 addToChat 方法给 ProjectPanel/FileTreeNode
@@ -73,7 +73,7 @@ function toggleDirectoryMode(): void {
   const thread = currentThread.value;
   if (!thread) return;
 
-  directoryMode.value = directoryMode.value === 'agent-home' ? 'workspace' : 'agent-home';
+  directoryMode.value = directoryMode.value === 'agent-home' ? 'session' : 'agent-home';
   updateProjectPathForMode(thread);
 }
 
@@ -116,7 +116,7 @@ watch(threadId, (newId) => {
 </script>
 
 <template>
-  <div class="thread-workspace flex h-full w-full flex-col bg-background">
+  <div class="thread-view flex h-full w-full flex-col bg-background">
     <!-- Thread 不存在 -->
     <div
       v-if="!currentThread && threadsStore.threads.length > 0"
@@ -182,7 +182,7 @@ watch(threadId, (newId) => {
 </template>
 
 <style scoped>
-.thread-workspace {
+.thread-view {
   font-family: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 </style>

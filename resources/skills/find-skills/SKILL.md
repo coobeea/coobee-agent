@@ -101,7 +101,7 @@ If the user wants to proceed, you can install the skill for them using `npx skil
 **Tip**: Check `runtime-env` skill for exact paths. Our system provides:
 
 - User skills directory (`userSkillsDir`)
-- Agent workspace skills (`{workspace}/skills/`)
+- Agent project skills (`{project}/skills/`)
 
 The `-y` flag skips confirmation prompts for automated installation.
 

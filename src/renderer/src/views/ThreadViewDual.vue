@@ -41,15 +41,15 @@ const previewFileName = ref('');
 /** 右侧抽屉是否展开 */
 const rightDrawerOpen = ref(false);
 /** 右侧当前入口 */
-const rightTab = ref<'agent-home' | 'workspace' | 'project' | 'terminal'>('agent-home');
+const rightTab = ref<'agent-home' | 'session' | 'project' | 'terminal'>('agent-home');
 
 const threadId = computed(() => route.params.id as string);
 
 const currentThread = computed(() => threadsStore.threads.find((t) => t.id === threadId.value));
 
-type DirectoryMode = 'agent-home' | 'workspace' | 'project';
+type DirectoryMode = 'agent-home' | 'session' | 'project';
 const directoryMode = computed<DirectoryMode>(() => {
-  if (rightTab.value === 'workspace') return 'workspace';
+  if (rightTab.value === 'session') return 'session';
   if (rightTab.value === 'project') return 'project';
   return 'agent-home';
 });
@@ -86,21 +86,22 @@ async function updateProjectPathForMode(thread: {
 }): Promise<void> {
   if (rightTab.value === 'agent-home') {
     projectPath.value = thread.agentHomePath || '';
-  } else if (rightTab.value === 'workspace') {
+  } else if (rightTab.value === 'session') {
     // 任务目录：当前 Thread 的会话产物目录
     // = .home/agents/{agentId}/sessions/{threadId}
     projectPath.value = thread.sessionPath || '';
   } else if (rightTab.value === 'project') {
     // 项目目录：Agent 级跨任务共享的业务项目目录
     // = .home/agents/{agentId}/project
-    projectPath.value = thread.agentProjectPath || thread.projectPath || thread.agentWorkspacePath || thread.workspacePath || '';
+    projectPath.value =
+      thread.agentProjectPath || thread.projectPath || thread.agentWorkspacePath || thread.workspacePath || '';
   }
 }
 
 async function toggleDirectoryMode(): Promise<void> {
   const thread = currentThread.value;
   if (!thread) return;
-  rightTab.value = rightTab.value === 'agent-home' ? 'workspace' : 'agent-home';
+  rightTab.value = rightTab.value === 'agent-home' ? 'session' : 'agent-home';
   await updateProjectPathForMode(thread);
 }
 
@@ -121,7 +122,7 @@ function goBackToAgents(): void {
   router.push('/agents');
 }
 
-async function openRightPanel(tab: 'agent-home' | 'workspace' | 'project' | 'terminal'): Promise<void> {
+async function openRightPanel(tab: 'agent-home' | 'session' | 'project' | 'terminal'): Promise<void> {
   rightTab.value = tab;
   rightDrawerOpen.value = true;
   const thread = currentThread.value;
@@ -158,7 +159,7 @@ watch(
 
 <template>
   <!-- 包裹所有内容，确保只有一个根节点 -->
-  <div class="thread-workspace flex h-full w-full flex-col bg-background">
+  <div class="thread-view flex h-full w-full flex-col bg-background">
     <!-- Thread 不存在 -->
     <div
       v-if="!currentThread && threadsStore.threads.length > 0"
@@ -204,7 +205,7 @@ watch(
           type="button"
           title="任务目录"
           class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-          @click="openRightPanel('workspace')">
+          @click="openRightPanel('session')">
           <span class="i-carbon-folder-shared inline-block h-4 w-4" />
         </button>
         <button
@@ -247,11 +248,11 @@ watch(
               type="button"
               class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors"
               :class="
-                rightTab === 'workspace'
+                rightTab === 'session'
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
               "
-              @click="openRightPanel('workspace')">
+              @click="openRightPanel('session')">
               <span class="i-carbon-folder-shared mr-1 inline-block h-3.5 w-3.5 align-middle" />
               任务目录
             </button>
@@ -318,7 +319,7 @@ watch(
 </template>
 
 <style scoped>
-.thread-workspace {
+.thread-view {
   font-family: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 

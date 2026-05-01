@@ -10,7 +10,7 @@
 
 ```typescript
 write({
-  path: '{workspace}/skills/my-skill/SKILL.md',
+  path: '{project}/skills/my-skill/SKILL.md',
   content: '---\nname: my-skill\ndescription: ...\n---\n...'
 });
 ```
@@ -24,7 +24,7 @@ write({
 当你需要新的工具或生命周期钩子时，创建一个 Extension：
 
 ```
-{workspace}/extensions/my-ext/
+{project}/extensions/my-ext/
 ├── extension.json
 └── index.ts
 ```
@@ -65,7 +65,7 @@ write({
 
 ## 5. 修改协议 → 覆盖 execution-protocol
 
-在 `{workspace}/skills/execution-protocol/SKILL.md` 创建同名 Skill，覆盖默认执行协议。
+在 `{project}/skills/execution-protocol/SKILL.md` 创建同名 Skill，覆盖默认执行协议。
 
 ---
 

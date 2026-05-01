@@ -314,7 +314,7 @@ description: 自我评估与修复方法论。当需要评估任务完成质量�
 使用 `write` 工具在工作空间的 `skills/` 目录下创建 SKILL.md：
 
 ```
-write('{workspace}/skills/{skill-name}/SKILL.md', content)
+write('{project}/skills/{skill-name}/SKILL.md', content)
 ```
 
 **SKILL.md 模板**：

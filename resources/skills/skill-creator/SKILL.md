@@ -26,13 +26,13 @@ Skill 是一段场景化的操作手册（Markdown 文件），告诉 Agent 遇�
 
 ### 第 1 步：确定存放位置
 
-| 场景                    | 路径                                       |
-| ----------------------- | ------------------------------------------ |
-| 仅当前会话可用          | `{workspace}/skills/{skill-name}/SKILL.md` |
-| 所有会话可用（用户级）  | `{userSkillsDir}/{skill-name}/SKILL.md`    |
-| 作为 Extension 的一部分 | 在 Extension 的 `skills/` 子目录中         |
+| 场景                    | 路径                                     |
+| ----------------------- | ---------------------------------------- |
+| 仅当前会话可用          | `{project}/skills/{skill-name}/SKILL.md` |
+| 所有会话可用（用户级）  | `{userSkillsDir}/{skill-name}/SKILL.md`  |
+| 作为 Extension 的一部分 | 在 Extension 的 `skills/` 子目录中       |
 
-**优先使用工作空间级**（`{workspace}/skills/`），除非用户明确要求全局可用。
+**优先使用会话级**（`{project}/skills/`），除非用户明确要求全局可用。
 
 ### 第 2 步：检查是否已存在
 

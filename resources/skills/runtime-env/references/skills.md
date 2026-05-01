@@ -14,9 +14,9 @@ Skill 是场景化的操作手册——一段 markdown 文档，告诉你遇到�
 
 四、**agent**（Agent 私有）：`.home/agents/{agentId}/skills/`。绑定到当前 Agent，跨会话保留。
 
-五、**workspace**（会话级临时）：`{workspace}/skills/`（即 `.home/agents/{agentId}/workspace/skills/`）。优先级最高，可用于临时实验。
+五、**session**（会话级临时）：`{project}/skills/`（即 `.home/agents/{agentId}/project/skills/`）。优先级最高，可用于临时实验。
 
-每条路径的来源标签（`label`）和 kind（`system` / `extension` / `marketplace` / `agent` / `workspace`）都会随 `skill_search_paths` 注入。
+每条路径的来源标签（`label`）和 kind（`system` / `extension` / `marketplace` / `agent` / `session`）都会随 `skill_search_paths` 注入。
 
 ## Skill 目录结构
 
@@ -90,7 +90,8 @@ config:
 通过 `exec` 工具调用 Skill 里 `scripts/` 下的脚本时，以下环境变量可用：
 
 - `COOBEE_CONFIG_DIR` — 全局 config 目录（读 skills.json5）
-- `COOBEE_WORKSPACE` — 当前 workspace
+- `COOBEE_PROJECT` — 当前业务项目目录（推荐）
+- `COOBEE_WORKSPACE` — 已废弃，值等于 `COOBEE_PROJECT`，仅兼容旧脚本
 - `COOBEE_SESSION_ID` — 当前会话 ID
 - `COOBEE_USER_HOME` — userHome 根
 - `COOBEE_MEMORY_DIR` — 当前会话可见的记忆目录
@@ -105,7 +106,7 @@ CONFIG_FILE="$COOBEE_CONFIG_DIR/skills.json5"
 
 ## 新建 Skill 的落点选择
 
-- 当前会话试验 → `{workspace}/skills/my-skill/`
+- 当前会话试验 → `{project}/skills/my-skill/`
 - 固定给这个 Agent 用 → `{agent_home}/skills/my-skill/`
 - 想给所有 Agent 共享 → `.home/skills/my-skill/`
 - 不要往 `resources/skills/` 写（只读）

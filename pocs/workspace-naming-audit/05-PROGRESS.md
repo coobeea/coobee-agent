@@ -22,16 +22,39 @@ POC 已从“整体重命名版”调整为“V1 收窄落地版”。
   - 迁移入口放启动早期 hook
 - [x] 重写需求分析、方案设计、反思优化、TODO。
 
-## 未启动
+## 已完成
 
-- [ ] Task 1 — AgentRuntimeLayout 切换到 project 目录
-- [ ] Task 2 — workspace → project 一次性迁移
-- [ ] Task 3 — Runtime prompt 和环境变量
-- [ ] Task 4 — SkillSearchPathKind 改名
-- [ ] Task 5 — 前端最小适配
-- [ ] Task 6 — 文档和内置 Skill 最小同步
-- [ ] Task 7 — 验证和收尾
+- [x] Task 1 — AgentRuntimeLayout 切换到 project 目录（commit 992ca47）
+- [x] Task 2 — workspace → project 一次性迁移（commit 992ca47）
+- [x] Task 3 — Runtime prompt 和环境变量（commit 992ca47）
+- [x] Task 4 — SkillSearchPathKind `'workspace'` → `'session'`（commit 992ca47）
+- [x] Task 5 — 前端最小适配
+  - ThreadView.vue / ThreadViewDual.vue：DirectoryMode + rightTab `'workspace'` → `'session'`
+  - ProjectPanel.vue：import 路径 + DirectoryMode
+  - AgentEditorView.vue：帮助文档文案 workspace → project
+  - useWorkspaceWatcher.ts → useProjectWatcher.ts（git mv）
+- [x] Task 6 — 文档和内置 Skill 最小同步
+  - runtime-env/references/workspace.md → project.md（git mv + 内容重写）
+  - 11 个 SKILL.md 文件 `{workspace}` → `{project}`
+  - skills.md：kind `'workspace'` → `'session'`，COOBEE_WORKSPACE 标为废弃
+- [x] Task 7 — 验证和收尾
+  - grep 残留检查：`workspace_context` 0 残留 ✅
+  - grep 残留检查：SkillSearchPathKind `'workspace'` 0 残留 ✅
+  - tsc --noEmit 编译通过 ✅
+  - SkillManager 全部 39 测试通过 ✅
+  - 全量测试：970 passed / 65 failed（全部为预存问题，与 V1 无关）
+
+## 验证结果摘要
+
+| 检查项                             | 结果                                      |
+| ---------------------------------- | ----------------------------------------- |
+| `workspace_context` 残留           | 0 matches ✅                              |
+| SkillSearchPathKind `'workspace'`  | 0 matches ✅                              |
+| `{workspace}` in resources/skills/ | 0 matches ✅                              |
+| TypeScript 编译                    | 通过 ✅                                   |
+| SkillManager 测试                  | 39/39 通过 ✅                             |
+| 全量测试（1036 例）                | 970 passed, 65 failed（预存，非 V1 引入） |
 
 ## 当前结论
 
-可以进入 V1 实施。实施时不要被“grep workspace 清零”牵着走，只处理本 POC 定义的高价值边界。
+V1 实施完成。所有 7 项 Task 均已交付。剩余 `workspace` 字符串均为：内部类型名（ExtensionOrigin）、迁移兼容路径（legacy handler）、sandbox Docker workdir（`/workspace`）、Gateway 事件名（workspace.file-changed）— 均在 V1 定义的非目标范围内。

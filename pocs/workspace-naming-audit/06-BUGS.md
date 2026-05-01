@@ -59,4 +59,34 @@
 
 ## 实施期间遇到的真实 Bug
 
-暂无。
+### B1 · ThreadViewDual.vue search_replace 部分失败
+
+**日期**：2026-04-30
+**现象**：批量替换 9 处 `'workspace'` → `'session'` 时，`@click="openRightPanel('workspace')"` 出现两次导致非唯一匹配失败；`rightTab === 'workspace'` 被前序替换已变更导致二次匹配失败。
+**解决**：对重复模式使用 `replace_all: true`；对已被变更的匹配确认无需再改。
+
+## 收尾验证记录
+
+### V1 合规检查（2026-04-30）
+
+| 检查项                    | 方法                                      | 结果    |
+| ------------------------- | ----------------------------------------- | ------- |
+| R3: workspaceRoot 未误改  | grep `workspaceRoot` → 仍为内部字段名     | ✅ 通过 |
+| R4: COOBEE_WORKSPACE 兼容 | 3 处引用均为"已废弃"说明                  | ✅ 通过 |
+| R5: Skill kind 字符串判断 | grep `'workspace'` in skills/ → 0 matches | ✅ 通过 |
+| R6: 历史文档未机械替换    | 仅修改活跃 resources/skills/ + 本 POC     | ✅ 通过 |
+| 编译完整性                | `tsc --noEmit` exit 0                     | ✅ 通过 |
+| SkillManager 回归         | 39/39 tests passed                        | ✅ 通过 |
+
+### 已知残余 workspace 字符串（V1 非目标）
+
+| 位置                     | 字符串                           | V1 不处理理由                         |
+| ------------------------ | -------------------------------- | ------------------------------------- |
+| ExtensionLoader.ts       | `'workspace'` (ExtensionOrigin)  | 内部类型值                            |
+| AgentProjectMigration.ts | `'workspace'` (legacy dir)       | 迁移兼容逻辑                          |
+| AgentRuntimeLayout.ts    | `'workspace'` (legacy dir)       | 迁移兼容逻辑                          |
+| AgentStore.ts            | `'workspace'` (legacy dir)       | 迁移兼容逻辑                          |
+| sandbox/\*               | `'/workspace'` (Docker workdir)  | Sandbox 执行根目录，非 Agent 业务目录 |
+| useProjectWatcher.ts     | `workspace.file-changed` (event) | Gateway 事件名，V1 不改               |
+| ProjectPanel.vue         | `@/api/workspace` (import)       | API 模块名，V1 不改                   |
+| Test fixtures            | `'workspace'` (dir name)         | 测试数据，非生产代码                  |

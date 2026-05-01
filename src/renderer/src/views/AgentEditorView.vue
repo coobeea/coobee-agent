@@ -852,9 +852,9 @@ onUnmounted(() => {
                   <p class="flex items-start gap-2 mt-3 pt-2 border-t border-primary/20">
                     <span class="i-carbon-idea text-primary shrink-0 mt-0.5"></span>
                     <span
-                      >系统会自动把业务工作区固定在智能体目录内（<code
+                      >系统会自动把业务项目目录固定在智能体目录内（<code
                         class="text-xs px-1 py-0.5 rounded bg-background/60"
-                        >agents/{'{agentId}'}/workspace</code
+                        >agents/{'{agentId}'}/project</code
                       >），会话产物固定写入
                       <code class="text-xs px-1 py-0.5 rounded bg-background/60"
                         >agents/{'{agentId}'}/sessions</code
@@ -871,13 +871,12 @@ onUnmounted(() => {
             <div class="space-y-2">
               <label class="text-sm font-medium flex items-center gap-2">
                 <span class="i-carbon-folder-details text-primary"></span>
-                业务工作区
+                业务项目目录
                 <span class="text-xs font-normal text-muted-foreground">（系统固定维护）</span>
               </label>
               <p class="text-sm text-muted-foreground">
                 工具执行、脚本输出、索引和报告都会写入智能体目录下的
-                <code class="text-xs px-1 py-0.5 rounded bg-background/60">workspace</code
-                >，不再支持在智能体配置中自定义
+                <code class="text-xs px-1 py-0.5 rounded bg-background/60">project</code>，不再支持在智能体配置中自定义
                 <code class="text-xs px-1 py-0.5 rounded bg-background/60">dataDirectory</code>。
               </p>
             </div>

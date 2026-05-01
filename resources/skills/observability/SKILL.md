@@ -115,10 +115,10 @@ python skills/observability/scripts/context-inspect.py <filename>
 所有脚本读取 **工作空间** 的快照文件：
 
 ```
-{COOBEE_WORKSPACE}/contexts/*.json
+{COOBEE_PROJECT}/contexts/*.json
 ```
 
-环境变量 `COOBEE_WORKSPACE` 由系统自动注入（通过 `exec` 工具执行时）。
+环境变量 `COOBEE_PROJECT` 由系统自动注入（通过 `exec` 工具执行时）。`COOBEE_WORKSPACE` 已废弃但仍可作为别名使用。
 
 ---
 
@@ -207,6 +207,6 @@ python skills/observability/scripts/context-inspect.py 20240223_093055_def456.js
 ```json
 {
   "error": "Workspace not found",
-  "message": "COOBEE_WORKSPACE environment variable not set"
+  "message": "COOBEE_PROJECT environment variable not set"
 }
 ```
