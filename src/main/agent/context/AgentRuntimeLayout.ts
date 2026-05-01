@@ -12,8 +12,14 @@ export interface AgentRuntimeLayout {
   agentHome: string;
   /** Agent 项目目录（{agentHome}/project），工具默认 cwd */
   projectDir: string;
+  /** 记忆目录（{agentHome}/memory） */
+  memoryDir: string;
+  /** 会话目录（{agentHome}/sessions） */
+  sessionsDir: string;
   /** 当前会话产物目录（{agentHome}/sessions/{sessionId}） */
   sessionDir: string;
+  /** 技能目录（{agentHome}/skills） */
+  skillsDir: string;
 }
 
 export interface ResolveAgentRuntimeLayoutOptions {
@@ -34,14 +40,20 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
 
   const agentHome = path.join(Env.paths.agentsDir, agentId);
   const projectDir = path.join(agentHome, 'project');
-  const sessionDir = path.join(agentHome, 'sessions', sessionId);
+  const memoryDir = path.join(agentHome, 'memory');
+  const sessionsDir = path.join(agentHome, 'sessions');
+  const sessionDir = path.join(sessionsDir, sessionId);
+  const skillsDir = path.join(agentHome, 'skills');
 
   return {
     agentId,
     sessionId,
     agentHome,
     projectDir,
-    sessionDir
+    memoryDir,
+    sessionsDir,
+    sessionDir,
+    skillsDir
   };
 }
 
@@ -50,7 +62,10 @@ export async function ensureAgentRuntimeLayout(options: ResolveAgentRuntimeLayou
   await Promise.all([
     fsp.mkdir(layout.agentHome, { recursive: true }),
     fsp.mkdir(layout.projectDir, { recursive: true }),
-    fsp.mkdir(layout.sessionDir, { recursive: true })
+    fsp.mkdir(layout.memoryDir, { recursive: true }),
+    fsp.mkdir(layout.sessionsDir, { recursive: true }),
+    fsp.mkdir(layout.sessionDir, { recursive: true }),
+    fsp.mkdir(layout.skillsDir, { recursive: true })
   ]);
   return layout;
 }
@@ -59,7 +74,10 @@ export function ensureAgentRuntimeLayoutSync(options: ResolveAgentRuntimeLayoutO
   const layout = createAgentRuntimeLayout(options);
   fs.mkdirSync(layout.agentHome, { recursive: true });
   fs.mkdirSync(layout.projectDir, { recursive: true });
+  fs.mkdirSync(layout.memoryDir, { recursive: true });
+  fs.mkdirSync(layout.sessionsDir, { recursive: true });
   fs.mkdirSync(layout.sessionDir, { recursive: true });
+  fs.mkdirSync(layout.skillsDir, { recursive: true });
   return layout;
 }
 

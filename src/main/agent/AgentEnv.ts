@@ -9,6 +9,8 @@
  *   2. 作为 Agent 进程的环境变量子集（未来 sandbox 场景）
  */
 
+import path from 'node:path';
+
 // ==================== 类型定义 ====================
 
 /**
@@ -33,6 +35,12 @@ export interface AgentEnv {
   sessionId: string;
   /** 当前会话运行产物目录 */
   sessionDir: string;
+  /** 记忆目录 */
+  memoryDir: string;
+  /** 会话目录 */
+  sessionsDir: string;
+  /** 技能目录 */
+  skillsDir: string;
 
   // --- 系统信息 ---
   /** 操作系统 */
@@ -163,6 +171,11 @@ export async function buildAgentEnv(
     // ToolRegistry 未初始化时忽略
   }
 
+  // 派生目录
+  const memoryDir = path.join(agentHome, 'memory');
+  const sessionsDir = path.join(agentHome, 'sessions');
+  const skillsDir = path.join(agentHome, 'skills');
+
   // 安全与模型上下文
   let sandboxMode: 'off' | 'path-only' | 'docker' = 'path-only';
   let execApproval: 'auto' | 'always' | 'never' = 'auto';
@@ -193,6 +206,9 @@ export async function buildAgentEnv(
     // 会话
     sessionId,
     sessionDir,
+    memoryDir,
+    sessionsDir,
+    skillsDir,
 
     // 系统信息
     platform: process.platform as 'darwin' | 'win32' | 'linux',
