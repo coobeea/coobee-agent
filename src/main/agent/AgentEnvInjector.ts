@@ -99,9 +99,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       );
     }
 
-    // 2. 构建 AgentEnv（一次性传入所有已解析的身份与会话信息）
-    const resolvedAgentName = agentName ?? agentId;
-    const agentEnv = await buildAgentEnv(sessionId, projectDir, agentId, resolvedAgentName, agentHome, sessionDir);
+    // 2. 构建 AgentEnv（传入 AgentRuntimeLayout，agentName 在内部做兜底）
+    const agentEnv = await buildAgentEnv(layout, agentName);
     if (options.thinkingLevel) {
       agentEnv.thinkingLevel = options.thinkingLevel;
     }

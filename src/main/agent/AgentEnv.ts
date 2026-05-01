@@ -9,7 +9,7 @@
  *   2. 作为 Agent 进程的环境变量子集（未来 sandbox 场景）
  */
 
-import path from 'node:path';
+import type { AgentRuntimeLayout } from './context/AgentRuntimeLayout';
 
 // ==================== 类型定义 ====================
 
@@ -122,23 +122,15 @@ export interface AgentEnv {
 // ==================== 构建函数 ====================
 
 /**
- * 从全局 Env 构建 Agent 安全环境子集
+ * 从 AgentRuntimeLayout 构建 Agent 安全环境子集
  *
- * @param sessionId 会话 ID
- * @param projectDir Agent 项目目录（agents/{agentId}/projectDir）
- * @param agentId Agent 定义 ID
- * @param agentName Agent 名称
- * @param agentHome Agent Home 路径（用于加载 Agent 级 Skill）
- * @param sessionDir 当前会话运行产物目录
+ * @param layout Agent 运行时布局（包含 agentId、sessionId、agentHome、projectDir、sessionDir 等）
+ * @param agentName Agent 名称（可选，未指定时默认为 agentId）
  */
-export async function buildAgentEnv(
-  sessionId: string,
-  projectDir: string,
-  agentId: string,
-  agentName: string,
-  agentHome: string,
-  sessionDir: string
-): Promise<AgentEnv> {
+export async function buildAgentEnv(layout: AgentRuntimeLayout, agentName?: string): Promise<AgentEnv> {
+  const { agentId, sessionId, agentHome, projectDir, sessionDir, memoryDir, sessionsDir, skillsDir } = layout;
+  const resolvedAgentName = agentName ?? agentId;
+
   // 延迟导入 Env，避免测试环境循环依赖
   const { Env } = await import('@main/common/env');
   const { SkillManager } = await import('./skills');
@@ -171,11 +163,6 @@ export async function buildAgentEnv(
     // ToolRegistry 未初始化时忽略
   }
 
-  // 派生目录
-  const memoryDir = path.join(agentHome, 'memory');
-  const sessionsDir = path.join(agentHome, 'sessions');
-  const skillsDir = path.join(agentHome, 'skills');
-
   // 安全与模型上下文
   let sandboxMode: 'off' | 'path-only' | 'docker' = 'path-only';
   let execApproval: 'auto' | 'always' | 'never' = 'auto';
@@ -200,7 +187,7 @@ export async function buildAgentEnv(
   return {
     // Agent 身份
     agentId,
-    agentName,
+    agentName: resolvedAgentName,
     agentHome,
 
     // 会话
