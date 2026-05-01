@@ -9,19 +9,11 @@ export interface AgentRuntimeLayout {
   /** 会话 ID */
   sessionId: string;
   /** Agent Home 目录（{agentsDir}/{agentId}） */
-  agentHomePath: string;
+  agentHome: string;
   /** Agent 项目目录（{agentHome}/project），工具默认 cwd */
-  agentProjectPath: string;
-  /** @alias agentProjectPath */
-  projectPath: string;
-  /** 会话根目录（{agentHome}/sessions） */
-  sessionRoot: string;
-  /** 当前会话产物目录（{sessionRoot}/{sessionId}） */
+  projectDir: string;
+  /** 当前会话产物目录（{agentHome}/sessions/{sessionId}） */
   sessionDir: string;
-  /** 会话文件子目录（{sessionDir}/sessions），SDK 内部使用 */
-  sessionFilesDir: string;
-  /** Agent 专属技能目录（{agentHome}/skills） */
-  agentSkillsPath: string;
 }
 
 export interface ResolveAgentRuntimeLayoutOptions {
@@ -40,45 +32,34 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
     throw new Error('[AgentRuntimeLayout] sessionId is required');
   }
 
-  const agentHomePath = path.join(Env.paths.agentsDir, agentId);
-  const agentProjectPath = path.join(agentHomePath, 'project');
-  const sessionRoot = path.join(agentHomePath, 'sessions');
-  const sessionDir = path.join(sessionRoot, sessionId);
+  const agentHome = path.join(Env.paths.agentsDir, agentId);
+  const projectDir = path.join(agentHome, 'project');
+  const sessionDir = path.join(agentHome, 'sessions', sessionId);
 
   return {
     agentId,
     sessionId,
-    agentHomePath,
-    agentProjectPath,
-    projectPath: agentProjectPath,
-    sessionRoot,
-    sessionDir,
-    sessionFilesDir: path.join(sessionDir, 'sessions'),
-    agentSkillsPath: path.join(agentHomePath, 'skills')
+    agentHome,
+    projectDir,
+    sessionDir
   };
 }
 
 export async function ensureAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptions): Promise<AgentRuntimeLayout> {
   const layout = createAgentRuntimeLayout(options);
   await Promise.all([
-    fsp.mkdir(layout.agentHomePath, { recursive: true }),
-    fsp.mkdir(layout.agentProjectPath, { recursive: true }),
-    fsp.mkdir(layout.sessionRoot, { recursive: true }),
-    fsp.mkdir(layout.sessionDir, { recursive: true }),
-    fsp.mkdir(layout.sessionFilesDir, { recursive: true }),
-    fsp.mkdir(layout.agentSkillsPath, { recursive: true })
+    fsp.mkdir(layout.agentHome, { recursive: true }),
+    fsp.mkdir(layout.projectDir, { recursive: true }),
+    fsp.mkdir(layout.sessionDir, { recursive: true })
   ]);
   return layout;
 }
 
 export function ensureAgentRuntimeLayoutSync(options: ResolveAgentRuntimeLayoutOptions): AgentRuntimeLayout {
   const layout = createAgentRuntimeLayout(options);
-  fs.mkdirSync(layout.agentHomePath, { recursive: true });
-  fs.mkdirSync(layout.agentProjectPath, { recursive: true });
-  fs.mkdirSync(layout.sessionRoot, { recursive: true });
+  fs.mkdirSync(layout.agentHome, { recursive: true });
+  fs.mkdirSync(layout.projectDir, { recursive: true });
   fs.mkdirSync(layout.sessionDir, { recursive: true });
-  fs.mkdirSync(layout.sessionFilesDir, { recursive: true });
-  fs.mkdirSync(layout.agentSkillsPath, { recursive: true });
   return layout;
 }
 

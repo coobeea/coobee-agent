@@ -89,8 +89,8 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
 
     // 1. 解析 Agent 运行时布局（Agent Home / projectDir / sessionDir 由 AgentRuntimeLayout 统一决定）
     const layout = await ensureAgentRuntimeLayout({ agentId, sessionId });
-    const agentHome = layout.agentHomePath;
-    const projectDir = layout.agentProjectPath;
+    const agentHome = layout.agentHome;
+    const projectDir = layout.projectDir;
     const sessionDir = layout.sessionDir;
 
     if (!projectDir || !sessionDir || !agentHome) {

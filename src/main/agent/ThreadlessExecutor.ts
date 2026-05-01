@@ -97,7 +97,7 @@ export class ThreadlessExecutor {
     const sessionId = params.sessionId ?? `threadless-agent-${params.agentId}-${generateSnowflakeId()}`;
     const { ensureAgentRuntimeLayout } = await import('./context/AgentRuntimeLayout');
     const layout = await ensureAgentRuntimeLayout({ agentId: agentDef.id, sessionId });
-    const workspaceRoot = params.workspaceRoot ?? layout.agentProjectPath;
+    const workspaceRoot = params.workspaceRoot ?? layout.projectDir;
 
     return {
       sessionId,
