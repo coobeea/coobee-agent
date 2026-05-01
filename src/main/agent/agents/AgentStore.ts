@@ -79,7 +79,7 @@ export class AgentStore {
 
   constructor(userDir: string, agentHomesDir?: string) {
     this.userDir = userDir;
-    const effectiveHomesDir = agentHomesDir || Env.paths.userAgentsDir;
+    const effectiveHomesDir = agentHomesDir || Env.paths.agentsDir;
     this.homeManager = new AgentHomeManager(effectiveHomesDir);
   }
 
@@ -87,7 +87,7 @@ export class AgentStore {
 
   static getInstance(): AgentStore {
     if (!AgentStore.instance) {
-      AgentStore.instance = new AgentStore(Env.paths.userAgentsDir);
+      AgentStore.instance = new AgentStore(Env.paths.agentsDir);
     }
     return AgentStore.instance;
   }

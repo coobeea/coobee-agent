@@ -79,7 +79,7 @@ vi.mock('@main/common/env', () => ({
   Env: {
     paths: {
       userHome: '/mock/home',
-      userAgentsDir: '/mock/home/agents',
+      agentsDir: '/mock/home/agents',
       threadsDir: '/mock/home/threads',
       home: '/mock/system/home',
       temp: '/tmp'
@@ -163,10 +163,7 @@ describe('AgentContextResolver', () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: 'user',
-        version: 1,
-        metadata: {
-          dataDirectory: '/custom/data/dir'
-        }
+        version: 1
       };
       store._setMockAgent(mockAgent);
 
@@ -180,7 +177,6 @@ describe('AgentContextResolver', () => {
       expect(context.agentId).toBe('agent-123');
       expect(context.agentName).toBe('Test Agent');
       expect(context.agentHomePath).toBe('/mock/home/agents/agent-123');
-      expect(context.dataDirectory).toBe('/mock/home/agents/agent-123/project');
       expect(context.projectPath).toBe('/mock/home/agents/agent-123/project');
       expect(context.agentProjectPath).toBe('/mock/home/agents/agent-123/project');
       expect(context.effectiveModel).toBe('openai/gpt-4');
@@ -190,7 +186,7 @@ describe('AgentContextResolver', () => {
       expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-123/project', { recursive: true });
     });
 
-    it('应该使用默认 dataDirectory', async () => {
+    it('应该正确解析 Agent 上下文（无自定义 dataDirectory）', async () => {
       const store = await getMockAgentStore();
       const mockAgent: AgentDefinition = {
         id: 'agent-789',
@@ -213,7 +209,6 @@ describe('AgentContextResolver', () => {
 
       const context = await resolver.resolve(params);
 
-      expect(context.dataDirectory).toBe('/mock/home/agents/agent-789/project');
       expect(context.sessionDir).toBe('/mock/home/agents/agent-789/sessions/session-111');
       expect(fsMocks.mkdir).toHaveBeenCalledWith('/mock/home/agents/agent-789/project', { recursive: true });
     });

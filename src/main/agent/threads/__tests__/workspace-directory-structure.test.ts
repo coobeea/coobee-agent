@@ -18,13 +18,12 @@ vi.mock('../../../common/env', () => ({
       logLevel: 'debug'
     },
     getAgentHomeDir: vi.fn(async (agentId: string) => `/tmp/coobee-agent-test-agents/${agentId}`),
-    getAgentWorkspaceDir: vi.fn(async (_agentId: string, threadId: string) => `/tmp/test-workspace/${threadId}`),
     paths: {
       logPath: '/tmp/test.log',
       userHome: '/tmp',
       workspacesDir: '/tmp/test-workspaces',
       threadsDir: '/tmp/test-threads',
-      userAgentsDir: '/tmp/coobee-agent-test-agents',
+      agentsDir: '/tmp/coobee-agent-test-agents',
       builtinAgentsDir: '/tmp/test-builtin-agents'
     }
   }

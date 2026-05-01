@@ -397,7 +397,7 @@ export class ThreadStore {
   private async appendToAgentSessionIndex(agentId: string, entry: { id: string; createdAt: string }): Promise<void> {
     try {
       const { Env } = await import('@main/common/env');
-      const homeDir = path.join(Env.paths.userAgentsDir, agentId);
+      const homeDir = path.join(Env.paths.agentsDir, agentId);
 
       // 确保 agent home 目录存在
       if (!fs.existsSync(homeDir)) {

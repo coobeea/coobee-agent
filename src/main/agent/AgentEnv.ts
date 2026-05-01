@@ -25,16 +25,12 @@ export interface AgentEnv {
   platform: 'darwin' | 'win32' | 'linux';
   /** CPU 架构 */
   arch: string;
-  /** 是否为开发模式 */
-  isDev: boolean;
   /** 应用版本 */
   appVersion: string;
 
   // --- 项目目录 ---
   /** Agent 业务项目目录，也是工具默认 cwd */
   project: string;
-  /** @deprecated Use project. */
-  workspace: string;
   /** 当前会话 ID */
   sessionId: string;
 
@@ -51,8 +47,28 @@ export interface AgentEnv {
   threadsDir: string;
 
   // --- Agent 系统 ---
-  /** 用户 Agent 目录（可读写） */
-  userAgentsDir: string;
+  /**
+   * 用户 Agent 集中存储目录（可读写），所有用户创建/导入的 Agent 均存放在此。
+   *
+   * 每个 Agent 以 agentId 为子目录名形成 Agent Home：`{agentsDir}/{agentId}/`
+   *
+   * 实际路径：
+   *   - 开发环境：`<项目>/.home/agents/`
+   *   - 生产环境：`~/.coobee-ai/agents/`
+   *
+   * 与 builtinAgentsDir（只读）不同，此为可读写目录。
+   *
+   * 典型结构：
+   *   agents/
+   *   ├── agent-crs-reporter/    ← Agent Home
+   *   │   ├── IDENTITY.md
+   *   │   ├── SOUL.md
+   *   │   ├── skills/            ← Agent 专属技能
+   *   │   ├── project/           ← 工具执行的 cwd
+   *   │   └── sessions/          ← 该 Agent 下的会话产物
+   *   └── ...
+   */
+  agentsDir: string;
 
   // --- Skill 系统 ---
   /** Skill 搜索路径（按优先级从低到高） */
@@ -71,8 +87,6 @@ export interface AgentEnv {
   loadedExtensions: string[];
 
   // --- 数据目录 ---
-  /** Agent 专属的数据目录（持久化业务数据） */
-  dataDirectory?: string;
   /** 当前会话运行产物目录 */
   sessionDir?: string;
 
@@ -168,12 +182,10 @@ export async function buildAgentEnv(sessionId: string, project: string, agentHom
     // 系统信息
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     arch: process.arch,
-    isDev: Env.isDev,
     appVersion: Env.app?.version ?? '0.0.0',
 
     // 项目目录
     project,
-    workspace: project,
     sessionId,
 
     // 系统路径
@@ -184,7 +196,7 @@ export async function buildAgentEnv(sessionId: string, project: string, agentHom
     threadsDir: Env.paths.threadsDir,
 
     // Agent 系统
-    userAgentsDir: Env.paths.userAgentsDir,
+    agentsDir: Env.paths.agentsDir,
 
     // Skill 系统
     skillPaths,
@@ -234,23 +246,22 @@ ${env.agentId ? `- id: ${env.agentId}` : ''}
 ${env.agentName ? `- name: ${env.agentName}` : ''}
 - Session: ${env.sessionId}
 - model: ${env.defaultModel} (thinking=${env.thinkingLevel})
-- platform: ${env.platform}/${env.arch} (${env.isDev ? 'dev' : 'prod'})
+- platform: ${env.platform}/${env.arch}
 - security: sandbox=${env.sandboxMode}, exec=${env.execApproval}
 - extensions: ${extensionsList}
 
 Paths:
-${env.dataDirectory ? `- data_directory: ${env.dataDirectory} (persistent business data)` : ''}
 ${env.sessionDir ? `- session_dir: ${env.sessionDir} (current conversation artifacts)` : ''}
 ${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)` : ''}
 - project: ${env.project} (tool cwd and durable business project)
 - config: ${env.configDir}
 - skill_search_paths:${skillPathsList}
-- agents_definitions: ${env.userAgentsDir}
+- agents_definitions: ${env.agentsDir}
 
 File usage:
-${env.dataDirectory ? '- Save durable business data, records, reports, and knowledge documents in data_directory.' : ''}
+- Save durable business data, records, reports, and knowledge documents in the project directory.
 - Use agent_home only for Agent identity, memory, preferences, rules, and configuration.
-- Use project (and data_directory when present) for tool outputs, generated reports, indexes, and intermediate files.
+- Use project for tool outputs, generated reports, indexes, and intermediate files.
 - Do not manually edit system-managed session files: session_dir/history.jsonl, session_dir/events.jsonl, session_dir/context.jsonl, session_dir/sessions/.
 </runtime_environment>`;
 }

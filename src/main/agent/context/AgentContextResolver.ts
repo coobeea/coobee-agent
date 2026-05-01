@@ -3,7 +3,6 @@
  *
  * 统一的 Agent 运行期上下文解析器，负责：
  *   - 解析 Agent Home 路径
- *   - 解析数据目录（dataDirectory）
  *   - 解析会话目录（sessionDir）
  *   - 解析有效模型（effectiveModel）
  *   - 解析 Agent project（工具 cwd）与 session 目录
@@ -42,9 +41,6 @@ export interface AgentContext {
 
   /** Agent Home 路径（agents/{agentId}/，跨会话持久化空间） */
   agentHomePath: string;
-
-  /** Agent 专属的数据目录（持久化业务数据） */
-  dataDirectory: string;
 
   /** Agent 业务项目目录，也是工具默认 cwd */
   projectPath: string;
@@ -170,15 +166,10 @@ export class AgentContextResolver {
     const { AgentHomeManager } = await import('../agents/AgentHomeManager');
 
     // 4.1 Agent Home 路径
-    const homeManager = new AgentHomeManager(Env.paths.userAgentsDir);
+    const homeManager = new AgentHomeManager(Env.paths.agentsDir);
     const agentHomePath = homeManager.initHome(params.agentId);
 
     // 4.2 Agent 运行目录布局
-    if (agent.metadata?.dataDirectory) {
-      log.warn(
-        `[ContextResolver] metadata.dataDirectory is deprecated and ignored for ${params.agentId}: ${agent.metadata.dataDirectory}`
-      );
-    }
     const layout = await ensureAgentRuntimeLayout({
       agentId: params.agentId,
       sessionId: params.sessionId,
@@ -195,7 +186,6 @@ export class AgentContextResolver {
       agentId: params.agentId,
       agentName: agent.name,
       agentHomePath: layout.agentHomePath,
-      dataDirectory: layout.dataDirectory,
       projectPath: layout.agentProjectPath,
       agentProjectPath: layout.agentProjectPath,
       workspacePath: layout.agentProjectPath,
@@ -218,7 +208,6 @@ export class AgentContextResolver {
         {
           agentName: context.agentName,
           agentHomePath: context.agentHomePath,
-          dataDirectory: context.dataDirectory,
           sessionDir: context.sessionDir,
           effectiveModel: context.effectiveModel,
           hasProject: !!context.projectPath

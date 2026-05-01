@@ -11,7 +11,7 @@ vi.mock('@main/common/env', () => {
   return {
     Env: {
       paths: {
-        userAgentsDir: path.join(process.cwd(), '.test-home/agents'),
+        agentsDir: path.join(process.cwd(), '.test-home/agents'),
         builtinAgentsDir: path.join(process.cwd(), 'resources/agents'),
         userHome: path.join(process.cwd(), '.test-home'),
         userData: path.join(process.cwd(), '.test-home/userData'),
@@ -19,7 +19,6 @@ vi.mock('@main/common/env', () => {
         threadsDir: path.join(process.cwd(), '.test-home/threads'),
         workspacesDir: path.join(process.cwd(), '.test-home/workspaces')
       },
-      getAgentWorkspaceDir: async () => path.join(process.cwd(), '.test-home/workspace'),
       getAgentHomeDir: async (id: string) => path.join(process.cwd(), '.test-home/agents', id),
       getSkillSearchPaths: async () => [path.join(process.cwd(), 'resources/skills')]
     }

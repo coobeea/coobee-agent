@@ -108,9 +108,8 @@ class EnvClass {
     builtinExtensionsDir: string;
     userExtensionsDir: string;
     builtinAgentsDir: string;
-    agentsMdPath: string;
     threadsDir: string;
-    userAgentsDir: string;
+    agentsDir: string;
   } {
     // === 基础路径计算 ===
     const _userHome = is.dev
@@ -146,9 +145,8 @@ class EnvClass {
       builtinExtensionsDir: path.join(app.getAppPath(), 'resources', 'extensions'),
       userExtensionsDir: path.join(_userHome, 'extensions'),
       builtinAgentsDir: path.join(app.getAppPath(), 'resources', 'agents'),
-      agentsMdPath: path.join(_userHome, 'agents.md'),
       threadsDir: path.join(_userHome, 'threads'),
-      userAgentsDir: path.join(_userHome, 'agents'),
+      agentsDir: path.join(_userHome, 'agents'),
 
       // === 系统路径（System Paths）===
       /** 系统用户目录 (如: /Users/username) */
@@ -197,12 +195,8 @@ class EnvClass {
     return upgradeDir;
   }
 
-  async getAgentWorkspaceDir(_sessionId: string): Promise<string> {
-    throw new Error('[Env] getAgentWorkspaceDir is deprecated. Use AgentRuntimeLayout for Agent projects.');
-  }
-
   async getAgentHomeDir(agentId: string): Promise<string> {
-    const dir = path.join(this.paths.userAgentsDir, agentId);
+    const dir = path.join(this.paths.agentsDir, agentId);
     if (!fs.existsSync(dir)) {
       await mkdirp(dir);
     }

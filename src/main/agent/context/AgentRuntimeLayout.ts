@@ -14,7 +14,6 @@ export interface AgentRuntimeLayout {
   projectPath: string;
   /** @deprecated Use agentProjectPath/projectPath. */
   agentWorkspacePath: string;
-  dataDirectory: string;
   sessionRoot: string;
   sessionDir: string;
   sessionFilesDir: string;
@@ -25,7 +24,7 @@ export interface ResolveAgentRuntimeLayoutOptions {
   agentId: string;
   sessionId: string;
   agentHomePath?: string;
-  userAgentsDir?: string;
+  agentsDir?: string;
 }
 
 export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptions): AgentRuntimeLayout {
@@ -37,7 +36,7 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
     throw new Error('[AgentRuntimeLayout] sessionId is required');
   }
 
-  const agentHomePath = options.agentHomePath || path.join(options.userAgentsDir || Env.paths.userAgentsDir, agentId);
+  const agentHomePath = options.agentHomePath || path.join(options.agentsDir || Env.paths.agentsDir, agentId);
   const agentProjectPath = path.join(agentHomePath, 'project');
   const sessionRoot = path.join(agentHomePath, 'sessions');
   const sessionDir = path.join(sessionRoot, sessionId);
@@ -49,7 +48,6 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
     agentProjectPath,
     projectPath: agentProjectPath,
     agentWorkspacePath: agentProjectPath,
-    dataDirectory: agentProjectPath,
     sessionRoot,
     sessionDir,
     sessionFilesDir: path.join(sessionDir, 'sessions'),
@@ -94,7 +92,7 @@ export function resolveThreadRuntimeLayoutSync(sessionId: string, fallbackAgentI
   const agentHomePath =
     typeof thread?.agentHomePath === 'string' && thread.agentHomePath
       ? thread.agentHomePath
-      : path.join(Env.paths.userAgentsDir, agentId);
+      : path.join(Env.paths.agentsDir, agentId);
 
   return ensureAgentRuntimeLayoutSync({
     agentId,

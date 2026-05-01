@@ -370,7 +370,7 @@ export function registerFileRoutes(router: Router): void {
       return;
     }
 
-    const agentHomesDir = Env.paths.userAgentsDir;
+    const agentHomesDir = Env.paths.agentsDir;
 
     // 验证路径安全
     if (!isPathSafe(targetDir, agentHomesDir)) {
@@ -434,7 +434,7 @@ export function registerFileRoutes(router: Router): void {
       return;
     }
 
-    const agentHomesDir = Env.paths.userAgentsDir;
+    const agentHomesDir = Env.paths.agentsDir;
     const appHome = Env.paths.userHome;
     const systemHome = Env.paths.home;
 
@@ -524,7 +524,7 @@ export function registerFileRoutes(router: Router): void {
       return;
     }
 
-    const agentHomesDir = Env.paths.userAgentsDir;
+    const agentHomesDir = Env.paths.agentsDir;
 
     // 验证路径安全
     if (!isPathSafe(targetPath, agentHomesDir)) {

@@ -23,7 +23,7 @@ vi.mock('@main/common/env', () => ({
     return {
       paths: {
         userHome: tmpDir,
-        userAgentsDir: userDir,
+        agentsDir: userDir,
         builtinAgentsDir
       }
     };

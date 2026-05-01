@@ -40,7 +40,7 @@ describe('Agent Home Sessions Index', () => {
     const store = new ThreadStore(threadsDir);
     await store.init();
 
-    // 模拟 Env.paths.userAgentsDir
+    // 模拟 Env.paths.agentsDir
     const originalEnvGetter = Object.getOwnPropertyDescriptor((await import('@main/common/env')).Env, 'paths');
 
     Object.defineProperty((await import('@main/common/env')).Env, 'paths', {
@@ -48,7 +48,7 @@ describe('Agent Home Sessions Index', () => {
         threadsDir,
         workspacesDir,
         userHome: tempDir,
-        userAgentsDir: agentHomesDir,
+        agentsDir: agentHomesDir,
         builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
@@ -92,7 +92,7 @@ describe('Agent Home Sessions Index', () => {
         threadsDir,
         workspacesDir,
         userHome: tempDir,
-        userAgentsDir: agentHomesDir,
+        agentsDir: agentHomesDir,
         builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true
@@ -133,7 +133,7 @@ describe('Agent Home Sessions Index', () => {
         threadsDir,
         workspacesDir,
         userHome: tempDir,
-        userAgentsDir: agentHomesDir,
+        agentsDir: agentHomesDir,
         builtinAgentsDir: path.join(tempDir, 'builtin-agents')
       }),
       configurable: true

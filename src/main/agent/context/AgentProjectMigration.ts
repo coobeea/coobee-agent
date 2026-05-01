@@ -17,23 +17,23 @@ const MIGRATION_FLAG_NAME = '.migration-agent-project-v1.json';
 
 export async function migrateAllAgentWorkspacesToProjects(options?: {
   userHome: string;
-  userAgentsDir: string;
+  agentsDir: string;
 }): Promise<AgentProjectMigrationResult> {
   const { Env } = await import('@main/common/env');
   const userHome = options?.userHome ?? Env.paths.userHome;
-  const userAgentsDir = options?.userAgentsDir ?? Env.paths.userAgentsDir;
+  const agentsDir = options?.agentsDir ?? Env.paths.agentsDir;
   const flagPath = path.join(userHome, MIGRATION_FLAG_NAME);
 
   if (fs.existsSync(flagPath)) {
     return { scanned: 0, migrated: 0, skippedByFlag: true, flagPath };
   }
 
-  if (!fs.existsSync(userAgentsDir)) {
+  if (!fs.existsSync(agentsDir)) {
     await writeMigrationFlag(flagPath, { scanned: 0, migrated: 0 });
     return { scanned: 0, migrated: 0, skippedByFlag: false, flagPath };
   }
 
-  const entries = await fsp.readdir(userAgentsDir, { withFileTypes: true });
+  const entries = await fsp.readdir(agentsDir, { withFileTypes: true });
   let scanned = 0;
   let migrated = 0;
 
@@ -41,7 +41,7 @@ export async function migrateAllAgentWorkspacesToProjects(options?: {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 
     scanned += 1;
-    const agentHomePath = path.join(userAgentsDir, entry.name);
+    const agentHomePath = path.join(agentsDir, entry.name);
     const legacyDir = path.join(agentHomePath, 'workspace');
     const projectDir = path.join(agentHomePath, 'project');
     const hadLegacyWorkspace = fs.existsSync(legacyDir);
