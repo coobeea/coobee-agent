@@ -10,7 +10,7 @@ import { createLogger } from '@main/common/logger';
 import fs from 'fs-extra';
 import path from 'path';
 import type { UpdateThreadParams } from '@main/agent/threads/types';
-import { ensureAgentRuntimeLayout, migrateLegacyThreadWorkspace } from '@main/agent/context/AgentRuntimeLayout';
+import { ensureAgentRuntimeLayout } from '@main/agent/context/AgentRuntimeLayout';
 import type { ApiResponse, DeleteThreadRespVO, UpdateThreadReqVO, UpdateThreadRespVO } from '@shared/api/thread-types';
 import type { ThreadRuntimeType, ThreadStatus } from '@shared/events/thread';
 
@@ -186,7 +186,6 @@ export function registerThreadRoutes(router: Router): void {
         agentId: thread.agentId,
         sessionId: thread.sessionId
       });
-      await migrateLegacyThreadWorkspace(thread.sessionId, layout.sessionDir);
       const messages = await extractMessagesFromSession(layout.sessionDir);
 
       ctx.body = {

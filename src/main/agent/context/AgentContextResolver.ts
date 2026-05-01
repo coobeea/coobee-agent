@@ -17,11 +17,7 @@
 
 import { createLogger } from '@main/common/logger';
 import { normalizeModelSpec } from '../provider/ModelSpec';
-import {
-  ensureAgentRuntimeLayout,
-  migrateLegacyAgentDataDirectory,
-  migrateLegacyThreadWorkspace
-} from './AgentRuntimeLayout';
+import { ensureAgentRuntimeLayout } from './AgentRuntimeLayout';
 
 const log = createLogger('context-resolver');
 
@@ -161,17 +157,11 @@ export class AgentContextResolver {
       throw new Error(`[ContextResolver] Agent not found: ${params.agentId}`);
     }
 
-    // 4. 解析路径
-    const { Env } = await import('@main/common/env');
-
     // 4.1 Agent 运行目录布局
     const layout = await ensureAgentRuntimeLayout({
       agentId: params.agentId,
       sessionId: params.sessionId
     });
-    await migrateLegacyAgentDataDirectory(params.agentId, layout.agentProjectPath);
-    await migrateLegacyThreadWorkspace(params.sessionId, layout.sessionDir);
-
     // 4.4 有效模型
     const effectiveModel = normalizeModelSpec(params.modelOverride) || normalizeModelSpec(agent.model);
 
