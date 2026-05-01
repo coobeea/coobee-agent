@@ -29,7 +29,7 @@ import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
 import type { AgentMode, SkillDefinition, ThinkingLevel, ToolDefinition } from './runtime/types';
-import { AgentContextResolver, type AgentContext } from './context/AgentContextResolver';
+import { ensureAgentRuntimeLayout } from './context/AgentRuntimeLayout';
 import { PromptAssemblyService } from './prompt/PromptAssemblyService';
 
 const log = createLogger('ai');
@@ -77,16 +77,11 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     }
 
     // 1. 解析 Agent 运行时布局（Agent Home / projectDir / sessionDir 由 AgentRuntimeLayout 统一决定）
-    const homeManager = new AgentHomeManager(Env.paths.agentsDir);
-    const resolver = AgentContextResolver.getInstance();
-    const agentContext: AgentContext = await resolver.resolve({
-      agentId,
-      sessionId
-    });
-    const agentHome = agentContext.agentHomePath;
-    const projectDir = agentContext.agentProjectPath;
-    const sessionDir = agentContext.sessionDir;
-    const contextDir = agentContext.sessionDir;
+    const layout = await ensureAgentRuntimeLayout({ agentId, sessionId });
+    const agentHome = layout.agentHomePath;
+    const projectDir = layout.agentProjectPath;
+    const sessionDir = layout.sessionDir;
+    const contextDir = layout.sessionDir;
 
     if (!projectDir || !sessionDir || !contextDir || !agentHome) {
       throw new Error(
@@ -146,6 +141,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       const skillDiscoveryHint = buildSkillDiscoveryHint(skillManager, agentDefinedSkills, agentHome);
       // 收集 Extension 注入的指令（运行时注入，对所有 Agent 生效）
       const extensionInstructions = collectExtensionInstructions();
+      const homeManager = new AgentHomeManager(Env.paths.agentsDir);
       const promptAssembly = new PromptAssemblyService();
       const promptBlocks = promptAssembly.assemble({
         runtimePathsBlock,
