@@ -184,8 +184,7 @@ export function registerThreadRoutes(router: Router): void {
       // 从 Agent Home 内的 session 目录读取完整对话历史
       const layout = await ensureAgentRuntimeLayout({
         agentId: thread.agentId,
-        sessionId: thread.sessionId,
-        agentHomePath: thread.agentHomePath
+        sessionId: thread.sessionId
       });
       await migrateLegacyThreadWorkspace(thread.sessionId, layout.sessionDir);
       const messages = await extractMessagesFromSession(layout.sessionDir);

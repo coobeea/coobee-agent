@@ -7,24 +7,31 @@ import { Env } from '@main/common/env';
 const log = createLogger('agent-runtime-layout');
 
 export interface AgentRuntimeLayout {
+  /** Agent 定义 ID */
   agentId: string;
+  /** 会话 ID */
   sessionId: string;
+  /** Agent Home 目录（{agentsDir}/{agentId}） */
   agentHomePath: string;
+  /** Agent 项目目录（{agentHome}/project），工具默认 cwd */
   agentProjectPath: string;
+  /** @alias agentProjectPath */
   projectPath: string;
-  /** @deprecated Use agentProjectPath/projectPath. */
-  agentWorkspacePath: string;
+  /** 会话根目录（{agentHome}/sessions） */
   sessionRoot: string;
+  /** 当前会话产物目录（{sessionRoot}/{sessionId}） */
   sessionDir: string;
+  /** 会话文件子目录（{sessionDir}/sessions），SDK 内部使用 */
   sessionFilesDir: string;
+  /** Agent 专属技能目录（{agentHome}/skills） */
   agentSkillsPath: string;
 }
 
 export interface ResolveAgentRuntimeLayoutOptions {
+  /** Agent 定义 ID */
   agentId: string;
+  /** 会话 ID */
   sessionId: string;
-  agentHomePath?: string;
-  agentsDir?: string;
 }
 
 export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptions): AgentRuntimeLayout {
@@ -36,7 +43,7 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
     throw new Error('[AgentRuntimeLayout] sessionId is required');
   }
 
-  const agentHomePath = options.agentHomePath || path.join(options.agentsDir || Env.paths.agentsDir, agentId);
+  const agentHomePath = path.join(Env.paths.agentsDir, agentId);
   const agentProjectPath = path.join(agentHomePath, 'project');
   const sessionRoot = path.join(agentHomePath, 'sessions');
   const sessionDir = path.join(sessionRoot, sessionId);
@@ -47,7 +54,6 @@ export function createAgentRuntimeLayout(options: ResolveAgentRuntimeLayoutOptio
     agentHomePath,
     agentProjectPath,
     projectPath: agentProjectPath,
-    agentWorkspacePath: agentProjectPath,
     sessionRoot,
     sessionDir,
     sessionFilesDir: path.join(sessionDir, 'sessions'),
@@ -89,15 +95,9 @@ export function resolveThreadRuntimeLayoutSync(sessionId: string, fallbackAgentI
     throw new Error(`[AgentRuntimeLayout] Cannot resolve agentId for session ${sessionId}`);
   }
 
-  const agentHomePath =
-    typeof thread?.agentHomePath === 'string' && thread.agentHomePath
-      ? thread.agentHomePath
-      : path.join(Env.paths.agentsDir, agentId);
-
   return ensureAgentRuntimeLayoutSync({
     agentId,
-    sessionId,
-    agentHomePath
+    sessionId
   });
 }
 

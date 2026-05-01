@@ -134,8 +134,7 @@ export class ThreadStore {
   private async createRuntimeDirectories(thread: ThreadDefinition): Promise<void> {
     await ensureAgentRuntimeLayout({
       agentId: thread.agentId,
-      sessionId: thread.sessionId,
-      agentHomePath: thread.agentHomePath
+      sessionId: thread.sessionId
     });
     log.debug(`[ThreadStore] Created runtime directories for thread ${thread.id}`);
   }
@@ -446,8 +445,7 @@ export type ThreadMessageEvent = ThreadMessageEventPayload;
 function toIndexEntry(def: ThreadDefinition): ThreadIndexEntry {
   const layout = createAgentRuntimeLayout({
     agentId: def.agentId,
-    sessionId: def.sessionId,
-    agentHomePath: def.agentHomePath
+    sessionId: def.sessionId
   });
 
   return {

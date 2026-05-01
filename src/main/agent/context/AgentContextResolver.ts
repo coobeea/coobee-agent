@@ -163,17 +163,11 @@ export class AgentContextResolver {
 
     // 4. 解析路径
     const { Env } = await import('@main/common/env');
-    const { AgentHomeManager } = await import('../agents/AgentHomeManager');
 
-    // 4.1 Agent Home 路径
-    const homeManager = new AgentHomeManager(Env.paths.agentsDir);
-    const agentHomePath = homeManager.initHome(params.agentId);
-
-    // 4.2 Agent 运行目录布局
+    // 4.1 Agent 运行目录布局
     const layout = await ensureAgentRuntimeLayout({
       agentId: params.agentId,
-      sessionId: params.sessionId,
-      agentHomePath
+      sessionId: params.sessionId
     });
     await migrateLegacyAgentDataDirectory(params.agentId, layout.agentProjectPath);
     await migrateLegacyThreadWorkspace(params.sessionId, layout.sessionDir);
