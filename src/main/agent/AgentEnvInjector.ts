@@ -214,12 +214,15 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
         throw new Error('[EnvInjector] projectDir is undefined, cannot build tool execution context');
       }
       const envVars = buildSkillEnvVars(agentEnv);
-      const toolCtx = await buildToolExecutionContext(effectiveCwd, sessionId, envVars, {
+      const toolCtx = await buildToolExecutionContext(
+        effectiveCwd,
+        sessionId,
+        envVars,
         agentId,
+        sessionDir,
         agentName,
-        agentMode: mode,
-        sessionDir
-      });
+        mode
+      );
       prepared.sandboxContext = toolCtx;
     }
 
@@ -257,17 +260,6 @@ function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
 
 // ==================== 工具执行上下文构建 ====================
 
-/** Agent 上下文信息（由调用方传入） */
-interface AgentContextInfo {
-  /** Agent ID 必填，路径重定义后会话产物一律落在 Agent Home 下，缺失时直接报错。 */
-  agentId: string;
-  /** 会话目录必填，EventWriter / HistoryWriter / context.jsonl 都以此为根。 */
-  sessionDir: string;
-  agentName?: string;
-  agentMode?: import('./runtime/types').AgentMode;
-  parentSessionId?: string;
-}
-
 /**
  * 构建工具执行上下文（ToolExecutionContext）
  *
@@ -283,11 +275,14 @@ async function buildToolExecutionContext(
   workspace: string,
   sessionId: string,
   envVars: Record<string, string>,
-  agentInfo: AgentContextInfo
+  agentId: string,
+  sessionDir: string,
+  agentName?: string,
+  agentMode?: import('./runtime/types').AgentMode
 ): Promise<ToolExecutionContext> {
-  if (!agentInfo.agentId || !agentInfo.sessionDir) {
+  if (!agentId || !sessionDir) {
     throw new Error(
-      `[EnvInjector] agentInfo.agentId and agentInfo.sessionDir are required to build tool execution context: sessionId=${sessionId}`
+      `[EnvInjector] agentId and sessionDir are required to build tool execution context: sessionId=${sessionId}`
     );
   }
   let sandboxMode: SandboxMode = 'path-only';
@@ -366,10 +361,10 @@ async function buildToolExecutionContext(
     tasksDir: path.join(workspace, 'tasks'),
 
     // 系统空间（严格走 AgentRuntimeLayout，禁止回退到 workspace）
-    sessionDir: agentInfo.sessionDir,
-    sessionsDir: path.join(agentInfo.sessionDir, 'sessions'),
-    contextsDir: agentInfo.sessionDir,
-    eventsDir: agentInfo.sessionDir,
+    sessionDir: sessionDir,
+    sessionsDir: path.join(sessionDir, 'sessions'),
+    contextsDir: sessionDir,
+    eventsDir: sessionDir,
 
     // 系统路径
     userHome,
@@ -377,12 +372,12 @@ async function buildToolExecutionContext(
     tempDir,
 
     // Agent 信息（必填）
-    agentName: agentInfo.agentName || 'agent',
-    agentMode: agentInfo.agentMode || 'agent',
+    agentName: agentName || 'agent',
+    agentMode: agentMode || 'agent',
 
     // Agent 信息
-    agentId: agentInfo.agentId,
-    parentSessionId: agentInfo.parentSessionId
+    agentId: agentId,
+    parentSessionId: undefined
   };
 
   return toolCtx;
