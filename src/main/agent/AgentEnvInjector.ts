@@ -52,7 +52,7 @@ export interface PrepareAgentEnvOptions {
 }
 
 export interface PreparedAgentEnv {
-  project: string;
+  projectDir: string;
   sessionDir: string;
   workspaceRoot: string;
   contextDir: string;
@@ -76,7 +76,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       throw new Error(`[EnvInjector] agentId is required: sessionId=${sessionId}`);
     }
 
-    // 1. 解析 Agent 运行时布局（Agent Home / project / sessionDir 由 AgentRuntimeLayout 统一决定）
+    // 1. 解析 Agent 运行时布局（Agent Home / projectDir / sessionDir 由 AgentRuntimeLayout 统一决定）
     const homeManager = new AgentHomeManager(Env.paths.agentsDir);
     const resolver = AgentContextResolver.getInstance();
     const agentContext: AgentContext = await resolver.resolve({
@@ -84,30 +84,22 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       sessionId
     });
     const agentHome = agentContext.agentHomePath;
-    const project = agentContext.agentProjectPath;
+    const projectDir = agentContext.agentProjectPath;
     const sessionDir = agentContext.sessionDir;
     const contextDir = agentContext.sessionDir;
 
-    if (!project || !sessionDir || !contextDir || !agentHome) {
+    if (!projectDir || !sessionDir || !contextDir || !agentHome) {
       throw new Error(
         `[EnvInjector] Failed to resolve agent runtime layout: agentId=${agentId}, sessionId=${sessionId}`
       );
     }
 
-    // 2. 构建 AgentEnv（传入 agentHome 用于加载 Agent 级 Skill）
-    const agentEnv = await buildAgentEnv(sessionId, project, agentHome);
+    // 2. 构建 AgentEnv（一次性传入所有已解析的身份与会话信息）
+    const resolvedAgentName = agentName ?? agentId;
+    const agentEnv = await buildAgentEnv(sessionId, projectDir, agentId, resolvedAgentName, agentHome, sessionDir);
     if (options.thinkingLevel) {
       agentEnv.thinkingLevel = options.thinkingLevel;
     }
-
-    // 3. 设置 AgentEnv 的 agentId、agentName 和 agentHome
-    agentEnv.agentId = agentId;
-    agentEnv.agentHome = agentHome;
-    if (agentName) {
-      agentEnv.agentName = agentName;
-    }
-
-    agentEnv.sessionDir = agentContext.sessionDir;
 
     // 读取 Agent 定义以获取 skills 配置
     let agentDefinedSkills: string[] | undefined;
@@ -124,9 +116,9 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
     }
 
     const prepared: PreparedAgentEnv = {
-      project,
+      projectDir,
       sessionDir,
-      workspaceRoot: project,
+      workspaceRoot: projectDir,
       contextDir,
       appendInstructions: [],
       skills: []
@@ -160,7 +152,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
         agentHome,
         agentId,
         agentHomeManager: homeManager,
-        project,
+        project: projectDir,
         skillDiscoveryHint,
         extensionInstructions
       });
@@ -214,11 +206,11 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
 
       // 8. 构建工具执行上下文（由 Runtime 的 convertTools 注入到每个工具）
       //    包含沙箱信息 + Agent/Session 上下文
-      //    注意：当前 tool cwd 固定为 Agent project
+      //    注意：当前 tool cwd 固定为 Agent projectDir
       //    如果未来需要支持"一个 Agent 操作多个项目目录"，应在 Builder 中增加 projectDir() 方法
-      const effectiveCwd = project;
+      const effectiveCwd = projectDir;
       if (!effectiveCwd) {
-        throw new Error('[EnvInjector] project is undefined, cannot build tool execution context');
+        throw new Error('[EnvInjector] projectDir is undefined, cannot build tool execution context');
       }
       const envVars = buildSkillEnvVars(agentEnv);
       const toolCtx = await buildToolExecutionContext(effectiveCwd, sessionId, envVars, {
@@ -230,7 +222,7 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       prepared.sandboxContext = toolCtx;
     }
 
-    log.info(`[EnvInjector] Prepared: sessionId=${sessionId}, mode=${mode}, project=${project}`);
+    log.info(`[EnvInjector] Prepared: sessionId=${sessionId}, mode=${mode}, projectDir=${projectDir}`);
     return prepared;
   } catch (error) {
     log.error(`[EnvInjector] Failed to prepare runtime env: ${formatUnknownError(error)}`);
@@ -253,14 +245,12 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
 function buildSkillEnvVars(env: AgentEnv): Record<string, string> {
   const vars: Record<string, string> = {
     COOBEE_CONFIG_DIR: env.configDir,
-    COOBEE_PROJECT: env.project,
-    COOBEE_WORKSPACE: env.project,
+    COOBEE_PROJECT: env.projectDir,
+    COOBEE_WORKSPACE: env.projectDir,
     COOBEE_SESSION_ID: env.sessionId,
+    COOBEE_SESSION_DIR: env.sessionDir,
     COOBEE_USER_HOME: env.userHome
   };
-  if (env.sessionDir) {
-    vars.COOBEE_SESSION_DIR = env.sessionDir;
-  }
   return vars;
 }
 

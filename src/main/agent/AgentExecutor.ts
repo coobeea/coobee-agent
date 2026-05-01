@@ -410,7 +410,7 @@ class AgentExecutor {
           thinkingLevel: request.enableThinking === false ? 'off' : undefined,
           hasRequestTools: false
         });
-        workspaceDir = preparedEnv.project;
+        workspaceDir = preparedEnv.projectDir;
 
         // 写入用户消息到 history.jsonl
         streamConsumersManager.writeUserMessage(sessionId, message, undefined, agentId);

@@ -20,6 +20,20 @@
  *   - 能力清单（可用工具、已加载扩展）
  */
 export interface AgentEnv {
+  // --- Agent 身份 ---
+  /** Agent 定义 ID */
+  agentId: string;
+  /** Agent 名称（未指定时默认为 agentId） */
+  agentName: string;
+  /** Agent Home 目录（{agentsDir}/{agentId}/，跨会话持久化空间） */
+  agentHome: string;
+
+  // --- 会话 ---
+  /** 当前会话 ID */
+  sessionId: string;
+  /** 当前会话运行产物目录 */
+  sessionDir: string;
+
   // --- 系统信息 ---
   /** 操作系统 */
   platform: 'darwin' | 'win32' | 'linux';
@@ -28,25 +42,19 @@ export interface AgentEnv {
   /** 应用版本 */
   appVersion: string;
 
-  // --- 项目目录 ---
+  // --- 目录与路径 ---
   /** Agent 业务项目目录，也是工具默认 cwd */
-  project: string;
-  /** 当前会话 ID */
-  sessionId: string;
-
-  // --- 系统路径 ---
+  projectDir: string;
   /** 用户主目录（应用级，如 ~/.coobee-ai） */
   userHome: string;
   /** 系统用户主目录（如 /Users/xxx） */
   systemHome: string;
   /** 系统临时目录 */
-  temp: string;
+  tempDir: string;
   /** 配置目录（存放 coobee.json5、secrets.json5、skills.json5） */
   configDir: string;
   /** 会话线程目录（{userHome}/threads/，Snowflake ID 有序） */
   threadsDir: string;
-
-  // --- Agent 系统 ---
   /**
    * 用户 Agent 集中存储目录（可读写），所有用户创建/导入的 Agent 均存放在此。
    *
@@ -86,18 +94,6 @@ export interface AgentEnv {
   /** 已加载的 Extension ID 列表 */
   loadedExtensions: string[];
 
-  // --- 数据目录 ---
-  /** 当前会话运行产物目录 */
-  sessionDir?: string;
-
-  // --- Agent Home ---
-  /** Agent 定义 ID（关联了 AgentDefinition 时存在） */
-  agentId?: string;
-  /** Agent 名称 */
-  agentName?: string;
-  /** Agent Home 目录（agents/{agentId}/，跨会话持久化空间） */
-  agentHome?: string;
-
   // --- 能力清单 ---
   /** 可用工具名称列表 */
   availableTools: string[];
@@ -121,17 +117,27 @@ export interface AgentEnv {
  * 从全局 Env 构建 Agent 安全环境子集
  *
  * @param sessionId 会话 ID
- * @param project Agent 项目目录（agents/{agentId}/project）
- * @param agentHome Agent Home 路径（可选，用于加载 Agent 级 Skill）
+ * @param projectDir Agent 项目目录（agents/{agentId}/projectDir）
+ * @param agentId Agent 定义 ID
+ * @param agentName Agent 名称
+ * @param agentHome Agent Home 路径（用于加载 Agent 级 Skill）
+ * @param sessionDir 当前会话运行产物目录
  */
-export async function buildAgentEnv(sessionId: string, project: string, agentHome?: string): Promise<AgentEnv> {
+export async function buildAgentEnv(
+  sessionId: string,
+  projectDir: string,
+  agentId: string,
+  agentName: string,
+  agentHome: string,
+  sessionDir: string
+): Promise<AgentEnv> {
   // 延迟导入 Env，避免测试环境循环依赖
   const { Env } = await import('@main/common/env');
   const { SkillManager } = await import('./skills');
 
-  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace: project, agentHome });
+  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace: projectDir, agentHome });
   const skillPaths = SkillManager.searchPathsFromSources(skillPathSources);
-  const extensionPaths = await Env.getExtensionSearchPaths(project);
+  const extensionPaths = await Env.getExtensionSearchPaths(projectDir);
 
   // Extension 系统信息
   let loadedExtensions: string[] = [];
@@ -179,23 +185,27 @@ export async function buildAgentEnv(sessionId: string, project: string, agentHom
   }
 
   return {
+    // Agent 身份
+    agentId,
+    agentName,
+    agentHome,
+
+    // 会话
+    sessionId,
+    sessionDir,
+
     // 系统信息
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     arch: process.arch,
     appVersion: Env.app?.version ?? '0.0.0',
 
-    // 项目目录
-    project,
-    sessionId,
-
-    // 系统路径
+    // 目录与路径
+    projectDir,
     userHome: Env.paths.userHome,
     systemHome: Env.paths.home,
-    temp: Env.paths.temp,
+    tempDir: Env.paths.temp,
     configDir: Env.paths.configDir,
     threadsDir: Env.paths.threadsDir,
-
-    // Agent 系统
     agentsDir: Env.paths.agentsDir,
 
     // Skill 系统
@@ -207,11 +217,6 @@ export async function buildAgentEnv(sessionId: string, project: string, agentHom
     builtinExtensionsDir: Env.paths.builtinExtensionsDir,
     userExtensionsDir: Env.paths.userExtensionsDir,
     loadedExtensions,
-
-    // Agent Home（由 prepareAgentEnv 在获取到 agentId 后补充）
-    agentId: undefined,
-    agentName: undefined,
-    agentHome: undefined,
 
     // 能力清单
     availableTools,
@@ -242,8 +247,8 @@ export function formatRuntimePaths(env: AgentEnv): string {
 
   return `<runtime_environment>
 Agent:
-${env.agentId ? `- id: ${env.agentId}` : ''}
-${env.agentName ? `- name: ${env.agentName}` : ''}
+- id: ${env.agentId}
+- name: ${env.agentName}
 - Session: ${env.sessionId}
 - model: ${env.defaultModel} (thinking=${env.thinkingLevel})
 - platform: ${env.platform}/${env.arch}
@@ -251,9 +256,9 @@ ${env.agentName ? `- name: ${env.agentName}` : ''}
 - extensions: ${extensionsList}
 
 Paths:
-${env.sessionDir ? `- session_dir: ${env.sessionDir} (current conversation artifacts)` : ''}
-${env.agentHome ? `- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)` : ''}
-- project: ${env.project} (tool cwd and durable business project)
+- session_dir: ${env.sessionDir} (current conversation artifacts)
+- agent_home: ${env.agentHome} (identity, memory, and Agent-level configuration)
+- project_dir: ${env.projectDir} (tool cwd and durable business project)
 - config: ${env.configDir}
 - skill_search_paths:${skillPathsList}
 - agents_definitions: ${env.agentsDir}
