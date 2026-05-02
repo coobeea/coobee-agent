@@ -22,15 +22,14 @@
 
 import path from 'node:path';
 import { createLogger } from '@main/common/logger';
-import { formatRuntimePaths, buildAgentEnv, type AgentEnv } from './AgentEnv';
+import { buildAgentEnv, type AgentEnv } from './AgentEnv';
 import { SkillManager } from './skills';
-import { AgentHomeManager } from './agents/AgentHomeManager';
 import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
 import type { AgentMode, SkillDefinition, ThinkingLevel, ToolDefinition } from './runtime/types';
 import { ensureAgentRuntimeLayout } from './context/AgentRuntimeLayout';
-import { PromptAssemblyService } from './prompt/PromptAssemblyService';
+import { buildSystemPrompt } from './prompt/SystemPromptBuilder';
 
 const log = createLogger('ai');
 
@@ -135,31 +134,18 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       skillManager.scanRegisteredSkills(Env.paths.secretsDir);
       SkillManager.setCurrent(skillManager, sessionId);
 
-      // 8. 注入核心执行协议 + 运行时环境 + Skill 发现提示 + Agent 发现提示到 appendInstructions
-      //    执行协议可通过同名 Skill 覆盖（用户在 skills/execution-protocol/ 创建即可）
-      // 🔕 执行协议注入已禁用（过于复杂）
-      // const executionProtocol = buildExecutionProtocol(skillManager);
-      const runtimePathsBlock = formatRuntimePaths(agentEnv);
-      // Skill 发现提示（双档策略）：
-      //   - 固有技能包（agent.skills 声明的 skill）：名称 + 描述 + SKILL.md 相对路径 固化到上下文
-      //   - 其他扫描到的技能：仅提示可通过 skill_list 工具按需发现
-      //   - 附加硬约束：必须先 read SKILL.md、脚本必须通过 exec 执行、禁止幻觉
-      const skillDiscoveryHint = buildSkillDiscoveryHint(skillManager, agentDefinedSkills, agentHome);
-      // 收集 Extension 注入的指令（运行时注入，对所有 Agent 生效）
+      // 8. 构建系统提示词注入块（runtime_environment + skill_discovery + extension_instructions）
+      //    由 SystemPromptBuilder 统一管理，执行协议注入已禁用
       const extensionInstructions = collectExtensionInstructions();
-      const homeManager = new AgentHomeManager(Env.paths.agentsDir);
-      const promptAssembly = new PromptAssemblyService();
-      const promptBlocks = promptAssembly.assemble({
-        runtimePathsBlock,
-        agentHome,
-        agentId,
-        agentHomeManager: homeManager,
-        project: projectDir,
-        skillDiscoveryHint,
-        extensionInstructions
+      const instructions = buildSystemPrompt({
+        agentEnv,
+        skillManager,
+        agentDefinedSkills,
+        extensionInstructions,
+        agentsDir: Env.paths.agentsDir
       });
 
-      prepared.appendInstructions.push(...promptAssembly.toInstructions(promptBlocks));
+      prepared.appendInstructions.push(...instructions);
 
       // 8b. 根据 Agent 配置注入 Skills（不再强制注入核心 Skills）
       //     只注入 Agent 配置文件中指定的 skills
@@ -408,89 +394,6 @@ function collectExtensionInstructions(): string[] {
 
 function compactPaths(paths: Array<string | undefined>): string[] {
   return paths.filter((item): item is string => typeof item === 'string' && item.length > 0);
-}
-
-// ==================== Skill 发现提示构建 ====================
-
-/**
- * 构建 <skill_discovery> 段内容
- *
- * 双档策略：
- *   1. 固有技能包：agent.skills 显式声明、且能在 SkillManager 中找到的 skill，
- *      名称 + 描述 + SKILL.md 相对路径 直接固化到上下文；
- *   2. 其他扫描到但未绑定的 skill：仅给出数量提示，让 LLM 按需通过 skill_list 发现。
- *
- * 并附加三条硬约束，防止 LLM 把 skill 名当 function tool 直接调用造成幻觉。
- */
-function buildSkillDiscoveryHint(
-  skillManager: SkillManager,
-  agentDefinedSkills: string[] | undefined,
-  agentHome: string
-): string {
-  if (skillManager.size === 0) {
-    return '';
-  }
-
-  const boundDefs = (agentDefinedSkills || [])
-    .map((name) => skillManager.getByName(name))
-    .filter((s): s is SkillDefinition => !!s);
-
-  // 在 agent home 下的 skill 统一以 AGENT_HOME/ 相对路径表达（覆盖 agent 私有和会话临时两种来源）；
-  // 其他来源（system / extension / marketplace）路径在 agent home 外，保留绝对路径。
-  const agentHomePrefix = agentHome ? agentHome + path.sep : '';
-  const formatSkillPath = (filePath: string | undefined): string => {
-    if (!filePath) return '';
-    if (agentHomePrefix && filePath.startsWith(agentHomePrefix)) {
-      const rel = filePath.slice(agentHome.length + 1); // 去掉 agentHome 前缀和分隔符
-      return `AGENT_HOME/${rel}`;
-    }
-    return filePath;
-  };
-
-  const lines: string[] = ['<skill_discovery>'];
-
-  if (boundDefs.length > 0) {
-    lines.push(`## Bound Skills (${boundDefs.length})`);
-    lines.push('');
-    lines.push('These skills are bound to this agent. Their metadata is listed below;');
-    lines.push('read the referenced SKILL.md file before using any of them.');
-    lines.push(
-      'Paths starting with `AGENT_HOME/` are relative to the agent_home absolute path declared in `<runtime_environment>`; resolve them by joining AGENT_HOME with the remainder. All other paths are absolute and must be used as-is.'
-    );
-    lines.push('');
-    for (const def of boundDefs) {
-      const displayPath = formatSkillPath(def.filePath);
-      const desc = (def.description || '').trim() || '(no description)';
-      const pathHint = displayPath ? ` — \`${displayPath}\`` : '';
-      lines.push(`- **${def.name}** — ${desc}${pathHint}`);
-    }
-    lines.push('');
-  }
-
-  const otherCount = Math.max(0, skillManager.size - boundDefs.length);
-  if (otherCount > 0) {
-    lines.push(`## Other Skills (${otherCount})`);
-    lines.push('');
-    lines.push(
-      `There are ${otherCount} additional skills available. Use the \`skill_list\` tool to discover them on demand.`
-    );
-    lines.push('');
-  }
-
-  lines.push('## How to Use a Skill');
-  lines.push('');
-  lines.push(
-    '1. **Read SKILL.md first.** Use the `read` tool on the path above (or a path returned by `skill_list`) before acting on any skill. Never skip this step.'
-  );
-  lines.push(
-    '2. **Execute scripts via `exec`.** Skill scripts (python/shell/etc.) must be invoked through the `exec` tool as shell commands. Skill names and script filenames are NOT function tools — calling them directly will fail with "Tool not found".'
-  );
-  lines.push(
-    '3. **No hallucination.** Never claim a skill has been invoked or a step has been completed unless you actually called the corresponding tool and received a successful result.'
-  );
-
-  lines.push('</skill_discovery>');
-  return lines.join('\n');
 }
 
 function formatUnknownError(error: unknown): string {
