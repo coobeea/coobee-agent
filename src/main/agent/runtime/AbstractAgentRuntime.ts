@@ -129,6 +129,11 @@ export abstract class AbstractAgentRuntime implements AgentRuntime {
           continue;
         }
 
+        yield {
+          type: 'run:error' as const,
+          content: error.message,
+          data: { message: error.message, fatal: true }
+        };
         throw error;
       }
     }

@@ -274,6 +274,9 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         executionSignal.addEventListener('abort', abortListener, { once: true });
       }
 
+      /** 延迟抛出：供 AbstractAgentRuntime.stream() 捕获并重试（勿在队列内吞掉异常） */
+      let capturedError: unknown = null;
+
       // 3. SDK 执行，完成后结束 queue
       piSession
         .prompt(input)
@@ -288,12 +291,8 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           await Promise.resolve();
 
           if (apiError) {
-            // API 返回了错误（如 usage limit exceeded）但 SDK 没有 throw
-            queue.push({
-              type: 'run:error',
-              content: apiError,
-              data: { message: apiError }
-            });
+            // API 返回了错误（如 usage limit exceeded）但 SDK 没有 throw — 转为异常交给基类重试策略
+            capturedError = new Error(apiError);
           } else {
             queue.push({ type: 'run:done', content: '' });
           }
@@ -307,17 +306,17 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
 
           unsubscribe();
           await Promise.resolve();
-          queue.push({
-            type: 'run:error',
-            content: err instanceof Error ? err.message : String(err),
-            data: { message: err instanceof Error ? err.message : String(err) }
-          });
+          capturedError = err;
           queue.end();
         });
 
       // 4. 逐个 yield 队列中的 chunk
       for await (const chunk of queue) {
         yield chunk;
+      }
+
+      if (capturedError) {
+        throw capturedError instanceof Error ? capturedError : new Error(String(capturedError));
       }
 
       return {
@@ -331,11 +330,6 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         rawApiRequest
       };
     } catch (error: unknown) {
-      yield {
-        type: 'run:error',
-        content: error instanceof Error ? error.message : String(error),
-        data: { message: error instanceof Error ? error.message : String(error) }
-      };
       log.error(`Stream execution failed:`, error);
       throw error;
     } finally {

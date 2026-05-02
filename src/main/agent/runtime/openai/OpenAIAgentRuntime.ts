@@ -165,11 +165,6 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
         }
       };
     } catch (error: unknown) {
-      yield {
-        type: 'run:error',
-        content: error instanceof Error ? error.message : String(error),
-        data: { message: error instanceof Error ? error.message : String(error) }
-      };
       log.error(`Stream execution failed:`, error);
       throw error;
     } finally {

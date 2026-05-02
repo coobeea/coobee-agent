@@ -21,6 +21,8 @@ import fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import path from 'node:path';
 
+import { Env } from '@main/common/env';
+
 // ==================== 类型定义 ====================
 
 /**
@@ -146,11 +148,7 @@ export interface AgentEnv extends AgentRuntimeLayout {
  * 这是路径计算的唯一入口，所有需要布局路径的地方均委托此函数，
  * 保证路径结构只维护一处。
  */
-export function computeAgentLayoutPaths(
-  agentsDir: string,
-  agentId: string,
-  sessionId: string
-): AgentRuntimeLayout {
+export function computeAgentLayoutPaths(agentsDir: string, agentId: string, sessionId: string): AgentRuntimeLayout {
   if (!agentId || !agentId.trim()) {
     throw new Error('[AgentEnv] agentId is required');
   }
@@ -183,7 +181,6 @@ export function computeAgentLayoutPaths(
  * 供不需要完整 AgentEnv 的场景使用（如 mkdir、thread 解析）。
  */
 export function computeAgentRuntimeLayout(options: { agentId: string; sessionId: string }): AgentRuntimeLayout {
-  const { Env } = require('@main/common/env') as typeof import('@main/common/env');
   return computeAgentLayoutPaths(Env.paths.agentsDir, options.agentId, options.sessionId);
 }
 
@@ -238,7 +235,6 @@ export function resolveThreadRuntimeLayoutSync(sessionId: string, fallbackAgentI
 }
 
 function readThreadDefinitionSync(sessionId: string): Record<string, unknown> | null {
-  const { Env } = require('@main/common/env') as typeof import('@main/common/env');
   const filePath = path.join(Env.paths.threadsDir, `${sessionId}.json`);
   if (!fs.existsSync(filePath)) return null;
 
@@ -279,7 +275,10 @@ export async function buildAgentEnv(options: BuildAgentEnvOptions): Promise<Agen
   // ---- Skill / Extension 路径聚合 ----
   const { SkillManager } = await import('./skills');
 
-  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace: layout.projectDir, agentHome: layout.agentHome });
+  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({
+    workspace: layout.projectDir,
+    agentHome: layout.agentHome
+  });
   const skillPaths = SkillManager.searchPathsFromSources(skillPathSources);
   const extensionPaths = await Env.getExtensionSearchPaths(layout.projectDir);
 
