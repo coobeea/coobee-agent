@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { buildSystemPrompt } from '../SystemPromptBuilder';
 import type { SystemPromptInput } from '../SystemPromptBuilder';
-import { computeAgentLayoutPaths, type AgentEnv } from '../../AgentEnv';
+import { buildAgentEnv, type AgentEnv } from '../../AgentEnv';
 import { SkillManager } from '../../skills';
 import type { SkillDefinition } from '../../runtime/types';
 
@@ -73,96 +73,53 @@ vi.mock('electron-log', () => {
   };
 });
 
-// mock @main/common/env — computeAgentLayoutPaths 的 agentsDir 参数来源
-const { mockAgentsDir } = vi.hoisted(() => ({
-  mockAgentsDir: '/tmp/test-agents'
+// mock @main/common/env — 与 buildAgentEnv 使用完全一致的路径结构
+const { mockEnvPaths } = vi.hoisted(() => ({
+  mockEnvPaths: {
+    agentsDir: '/tmp/test-agents',
+    userHome: '/tmp/test-user-home',
+    home: '/Users/test',
+    temp: '/tmp',
+    configDir: '/tmp/test-user-home/config',
+    threadsDir: '/tmp/test-user-home/threads',
+    builtinExtensionsDir: '/tmp/test-user-home/extensions/builtin',
+    userExtensionsDir: '/tmp/test-user-home/extensions/user',
+    builtinSkillsDir: '/tmp/test-user-home/skills/builtin',
+    userSkillsDir: '/tmp/test-user-home/skills/user'
+  }
 }));
 vi.mock('@main/common/env', () => ({
   Env: {
-    paths: {
-      agentsDir: mockAgentsDir
-    },
+    paths: mockEnvPaths,
+    app: { version: '1.0.0' },
     main: {
       logLevel: 'info',
       logMaxSize: 10 * 1024 * 1024
-    }
+    },
+    getExtensionSearchPaths: (_workspace?: string) => [
+      mockEnvPaths.userExtensionsDir,
+      mockEnvPaths.builtinExtensionsDir
+    ]
   }
 }));
 
 // ==================== Fixtures ====================
 
 /**
- * 基于 computeAgentLayoutPaths 构建测试用 AgentEnv
+ * 直接委托给 buildAgentEnv 构建测试用 AgentEnv
  *
- * 路径计算与生产代码一致（单一来源：computeAgentLayoutPaths）：
- *   agentHome = {agentsDir}/{agentId}
- *   projectDir = {agentHome}/project
- *   sessionDir = {sessionsDir}/{sessionId}
- *   etc.
+ * 与生产代码完全一致，不手动拼路径或硬编码字段。
+ * overrides 通过 Object.assign 在 buildAgentEnv 之后再覆盖。
  */
-function createMockAgentEnv(overrides?: Partial<AgentEnv>): AgentEnv {
-  const agentId = overrides?.agentId ?? 'test-agent';
+async function createMockAgentEnv(overrides?: Partial<AgentEnv>): Promise<AgentEnv> {
+  const agentId = overrides?.agentId || '_default_';
   const sessionId = overrides?.sessionId ?? 'sess-001';
-  const agentsDir = overrides?.agentsDir ?? mockAgentsDir;
+  const agentName = overrides?.agentName;
 
-  // 仅当 agentId 有效时才使用 computeAgentLayoutPaths（空 agentId 会触发校验错误）
-  const layout = agentId && agentId.trim()
-    ? computeAgentLayoutPaths(agentsDir, agentId, sessionId)
-    : {
-        agentId,
-        sessionId,
-        agentHome: path.join(agentsDir, agentId || '_empty_'),
-        projectDir: path.join(agentsDir, agentId || '_empty_', 'project'),
-        memoryDir: path.join(agentsDir, agentId || '_empty_', 'memory'),
-        sessionsDir: path.join(agentsDir, agentId || '_empty_', 'sessions'),
-        sessionDir: path.join(agentsDir, agentId || '_empty_', 'sessions', sessionId),
-        skillsDir: path.join(agentsDir, agentId || '_empty_', 'skills')
-      };
+  const env = await buildAgentEnv({ agentId, sessionId, agentName });
 
-  return {
-    // 布局字段（通过 extends AgentRuntimeLayout 继承，spread 一次性展开）
-    ...layout,
-
-    // Agent 身份
-    agentName: agentId,
-
-    // 系统信息
-    platform: 'darwin',
-    arch: 'arm64',
-    appVersion: '1.0.0',
-
-    // 目录与路径
-    userHome: '/tmp/user-home',
-    systemHome: '/Users/test',
-    tempDir: '/tmp',
-    configDir: '/tmp/config',
-    threadsDir: '/tmp/threads',
-    agentsDir,
-
-    // Skill 系统
-    skillPaths: [],
-    skillPathSources: [],
-
-    // Extension 系统
-    extensionPaths: [],
-    builtinExtensionsDir: '/tmp/builtin-ext',
-    userExtensionsDir: '/tmp/user-ext',
-    loadedExtensions: [],
-
-    // 能力清单
-    availableTools: [],
-
-    // 安全上下文
-    sandboxMode: 'path-only',
-    execApproval: 'auto',
-
-    // 模型上下文
-    defaultModel: 'openai/gpt-4',
-    thinkingLevel: 'medium',
-
-    // 覆盖（可覆盖任意字段，包括布局路径）
-    ...overrides
-  };
+  // 应用覆盖（如 agentHome、projectDir 等特定测试场景）
+  return overrides ? { ...env, ...overrides } : env;
 }
 
 /** 构造一个包含已注册 skills 的 SkillManager */
@@ -192,9 +149,9 @@ describe('buildSystemPrompt', () => {
   // ==================== runtime_environment ====================
 
   describe('<runtime_environment>', () => {
-    it('始终包含 runtime_environment 块', () => {
+    it('始终包含 runtime_environment 块', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -209,9 +166,9 @@ describe('buildSystemPrompt', () => {
       expect(result[0]).toContain('</runtime_environment>');
     });
 
-    it('包含 Agent 身份信息', () => {
+    it('包含 Agent 身份信息', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentId: 'my-agent', agentName: 'My Agent' }),
+        agentEnv: await createMockAgentEnv({ agentId: 'my-agent', agentName: 'My Agent' }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -224,9 +181,9 @@ describe('buildSystemPrompt', () => {
       expect(result[0]).toContain('- name: My Agent');
     });
 
-    it('包含模型和平台信息', () => {
+    it('包含模型和平台信息', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({
+        agentEnv: await createMockAgentEnv({
           defaultModel: 'anthropic/claude-4',
           thinkingLevel: 'high',
           platform: 'linux',
@@ -244,9 +201,9 @@ describe('buildSystemPrompt', () => {
       expect(result[0]).toContain('platform: linux/x64');
     });
 
-    it('包含安全配置', () => {
+    it('包含安全配置', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ sandboxMode: 'docker', execApproval: 'always' }),
+        agentEnv: await createMockAgentEnv({ sandboxMode: 'docker', execApproval: 'always' }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -259,9 +216,9 @@ describe('buildSystemPrompt', () => {
       expect(result[0]).toContain('exec=always');
     });
 
-    it('无扩展时显示 none', () => {
+    it('无扩展时显示 none', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ loadedExtensions: [] }),
+        agentEnv: await createMockAgentEnv({ loadedExtensions: [] }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -272,9 +229,9 @@ describe('buildSystemPrompt', () => {
       expect(result[0]).toContain('extensions: none');
     });
 
-    it('包含 skill 搜索路径', () => {
+    it('包含 skill 搜索路径', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({
+        agentEnv: await createMockAgentEnv({
           skillPathSources: [
             { label: 'User Skills', kind: 'session', path: '/tmp/user-skills', priority: 0 },
             { label: 'Agent Skills', kind: 'agent', path: '/tmp/agent-skills', priority: 1 }
@@ -295,13 +252,13 @@ describe('buildSystemPrompt', () => {
   // ==================== agent_rules ====================
 
   describe('<agent_rules>', () => {
-    it('读取 Agent Home 中的 AGENTS.md', () => {
+    it('读取 Agent Home 中的 AGENTS.md', async () => {
       const agentHome = path.join(tempDir, 'agent-home');
       fs.mkdirSync(agentHome, { recursive: true });
       fs.writeFileSync(path.join(agentHome, 'AGENTS.md'), 'Always respond in Chinese.', 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentHome }),
+        agentEnv: await createMockAgentEnv({ agentHome }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -316,13 +273,13 @@ describe('buildSystemPrompt', () => {
       expect(rulesBlock).toContain('Always respond in Chinese.');
     });
 
-    it('跳过纯注释的 AGENTS.md', () => {
+    it('跳过纯注释的 AGENTS.md', async () => {
       const agentHome = path.join(tempDir, 'agent-home');
       fs.mkdirSync(agentHome, { recursive: true });
       fs.writeFileSync(path.join(agentHome, 'AGENTS.md'), '# Title\n\n<!-- template -->', 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentHome }),
+        agentEnv: await createMockAgentEnv({ agentHome }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -334,9 +291,9 @@ describe('buildSystemPrompt', () => {
       expect(result.some((s) => s.includes('<agent_rules'))).toBe(false);
     });
 
-    it('agentHome 为空时不注入', () => {
+    it('agentHome 为空时不注入', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentHome: '' }),
+        agentEnv: await createMockAgentEnv({ agentHome: '' }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -351,7 +308,7 @@ describe('buildSystemPrompt', () => {
   // ==================== agent_home ====================
 
   describe('<agent_home>', () => {
-    it('通过 AgentHomeManager 读取注入文件', () => {
+    it('通过 AgentHomeManager 读取注入文件', async () => {
       const agentsDir = path.join(tempDir, 'agents');
       const agentHome = path.join(agentsDir, 'test-agent');
       fs.mkdirSync(agentHome, { recursive: true });
@@ -359,7 +316,7 @@ describe('buildSystemPrompt', () => {
       fs.writeFileSync(path.join(agentHome, 'SOUL.md'), 'Be helpful and concise.', 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentId: 'test-agent', agentHome }),
+        agentEnv: await createMockAgentEnv({ agentId: 'test-agent', agentHome }),
         skillManager: new SkillManager(),
         agentsDir
       };
@@ -372,29 +329,30 @@ describe('buildSystemPrompt', () => {
       expect(result[0]).toContain('<runtime_environment>');
     });
 
-    it('agentId 为空时不注入 agent_home', () => {
+    it('agentId 为空时使用默认占位符', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentId: '' }),
+        agentEnv: await createMockAgentEnv({ agentId: '' }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
 
       const result = buildSystemPrompt(input);
-      log('INFO', '测试: agentId 为空时不注入 agent_home');
+      log('INFO', '测试: agentId 为空时使用默认占位符');
 
       expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result[0]).toContain('<runtime_environment>');
     });
   });
 
   // ==================== project_context ====================
 
   describe('<project_context>', () => {
-    it('读取项目目录下的 .md 文件', () => {
+    it('读取项目目录下的 .md 文件', async () => {
       fs.writeFileSync(path.join(tempDir, 'overview.md'), 'Project overview content.', 'utf-8');
       fs.writeFileSync(path.join(tempDir, 'guide.md'), 'How to use this project.', 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ projectDir: tempDir }),
+        agentEnv: await createMockAgentEnv({ projectDir: tempDir }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -412,12 +370,12 @@ describe('buildSystemPrompt', () => {
       expect(ctxBlock).toContain('How to use this project.');
     });
 
-    it('忽略非 .md 文件', () => {
+    it('忽略非 .md 文件', async () => {
       fs.writeFileSync(path.join(tempDir, 'data.json'), '{}', 'utf-8');
       fs.writeFileSync(path.join(tempDir, 'readme.md'), 'Hello', 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ projectDir: tempDir }),
+        agentEnv: await createMockAgentEnv({ projectDir: tempDir }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -431,11 +389,11 @@ describe('buildSystemPrompt', () => {
       expect(ctxBlock).not.toContain('data.json');
     });
 
-    it('无 .md 文件时不注入', () => {
+    it('无 .md 文件时不注入', async () => {
       fs.writeFileSync(path.join(tempDir, 'data.txt'), 'hello', 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ projectDir: tempDir }),
+        agentEnv: await createMockAgentEnv({ projectDir: tempDir }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -446,12 +404,12 @@ describe('buildSystemPrompt', () => {
       expect(result.some((s) => s.includes('<project_context'))).toBe(false);
     });
 
-    it('保留原始内容不截断', () => {
+    it('保留原始内容不截断', async () => {
       const longContent = 'X'.repeat(20_000);
       fs.writeFileSync(path.join(tempDir, 'large.md'), longContent, 'utf-8');
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ projectDir: tempDir }),
+        agentEnv: await createMockAgentEnv({ projectDir: tempDir }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -467,9 +425,9 @@ describe('buildSystemPrompt', () => {
       expect(ctxBlock!.length).toBeGreaterThan(20_000);
     });
 
-    it('projectDir 为空时不注入', () => {
+    it('projectDir 为空时不注入', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ projectDir: '' }),
+        agentEnv: await createMockAgentEnv({ projectDir: '' }),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -484,9 +442,9 @@ describe('buildSystemPrompt', () => {
   // ==================== skill_discovery ====================
 
   describe('<skill_discovery>', () => {
-    it('SkillManager 为空时不注入', () => {
+    it('SkillManager 为空时不注入', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: new SkillManager(),
         agentsDir: tempDir
       };
@@ -497,13 +455,13 @@ describe('buildSystemPrompt', () => {
       expect(result.some((s) => s.includes('<skill_discovery'))).toBe(false);
     });
 
-    it('显示 Bound Skills 信息', () => {
+    it('显示 Bound Skills 信息', async () => {
       const manager = createSkillManagerWith([
         { name: 'report-gen', description: 'Generate reports', content: 'content' }
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: manager,
         agentDefinedSkills: ['report-gen'],
         agentsDir: tempDir
@@ -521,14 +479,14 @@ describe('buildSystemPrompt', () => {
       expect(block).toContain('Generate reports');
     });
 
-    it('显示 Other Skills 数量', () => {
+    it('显示 Other Skills 数量', async () => {
       const manager = createSkillManagerWith([
         { name: 'bound-skill', description: 'Bound one', content: 'c1' },
         { name: 'extra-skill', description: 'Extra one', content: 'c2' }
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: manager,
         agentDefinedSkills: ['bound-skill'],
         agentsDir: tempDir
@@ -544,7 +502,7 @@ describe('buildSystemPrompt', () => {
       expect(block).toContain('skill_list');
     });
 
-    it('Agent Home 下的 skill 路径转为 AGENT_HOME/ 相对路径', () => {
+    it('Agent Home 下的 skill 路径转为 AGENT_HOME/ 相对路径', async () => {
       const agentHome = '/tmp/agent-home';
       const manager = createSkillManagerWith([
         {
@@ -556,7 +514,7 @@ describe('buildSystemPrompt', () => {
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentHome }),
+        agentEnv: await createMockAgentEnv({ agentHome }),
         skillManager: manager,
         agentDefinedSkills: ['private-skill'],
         agentsDir: tempDir
@@ -572,7 +530,7 @@ describe('buildSystemPrompt', () => {
       expect(block).toContain('AGENT_HOME/skills/private-skill/SKILL.md');
     });
 
-    it('Agent Home 外的 skill 保留绝对路径', () => {
+    it('Agent Home 外的 skill 保留绝对路径', async () => {
       const manager = createSkillManagerWith([
         {
           name: 'system-skill',
@@ -583,7 +541,7 @@ describe('buildSystemPrompt', () => {
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentHome: '/tmp/agent-home' }),
+        agentEnv: await createMockAgentEnv({ agentHome: '/tmp/agent-home' }),
         skillManager: manager,
         agentDefinedSkills: ['system-skill'],
         agentsDir: tempDir
@@ -598,13 +556,13 @@ describe('buildSystemPrompt', () => {
       expect(block).not.toContain('AGENT_HOME//opt');
     });
 
-    it('包含使用说明约束', () => {
+    it('包含使用说明约束', async () => {
       const manager = createSkillManagerWith([
         { name: 's1', description: 'Skill 1', content: 'c' }
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: manager,
         agentsDir: tempDir
       };
@@ -619,14 +577,14 @@ describe('buildSystemPrompt', () => {
       expect(block).toContain('No hallucination');
     });
 
-    it('未配置 agentDefinedSkills 时全部为 Other Skills', () => {
+    it('未配置 agentDefinedSkills 时全部为 Other Skills', async () => {
       const manager = createSkillManagerWith([
         { name: 'a', description: 'A', content: 'c' },
         { name: 'b', description: 'B', content: 'c' }
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: manager,
         agentsDir: tempDir
       };
@@ -645,9 +603,9 @@ describe('buildSystemPrompt', () => {
   // ==================== Extension 指令 ====================
 
   describe('Extension instructions', () => {
-    it('注入 Extension 指令', () => {
+    it('注入 Extension 指令', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: new SkillManager(),
         extensionInstructions: ['Remember to use memory-smart tool.', 'Always check context.'],
         agentsDir: tempDir
@@ -661,9 +619,9 @@ describe('buildSystemPrompt', () => {
       expect(result).toContain('Always check context.');
     });
 
-    it('空 Extension 指令不注入', () => {
+    it('空 Extension 指令不注入', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: new SkillManager(),
         extensionInstructions: [],
         agentsDir: tempDir
@@ -681,7 +639,7 @@ describe('buildSystemPrompt', () => {
   // ==================== 整体顺序 ====================
 
   describe('指令块顺序', () => {
-    it('按 runtime → rules → home → project → skills → extensions 顺序输出', () => {
+    it('按 runtime → rules → home → project → skills → extensions 顺序输出', async () => {
       const agentHome = path.join(tempDir, 'agent-home');
       fs.mkdirSync(agentHome, { recursive: true });
       fs.writeFileSync(path.join(agentHome, 'AGENTS.md'), 'Be concise.', 'utf-8');
@@ -700,7 +658,7 @@ describe('buildSystemPrompt', () => {
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({ agentHome, projectDir }),
+        agentEnv: await createMockAgentEnv({ agentHome, projectDir }),
         skillManager: manager,
         agentDefinedSkills: ['report'],
         extensionInstructions: ['Use memory.'],
@@ -739,9 +697,9 @@ describe('buildSystemPrompt', () => {
   // ==================== 空内容跳过 ====================
 
   describe('空内容过滤', () => {
-    it('空白 Extension 指令被跳过', () => {
+    it('空白 Extension 指令被跳过', async () => {
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv(),
+        agentEnv: await createMockAgentEnv(),
         skillManager: new SkillManager(),
         extensionInstructions: ['   ', '', '\t\n'],
         agentsDir: tempDir
@@ -758,7 +716,7 @@ describe('buildSystemPrompt', () => {
   // ==================== 完整输出快照 ====================
 
   describe('完整输出', () => {
-    it('全量场景输出快照到日志', () => {
+    it('全量场景输出快照到日志', async () => {
       const agentHome = path.join(tempDir, 'agent-home');
       fs.mkdirSync(agentHome, { recursive: true });
       fs.writeFileSync(path.join(agentHome, 'AGENTS.md'), 'Always respond in Chinese.\nUse concise language.', 'utf-8');
@@ -781,7 +739,7 @@ describe('buildSystemPrompt', () => {
       ]);
 
       const input: SystemPromptInput = {
-        agentEnv: createMockAgentEnv({
+        agentEnv: await createMockAgentEnv({
           agentId: 'full-agent',
           agentName: 'Full Agent',
           agentHome,
