@@ -205,60 +205,59 @@ onBeforeUnmount(() => {
   word-break: break-word;
 }
 
-/* 代码块容器 */
+/* 代码块容器 — 终端风格深色背景 */
 .prose :deep(.markdown-code-block) {
   position: relative;
   margin: 0.55rem 0;
   border-radius: 0.5rem;
-  background: hsl(var(--muted) / 0.24);
+  background: #1e1e2e;
   overflow: hidden;
-  border: 1px solid hsl(var(--border) / 0.7);
+  border: 1px solid #313244;
   text-align: left;
 }
 
-/* 代码块顶部工具栏 */
+/* 代码块顶部工具栏 — 紧凑一体 */
 .prose :deep(.code-header) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0.65rem;
-  background: hsl(var(--muted) / 0.36);
-  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  padding: 0.3rem 0.75rem;
+  background: #181825;
+  border-bottom: 1px solid #313244;
   font-size: 0.7rem;
+  min-height: 1.75rem;
 }
 
 .prose :deep(.code-language) {
   font-family: var(--font-mono);
-  color: hsl(var(--muted-foreground));
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  color: #6c7086;
+  text-transform: lowercase;
+  font-weight: 500;
+  font-size: 0.7rem;
+  letter-spacing: 0.3px;
 }
 
 .prose :deep(.code-copy-btn) {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.45rem;
+  gap: 0.2rem;
+  padding: 0.15rem 0.4rem;
   background: transparent;
-  border: 1px solid hsl(var(--border) / 0.7);
-  border-radius: 0.25rem;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
+  border: none;
+  border-radius: 0.2rem;
+  color: #6c7086;
+  font-size: 0.68rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .prose :deep(.code-copy-btn:hover) {
-  background: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
-  border-color: hsl(var(--accent));
+  background: #313244;
+  color: #cdd6f4;
 }
 
 .prose :deep(.code-copy-btn.copied) {
-  background: hsl(var(--success));
-  color: hsl(var(--success-foreground));
-  border-color: hsl(var(--success));
+  color: #a6e3a1;
 }
 
 .prose :deep(.code-copy-btn.copied .copy-text)::before {
@@ -271,8 +270,8 @@ onBeforeUnmount(() => {
 
 .prose :deep(.copy-icon) {
   display: inline-block;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 /* 代码块内容区域 */
@@ -283,7 +282,7 @@ onBeforeUnmount(() => {
 
 .prose :deep(.code-content pre) {
   margin: 0 !important;
-  padding: 0.75rem !important;
+  padding: 0.75rem 1rem !important;
   background: transparent !important;
   border: none !important;
   overflow-x: auto;
@@ -293,9 +292,83 @@ onBeforeUnmount(() => {
 .prose :deep(.code-content pre code) {
   font-family: var(--font-mono);
   font-size: 0.82rem;
-  line-height: 1.55;
+  line-height: 1.6;
   background: transparent;
   padding: 0;
+  color: #cdd6f4;
+}
+
+/* 代码块内强制使用深色高亮（覆盖全局 hljs 变量） */
+.prose :deep(.markdown-code-block) .hljs-keyword,
+.prose :deep(.markdown-code-block) .hljs-selector-tag,
+.prose :deep(.markdown-code-block) .hljs-literal,
+.prose :deep(.markdown-code-block) .hljs-section,
+.prose :deep(.markdown-code-block) .hljs-link {
+  color: #89b4fa;
+  font-weight: 600;
+}
+
+.prose :deep(.markdown-code-block) .hljs-string,
+.prose :deep(.markdown-code-block) .hljs-addition {
+  color: #a6e3a1;
+}
+
+.prose :deep(.markdown-code-block) .hljs-variable,
+.prose :deep(.markdown-code-block) .hljs-template-variable,
+.prose :deep(.markdown-code-block) .hljs-template-tag {
+  color: #f5c2e7;
+}
+
+.prose :deep(.markdown-code-block) .hljs-built_in,
+.prose :deep(.markdown-code-block) .hljs-type {
+  color: #94e2d5;
+}
+
+.prose :deep(.markdown-code-block) .hljs-title,
+.prose :deep(.markdown-code-block) .hljs-name,
+.prose :deep(.markdown-code-block) .hljs-attribute,
+.prose :deep(.markdown-code-block) .hljs-symbol,
+.prose :deep(.markdown-code-block) .hljs-bullet {
+  color: #f9e2af;
+}
+
+.prose :deep(.markdown-code-block) .hljs-number,
+.prose :deep(.markdown-code-block) .hljs-regexp {
+  color: #fab387;
+}
+
+.prose :deep(.markdown-code-block) .hljs-meta,
+.prose :deep(.markdown-code-block) .hljs-meta .hljs-keyword,
+.prose :deep(.markdown-code-block) .hljs-meta .hljs-string {
+  color: #cba6f7;
+}
+
+.prose :deep(.markdown-code-block) .hljs-comment,
+.prose :deep(.markdown-code-block) .hljs-quote {
+  color: #6c7086;
+  font-style: italic;
+}
+
+.prose :deep(.markdown-code-block) .hljs-function,
+.prose :deep(.markdown-code-block) .hljs-class,
+.prose :deep(.markdown-code-block) .hljs-title.function_,
+.prose :deep(.markdown-code-block) .hljs-title.class_,
+.prose :deep(.markdown-code-block) .hljs-title.class_.inherited__ {
+  color: #89dceb;
+  font-weight: 600;
+}
+
+.prose :deep(.markdown-code-block) .hljs-params,
+.prose :deep(.markdown-code-block) .hljs-attr {
+  color: #f5c2e7;
+}
+
+.prose :deep(.markdown-code-block) .hljs-tag {
+  color: #cdd6f4;
+}
+
+.prose :deep(.markdown-code-block) .hljs-deletion {
+  color: #f38ba8;
 }
 
 /* 链接样式 */

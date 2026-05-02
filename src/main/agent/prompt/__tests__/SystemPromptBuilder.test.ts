@@ -502,14 +502,15 @@ describe('buildSystemPrompt', () => {
       expect(block).toContain('skill_list');
     });
 
-    it('Agent Home 下的 skill 路径转为 AGENT_HOME/ 相对路径', async () => {
+    it('Agent Home 下的 skill 使用绝对路径', async () => {
       const agentHome = '/tmp/agent-home';
+      const skillPath = `${agentHome}/skills/private-skill/SKILL.md`;
       const manager = createSkillManagerWith([
         {
           name: 'private-skill',
           description: 'Agent private',
           content: 'c',
-          filePath: `${agentHome}/skills/private-skill/SKILL.md`
+          filePath: skillPath
         }
       ]);
 
@@ -522,12 +523,12 @@ describe('buildSystemPrompt', () => {
 
       const result = buildSystemPrompt(input);
       const block = result.find((s) => s.includes('<skill_discovery'));
-      log('INFO', '测试: Agent Home 下的 skill 路径转为 AGENT_HOME/ 相对路径');
-      log('INFO', `  原始路径: ${agentHome}/skills/private-skill/SKILL.md`);
-      log('INFO', `  转换后: AGENT_HOME/skills/private-skill/SKILL.md`);
+      log('INFO', '测试: Agent Home 下的 skill 使用绝对路径');
+      log('INFO', `  路径: ${skillPath}`);
 
       expect(block).toBeDefined();
-      expect(block).toContain('AGENT_HOME/skills/private-skill/SKILL.md');
+      expect(block).toContain(skillPath);
+      expect(block).not.toContain('AGENT_HOME/');
     });
 
     it('Agent Home 外的 skill 保留绝对路径', async () => {

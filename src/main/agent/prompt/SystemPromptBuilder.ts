@@ -65,7 +65,7 @@ export function buildSystemPrompt(input: SystemPromptInput): string[] {
   addInstruction(instructions, readProjectContextFiles(agentEnv.projectDir));
 
   // 5. <skill_discovery>
-  addInstruction(instructions, buildSkillDiscoveryBlock(skillManager, agentDefinedSkills, agentEnv.agentHome));
+  addInstruction(instructions, buildSkillDiscoveryBlock(skillManager, agentDefinedSkills));
 
   // 6. Extension 注入指令
   for (const instruction of extensionInstructions || []) {
@@ -225,8 +225,7 @@ File usage:
  */
 function buildSkillDiscoveryBlock(
   skillManager: SkillManager,
-  agentDefinedSkills: string[] | undefined,
-  agentHome: string
+  agentDefinedSkills: string[] | undefined
 ): string {
   if (skillManager.size === 0) {
     return '';
@@ -236,31 +235,16 @@ function buildSkillDiscoveryBlock(
     .map((name) => skillManager.getByName(name))
     .filter((s): s is SkillDefinition => !!s);
 
-  // 在 agent home 下的 skill 统一以 AGENT_HOME/ 相对路径表达（覆盖 agent 私有和会话临时两种来源）；
-  // 其他来源（system / extension / marketplace）路径在 agent home 外，保留绝对路径。
-  const agentHomePrefix = agentHome ? agentHome + path.sep : '';
-  const formatSkillPath = (filePath: string | undefined): string => {
-    if (!filePath) return '';
-    if (agentHomePrefix && filePath.startsWith(agentHomePrefix)) {
-      const rel = filePath.slice(agentHome.length + 1); // 去掉 agentHome 前缀和分隔符
-      return `AGENT_HOME/${rel}`;
-    }
-    return filePath;
-  };
-
   const lines: string[] = ['<skill_discovery>'];
 
   if (boundDefs.length > 0) {
     lines.push(`## Bound Skills (${boundDefs.length})`);
     lines.push('');
     lines.push('These skills are bound to this agent. Their metadata is listed below;');
-    lines.push('read the referenced SKILL.md file before using any of them.');
-    lines.push(
-      'Paths starting with `AGENT_HOME/` are relative to the agent_home absolute path declared in `<runtime_environment>`; resolve them by joining AGENT_HOME with the remainder. All other paths are absolute and must be used as-is.'
-    );
+    lines.push('read the referenced SKILL.md file (absolute path) before using any of them.');
     lines.push('');
     for (const def of boundDefs) {
-      const displayPath = formatSkillPath(def.filePath);
+      const displayPath = def.filePath || '';
       const desc = (def.description || '').trim() || '(no description)';
       const pathHint = displayPath ? ` — \`${displayPath}\`` : '';
       lines.push(`- **${def.name}** — ${desc}${pathHint}`);

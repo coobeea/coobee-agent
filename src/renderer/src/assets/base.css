@@ -388,19 +388,25 @@
     --hljs-keyword: 207 61% 39%;
     --hljs-string: 142 76% 36%;
     --hljs-number: 25 95% 53%;
-    --hljs-comment: 0 0% 60%;
+    --hljs-comment: 0 0% 48%;
     --hljs-function: 262 83% 58%;
-    --hljs-variable: 0 84% 60%;
+    --hljs-variable: 340 82% 52%;
+    --hljs-built-in: 187 72% 38%;
+    --hljs-title: 35 85% 46%;
+    --hljs-meta: 280 50% 50%;
   }
 
   /* 暗色模式代码高亮 */
   .dark {
-    --hljs-keyword: 207 100% 75%;
-    --hljs-string: 142 70% 55%;
-    --hljs-number: 25 90% 65%;
-    --hljs-comment: 0 0% 55%;
-    --hljs-function: 262 80% 70%;
-    --hljs-variable: 0 75% 70%;
+    --hljs-keyword: 207 100% 72%;
+    --hljs-string: 95 60% 64%;
+    --hljs-number: 25 90% 68%;
+    --hljs-comment: 0 0% 52%;
+    --hljs-function: 35 90% 68%;
+    --hljs-variable: 340 75% 72%;
+    --hljs-built-in: 187 65% 62%;
+    --hljs-title: 45 85% 65%;
+    --hljs-meta: 280 55% 72%;
   }
 
   /* Highlight.js 样式覆盖 */
@@ -414,24 +420,38 @@
   }
 
   .hljs-string,
-  .hljs-title,
-  .hljs-name,
-  .hljs-type,
-  .hljs-attribute,
-  .hljs-symbol,
-  .hljs-bullet,
-  .hljs-built_in,
-  .hljs-addition,
-  .hljs-variable,
-  .hljs-template-tag,
-  .hljs-template-variable {
+  .hljs-addition {
     color: hsl(var(--hljs-string));
   }
 
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-template-tag {
+    color: hsl(var(--hljs-variable));
+  }
+
+  .hljs-built_in,
+  .hljs-type {
+    color: hsl(var(--hljs-built-in));
+  }
+
+  .hljs-title,
+  .hljs-name,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet {
+    color: hsl(var(--hljs-title));
+  }
+
   .hljs-number,
-  .hljs-regexp,
-  .hljs-meta {
+  .hljs-regexp {
     color: hsl(var(--hljs-number));
+  }
+
+  .hljs-meta,
+  .hljs-meta .hljs-keyword,
+  .hljs-meta .hljs-string {
+    color: hsl(var(--hljs-meta));
   }
 
   .hljs-comment,
