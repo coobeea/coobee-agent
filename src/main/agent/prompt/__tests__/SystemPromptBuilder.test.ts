@@ -13,8 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { buildSystemPrompt } from '../SystemPromptBuilder';
 import type { SystemPromptInput } from '../SystemPromptBuilder';
-import type { AgentEnv } from '../../AgentEnv';
-import { createAgentRuntimeLayout } from '../../context/AgentRuntimeLayout';
+import { computeAgentLayoutPaths, type AgentEnv } from '../../AgentEnv';
 import { SkillManager } from '../../skills';
 import type { SkillDefinition } from '../../runtime/types';
 
@@ -74,7 +73,7 @@ vi.mock('electron-log', () => {
   };
 });
 
-// mock @main/common/env — createAgentRuntimeLayout 依赖 Env.paths.agentsDir
+// mock @main/common/env — computeAgentLayoutPaths 的 agentsDir 参数来源
 const { mockAgentsDir } = vi.hoisted(() => ({
   mockAgentsDir: '/tmp/test-agents'
 }));
@@ -93,9 +92,9 @@ vi.mock('@main/common/env', () => ({
 // ==================== Fixtures ====================
 
 /**
- * 基于 AgentRuntimeLayout 构建测试用 AgentEnv
+ * 基于 computeAgentLayoutPaths 构建测试用 AgentEnv
  *
- * 路径关系与生产代码一致：
+ * 路径计算与生产代码一致（单一来源：computeAgentLayoutPaths）：
  *   agentHome = {agentsDir}/{agentId}
  *   projectDir = {agentHome}/project
  *   sessionDir = {sessionsDir}/{sessionId}
@@ -106,9 +105,9 @@ function createMockAgentEnv(overrides?: Partial<AgentEnv>): AgentEnv {
   const sessionId = overrides?.sessionId ?? 'sess-001';
   const agentsDir = overrides?.agentsDir ?? mockAgentsDir;
 
-  // 仅当 agentId 有效时才使用 createAgentRuntimeLayout（空 agentId 会触发校验错误）
+  // 仅当 agentId 有效时才使用 computeAgentLayoutPaths（空 agentId 会触发校验错误）
   const layout = agentId && agentId.trim()
-    ? createAgentRuntimeLayout({ agentId, sessionId })
+    ? computeAgentLayoutPaths(agentsDir, agentId, sessionId)
     : {
         agentId,
         sessionId,
@@ -121,15 +120,8 @@ function createMockAgentEnv(overrides?: Partial<AgentEnv>): AgentEnv {
       };
 
   return {
-    // 布局字段（来自 AgentRuntimeLayout）
-    agentId: layout.agentId,
-    sessionId: layout.sessionId,
-    agentHome: layout.agentHome,
-    projectDir: layout.projectDir,
-    memoryDir: layout.memoryDir,
-    sessionsDir: layout.sessionsDir,
-    sessionDir: layout.sessionDir,
-    skillsDir: layout.skillsDir,
+    // 布局字段（通过 extends AgentRuntimeLayout 继承，spread 一次性展开）
+    ...layout,
 
     // Agent 身份
     agentName: agentId,

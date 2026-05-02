@@ -22,13 +22,12 @@
 
 import path from 'node:path';
 import { createLogger } from '@main/common/logger';
-import { buildAgentEnv, type AgentEnv } from './AgentEnv';
+import { buildAgentEnv, ensureAgentRuntimeLayout, type AgentEnv, type AgentRuntimeLayout } from './AgentEnv';
 import { SkillManager } from './skills';
 import { createPathOnlyContext, resolveSandboxContext } from './sandbox';
 import type { SandboxMode } from './sandbox';
 import type { ToolExecutionContext } from './tools/types';
 import type { AgentMode, SkillDefinition, ThinkingLevel, ToolDefinition } from './runtime/types';
-import { ensureAgentRuntimeLayout } from './context/AgentRuntimeLayout';
 import { buildSystemPrompt } from './prompt/SystemPromptBuilder';
 
 const log = createLogger('ai');
@@ -86,23 +85,17 @@ export async function prepareAgentEnv(options: PrepareAgentEnvOptions): Promise<
       throw new Error(`[EnvInjector] agentId is required: sessionId=${sessionId}`);
     }
 
-    // 1. 解析 Agent 运行时布局（Agent Home / projectDir / sessionDir 由 AgentRuntimeLayout 统一决定）
-    const layout = await ensureAgentRuntimeLayout({ agentId, sessionId });
-    const agentHome = layout.agentHome;
-    const projectDir = layout.projectDir;
-    const sessionDir = layout.sessionDir;
-
-    if (!projectDir || !sessionDir || !agentHome) {
-      throw new Error(
-        `[EnvInjector] Failed to resolve agent runtime layout: agentId=${agentId}, sessionId=${sessionId}`
-      );
-    }
-
-    // 2. 构建 AgentEnv（传入 AgentRuntimeLayout，agentName 在内部做兜底）
-    const agentEnv = await buildAgentEnv(layout, agentName);
+    // 1. 构建 AgentEnv（路径计算在 buildAgentEnv 内部完成）
+    const agentEnv = await buildAgentEnv({ agentId, sessionId, agentName });
     if (options.thinkingLevel) {
       agentEnv.thinkingLevel = options.thinkingLevel;
     }
+
+    // 2. 确保运行时目录存在（agentHome/projectDir/sessionDir 等）
+    await ensureAgentRuntimeLayout(agentEnv as AgentRuntimeLayout);
+
+    const projectDir = agentEnv.projectDir;
+    const sessionDir = agentEnv.sessionDir;
 
     // 读取 Agent 定义以获取 skills 配置
     let agentDefinedSkills: string[] | undefined;

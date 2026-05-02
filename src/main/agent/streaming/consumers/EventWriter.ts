@@ -12,7 +12,7 @@
 import path from 'node:path';
 import { eventBus } from '@main/common/eventbus';
 import { createLogger } from '@main/common/logger';
-import { resolveThreadRuntimeLayoutSync } from '@main/agent/context/AgentRuntimeLayout';
+import { resolveThreadRuntimeLayoutSync } from '@main/agent/AgentEnv';
 import { StreamEventType, type StreamEvent, type StreamMessage } from '../types';
 import { AsyncJsonlWriter } from './AsyncJsonlWriter';
 

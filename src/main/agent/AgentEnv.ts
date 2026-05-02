@@ -7,11 +7,45 @@
  * 用途：
  *   1. 注入到系统提示词（appendInstructions）的 <runtime_paths> 块
  *   2. 作为 Agent 进程的环境变量子集（未来 sandbox 场景）
+ *
+ * 本文件同时包含：
+ *   - AgentRuntimeLayout 接口定义（路径布局）
+ *   - computeAgentLayoutPaths 路径计算（单一来源）
+ *   - computeAgentRuntimeLayout 便捷函数（自动从 Env 取 agentsDir）
+ *   - ensureAgentRuntimeLayout / ensureAgentRuntimeLayoutSync（mkdir）
+ *   - resolveThreadRuntimeLayoutSync（从 thread 反推布局）
+ *   - buildAgentEnv 完整环境构建
  */
 
-import type { AgentRuntimeLayout } from './context/AgentRuntimeLayout';
+import fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import path from 'node:path';
 
 // ==================== 类型定义 ====================
+
+/**
+ * Agent 运行时布局 — 路径集合
+ *
+ * 描述 Agent 运行时所需的目录结构，所有路径由 computeAgentLayoutPaths 统一计算。
+ */
+export interface AgentRuntimeLayout {
+  /** Agent 定义 ID */
+  agentId: string;
+  /** 会话 ID */
+  sessionId: string;
+  /** Agent Home 目录（{agentsDir}/{agentId}） */
+  agentHome: string;
+  /** Agent 项目目录（{agentHome}/project），工具默认 cwd */
+  projectDir: string;
+  /** 记忆目录（{agentHome}/memory） */
+  memoryDir: string;
+  /** 会话目录（{agentHome}/sessions） */
+  sessionsDir: string;
+  /** 当前会话产物目录（{agentHome}/sessions/{sessionId}） */
+  sessionDir: string;
+  /** 技能目录（{agentHome}/skills） */
+  skillsDir: string;
+}
 
 /**
  * Agent 可见的运行时环境
@@ -20,27 +54,14 @@ import type { AgentRuntimeLayout } from './context/AgentRuntimeLayout';
  *   - 系统信息（平台、架构、版本）
  *   - 目录结构（工作空间、Skill、Extension、记忆）
  *   - 能力清单（可用工具、已加载扩展）
+ *
+ * 路径字段通过 extends AgentRuntimeLayout 继承，
+ * 保证与布局层的字段定义始终一致。
  */
-export interface AgentEnv {
-  // --- Agent 身份 ---
-  /** Agent 定义 ID */
-  agentId: string;
+export interface AgentEnv extends AgentRuntimeLayout {
+  // --- Agent 身份（扩展） ---
   /** Agent 名称（未指定时默认为 agentId） */
   agentName: string;
-  /** Agent Home 目录（{agentsDir}/{agentId}/，跨会话持久化空间） */
-  agentHome: string;
-
-  // --- 会话 ---
-  /** 当前会话 ID */
-  sessionId: string;
-  /** 当前会话运行产物目录 */
-  sessionDir: string;
-  /** 记忆目录 */
-  memoryDir: string;
-  /** 会话目录 */
-  sessionsDir: string;
-  /** 技能目录 */
-  skillsDir: string;
 
   // --- 系统信息 ---
   /** 操作系统 */
@@ -50,9 +71,7 @@ export interface AgentEnv {
   /** 应用版本 */
   appVersion: string;
 
-  // --- 目录与路径 ---
-  /** Agent 业务项目目录，也是工具默认 cwd */
-  projectDir: string;
+  // --- 目录与路径（扩展） ---
   /** 用户主目录（应用级，如 ~/.coobee-ai） */
   userHome: string;
   /** 系统用户主目录（如 /Users/xxx） */
@@ -119,25 +138,150 @@ export interface AgentEnv {
   thinkingLevel: string;
 }
 
-// ==================== 构建函数 ====================
+// ==================== 路径计算（单一来源） ====================
 
 /**
- * 从 AgentRuntimeLayout 构建 Agent 安全环境子集
+ * 从 agentsDir + agentId + sessionId 计算运行时布局路径（纯计算，无副作用）
  *
- * @param layout Agent 运行时布局（包含 agentId、sessionId、agentHome、projectDir、sessionDir 等）
- * @param agentName Agent 名称（可选，未指定时默认为 agentId）
+ * 这是路径计算的唯一入口，所有需要布局路径的地方均委托此函数，
+ * 保证路径结构只维护一处。
  */
-export async function buildAgentEnv(layout: AgentRuntimeLayout, agentName?: string): Promise<AgentEnv> {
-  const { agentId, sessionId, agentHome, projectDir, sessionDir, memoryDir, sessionsDir, skillsDir } = layout;
+export function computeAgentLayoutPaths(
+  agentsDir: string,
+  agentId: string,
+  sessionId: string
+): AgentRuntimeLayout {
+  if (!agentId || !agentId.trim()) {
+    throw new Error('[AgentEnv] agentId is required');
+  }
+  if (!sessionId || !sessionId.trim()) {
+    throw new Error('[AgentEnv] sessionId is required');
+  }
+
+  const agentHome = path.join(agentsDir, agentId);
+  const projectDir = path.join(agentHome, 'project');
+  const memoryDir = path.join(agentHome, 'memory');
+  const sessionsDir = path.join(agentHome, 'sessions');
+  const sessionDir = path.join(sessionsDir, sessionId);
+  const skillsDir = path.join(agentHome, 'skills');
+
+  return {
+    agentId,
+    sessionId,
+    agentHome,
+    projectDir,
+    memoryDir,
+    sessionsDir,
+    sessionDir,
+    skillsDir
+  };
+}
+
+/**
+ * 从 agentId + sessionId 计算运行时布局路径（自动从 Env 取 agentsDir）
+ *
+ * 供不需要完整 AgentEnv 的场景使用（如 mkdir、thread 解析）。
+ */
+export function computeAgentRuntimeLayout(options: { agentId: string; sessionId: string }): AgentRuntimeLayout {
+  const { Env } = require('@main/common/env') as typeof import('@main/common/env');
+  return computeAgentLayoutPaths(Env.paths.agentsDir, options.agentId, options.sessionId);
+}
+
+// ==================== 目录创建 ====================
+
+/**
+ * 确保运行时目录存在（异步）
+ *
+ * 接收 AgentRuntimeLayout（由 computeAgentRuntimeLayout 或 AgentEnv 提供），
+ * 只负责创建目录，不做路径计算。
+ */
+export async function ensureAgentRuntimeLayout(layout: AgentRuntimeLayout): Promise<AgentRuntimeLayout> {
+  await Promise.all([
+    fsp.mkdir(layout.agentHome, { recursive: true }),
+    fsp.mkdir(layout.projectDir, { recursive: true }),
+    fsp.mkdir(layout.memoryDir, { recursive: true }),
+    fsp.mkdir(layout.sessionsDir, { recursive: true }),
+    fsp.mkdir(layout.sessionDir, { recursive: true }),
+    fsp.mkdir(layout.skillsDir, { recursive: true })
+  ]);
+  return layout;
+}
+
+/**
+ * 确保运行时目录存在（同步）
+ */
+export function ensureAgentRuntimeLayoutSync(layout: AgentRuntimeLayout): AgentRuntimeLayout {
+  fs.mkdirSync(layout.agentHome, { recursive: true });
+  fs.mkdirSync(layout.projectDir, { recursive: true });
+  fs.mkdirSync(layout.memoryDir, { recursive: true });
+  fs.mkdirSync(layout.sessionsDir, { recursive: true });
+  fs.mkdirSync(layout.sessionDir, { recursive: true });
+  fs.mkdirSync(layout.skillsDir, { recursive: true });
+  return layout;
+}
+
+/**
+ * 从 thread ID 解析运行时布局并创建目录（同步）
+ *
+ * 供 HistoryWriter/EventWriter 等需要从 sessionId 反推路径的场景使用。
+ */
+export function resolveThreadRuntimeLayoutSync(sessionId: string, fallbackAgentId?: string): AgentRuntimeLayout {
+  const thread = readThreadDefinitionSync(sessionId);
+  const agentId = typeof thread?.agentId === 'string' && thread.agentId ? thread.agentId : fallbackAgentId;
+
+  if (!agentId) {
+    throw new Error(`[AgentEnv] Cannot resolve agentId for session ${sessionId}`);
+  }
+
+  const layout = computeAgentRuntimeLayout({ agentId, sessionId });
+  return ensureAgentRuntimeLayoutSync(layout);
+}
+
+function readThreadDefinitionSync(sessionId: string): Record<string, unknown> | null {
+  const { Env } = require('@main/common/env') as typeof import('@main/common/env');
+  const filePath = path.join(Env.paths.threadsDir, `${sessionId}.json`);
+  if (!fs.existsSync(filePath)) return null;
+
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+// ==================== 构建函数 ====================
+
+/** buildAgentEnv 的参数 */
+export interface BuildAgentEnvOptions {
+  /** Agent 定义 ID */
+  agentId: string;
+  /** 会话 ID */
+  sessionId: string;
+  /** Agent 名称（可选，未指定时默认为 agentId） */
+  agentName?: string;
+}
+
+/**
+ * 构建 Agent 安全环境子集
+ *
+ * 路径计算在此函数内部完成（agentHome/projectDir/sessionDir 等），
+ * 不再依赖外部传入的 AgentRuntimeLayout。
+ *
+ * @param options 包含 agentId、sessionId、agentName
+ */
+export async function buildAgentEnv(options: BuildAgentEnvOptions): Promise<AgentEnv> {
+  const { agentId, sessionId, agentName } = options;
   const resolvedAgentName = agentName ?? agentId;
 
   // 延迟导入 Env，避免测试环境循环依赖
   const { Env } = await import('@main/common/env');
+
+  // ---- 路径计算（单一来源：computeAgentLayoutPaths） ----
+  const layout = computeAgentLayoutPaths(Env.paths.agentsDir, agentId, sessionId);
+
+  // ---- Skill / Extension 路径聚合 ----
   const { SkillManager } = await import('./skills');
 
-  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace: projectDir, agentHome });
+  const skillPathSources = await SkillManager.buildDefaultSearchPathSources({ workspace: layout.projectDir, agentHome: layout.agentHome });
   const skillPaths = SkillManager.searchPathsFromSources(skillPathSources);
-  const extensionPaths = await Env.getExtensionSearchPaths(projectDir);
+  const extensionPaths = await Env.getExtensionSearchPaths(layout.projectDir);
 
   // Extension 系统信息
   let loadedExtensions: string[] = [];
@@ -147,7 +291,6 @@ export async function buildAgentEnv(layout: AgentRuntimeLayout, agentName?: stri
     const { ExtensionManager } = await import('@main/extension');
     const registry = ExtensionManager.getRegistry();
     if (registry) {
-      // 已加载的 Extension ID 列表
       loadedExtensions = registry.getExtensionIds();
     }
   } catch {
@@ -185,25 +328,18 @@ export async function buildAgentEnv(layout: AgentRuntimeLayout, agentName?: stri
   }
 
   return {
-    // Agent 身份
-    agentId,
-    agentName: resolvedAgentName,
-    agentHome,
+    // 布局字段（来自 AgentRuntimeLayout，通过 extends 继承）
+    ...layout,
 
-    // 会话
-    sessionId,
-    sessionDir,
-    memoryDir,
-    sessionsDir,
-    skillsDir,
+    // Agent 身份（扩展）
+    agentName: resolvedAgentName,
 
     // 系统信息
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     arch: process.arch,
     appVersion: Env.app?.version ?? '0.0.0',
 
-    // 目录与路径
-    projectDir,
+    // 目录与路径（扩展）
     userHome: Env.paths.userHome,
     systemHome: Env.paths.home,
     tempDir: Env.paths.temp,

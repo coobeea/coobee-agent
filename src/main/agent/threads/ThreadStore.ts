@@ -23,7 +23,7 @@ import { generateSnowflakeId } from '@main/utils/SnowflakeIdGenerator';
 import { ThreadEventTypes } from '@shared/events/thread';
 import type { ThreadMessageAction, ThreadMessageEventPayload } from '@shared/events/thread';
 import { normalizeModelSpec } from '../provider/ModelSpec';
-import { createAgentRuntimeLayout, ensureAgentRuntimeLayout } from '../context/AgentRuntimeLayout';
+import { computeAgentRuntimeLayout, ensureAgentRuntimeLayout } from '../AgentEnv';
 import type {
   ThreadDefinition,
   ThreadIndexEntry,
@@ -132,10 +132,11 @@ export class ThreadStore {
 
   /** 创建 Thread 的 Agent 运行目录 */
   private async createRuntimeDirectories(thread: ThreadDefinition): Promise<void> {
-    await ensureAgentRuntimeLayout({
+    const layout = computeAgentRuntimeLayout({
       agentId: thread.agentId,
       sessionId: thread.sessionId
     });
+    await ensureAgentRuntimeLayout(layout);
     log.debug(`[ThreadStore] Created runtime directories for thread ${thread.id}`);
   }
 
@@ -443,7 +444,7 @@ export type ThreadMessageEvent = ThreadMessageEventPayload;
 
 /** 从完整定义提取索引条目 */
 function toIndexEntry(def: ThreadDefinition): ThreadIndexEntry {
-  const layout = createAgentRuntimeLayout({
+  const layout = computeAgentRuntimeLayout({
     agentId: def.agentId,
     sessionId: def.sessionId
   });

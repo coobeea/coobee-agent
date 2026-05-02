@@ -387,8 +387,9 @@ class AgentExecutor {
         const agentId = request.agentId;
         workspaceDir = request.workspaceRoot;
         if (!workspaceDir) {
-          const { ensureAgentRuntimeLayout } = await import('./context/AgentRuntimeLayout');
-          const layout = await ensureAgentRuntimeLayout({ agentId, sessionId });
+          const { computeAgentRuntimeLayout, ensureAgentRuntimeLayout } = await import('./AgentEnv');
+          const layout = computeAgentRuntimeLayout({ agentId, sessionId });
+          await ensureAgentRuntimeLayout(layout);
           workspaceDir = layout.projectDir;
         }
 
