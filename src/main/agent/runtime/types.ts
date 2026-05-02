@@ -652,8 +652,6 @@ export interface RunErrorData {
   message: string;
   /** 错误码 */
   code?: string;
-  /** 不可恢复错误（基类 stream() 在放弃重试前发出） */
-  fatal?: boolean;
 }
 
 // ---- ② turn: ----

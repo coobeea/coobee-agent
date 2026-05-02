@@ -274,7 +274,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         executionSignal.addEventListener('abort', abortListener, { once: true });
       }
 
-      /** 延迟抛出：供 AbstractAgentRuntime.stream() 捕获并重试（勿在队列内吞掉异常） */
+      /** SDK 级别异常暂存：队列消费完毕后抛出，避免被 .catch() 吞掉 */
       let capturedError: unknown = null;
 
       // 3. SDK 执行，完成后结束 queue
@@ -291,7 +291,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           await Promise.resolve();
 
           if (apiError) {
-            // API 返回了错误（如 usage limit exceeded）但 SDK 没有 throw — 转为异常交给基类重试策略
+            // API 返回了错误（如 usage limit exceeded）但 SDK 没有 throw — 转为异常传播给调用方
             capturedError = new Error(apiError);
           } else {
             queue.push({ type: 'run:done', content: '' });

@@ -12,7 +12,7 @@
  * - maxTurns：防止无限工具调用循环
  */
 
-import { run, Agent, tool, OpenAIResponsesModel } from '@openai/agents';
+import { run, Agent, tool, OpenAIResponsesModel, retryPolicies } from '@openai/agents';
 import type { StreamedRunResult, Tool, Model, ModelSettings } from '@openai/agents';
 import OpenAI from 'openai';
 
@@ -216,6 +216,28 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       enable_thinking: options.thinkingLevel !== 'off',
       reasoning_effort: options.thinkingLevel && options.thinkingLevel !== 'off' ? options.thinkingLevel : 'none'
     };
+
+    // retry — SDK 原生重试（与 PiMono 的 SettingsManager.retry 对等）
+    if (options.retry?.enabled !== false) {
+      const maxRetries = options.retry?.maxRetries ?? 3;
+      const baseDelayMs = options.retry?.baseDelayMs ?? 1000;
+
+      settings.retry = {
+        maxRetries,
+        backoff: {
+          initialDelayMs: baseDelayMs,
+          maxDelayMs: baseDelayMs * 16,
+          multiplier: 2,
+          jitter: true
+        },
+        policy: retryPolicies.any(
+          retryPolicies.providerSuggested(),
+          retryPolicies.retryAfter(),
+          retryPolicies.networkError(),
+          retryPolicies.httpStatus([408, 409, 429, 500, 502, 503, 504])
+        )
+      };
+    }
 
     return settings;
   }
