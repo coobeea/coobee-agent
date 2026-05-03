@@ -14,5 +14,7 @@
 - 修改了 `src/renderer/src/components/chat/VoiceConversationInput.vue`，改为直接消费统一 `displayText`，在 turn final 时加快自动提交。
 - 在 `src/renderer/src/composables/useAudioRecorder.ts` 中增加统一转写消息的 `seq` 去重保护，降低重复消息或乱序消息导致的重复展示风险。
 - 在 `resources/workers/asr/server.py` 的阿里云链路中补上 `session.finished` 前草稿尾段的收尾合并，并在 `session_final` 中补齐 legacy `final` 兜底。
+- 在 `resources/workers/asr/server.py` 中增加可观测性日志，覆盖本地 ASR 与阿里云 ASR 的收音频、VAD、识别开始/结束、状态下行与 transcript 下行。
+- 增加 `ASR_VERBOSE_LOG` 开关，默认开启信息级日志，便于通过终端快速判断“有没有在处理、卡在处理哪一段”。
 - 执行了 `python3 -m py_compile resources/workers/asr/server.py`，通过。
 - 执行了针对 `useAudioRecorder.ts`、`InsightView.vue`、`VoiceConversationInput.vue` 的 ESLint 检查，已清理本轮新增告警。

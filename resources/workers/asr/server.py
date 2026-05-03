@@ -20,9 +20,6 @@ FastAPI + WebSocket 服务，封装 FunASR-Nano 模型。
 
 import argparse
 import asyncio
-import base64
-import contextlib
-import json
 import logging
 import os
 import re
@@ -30,9 +27,25 @@ import struct
 import sys
 import tempfile
 import time
-import urllib.parse
-import uuid
 import wave
+from core.config import (
+    ALIYUN_MODEL_NAME,
+    API_KEY,
+    API_URL,
+    BYTES_PER_SAMPLE,
+    BYTES_PER_SEC,
+    MODEL_DIR,
+    MODEL_NAME,
+    SAMPLE_RATE,
+    SCRIPT_DIR,
+    USE_ALIYUN_QWEN_ASR,
+    VERBOSE_LOG,
+    local_config_base_dir,
+)
+from core.logging_utils import configure_asr_logging
+from app.provider_registry import ProviderRegistry
+from providers.aliyun_provider import AliyunAsrProvider
+from providers.local_provider import LocalAsrProvider
 
 os.environ["TQDM_DISABLE"] = "1"
 os.environ["FUNASR_DISABLE_PBAR"] = "1"
@@ -49,7 +62,7 @@ logging.getLogger("funasr").setLevel(logging.WARNING)
 
 # FastAPI / uvicorn
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket
     from fastapi.responses import JSONResponse
     import uvicorn
 except ImportError:
@@ -58,61 +71,10 @@ except ImportError:
 
 # ==================== 配置 ====================
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_NAME = "FunAudioLLM/Fun-ASR-Nano-2512"
-DEFAULT_ALIYUN_ASR_API_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
-
-# 默认路径
-DEFAULT_MODEL_DIR = os.path.join(os.environ.get("HOME", ""), ".cache", "modelscope", "hub")
-MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
-API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
-API_URL = DEFAULT_ALIYUN_ASR_API_URL
-
-# 尝试读取运行时配置覆盖 (WORKER_CONFIG_PATH)，local_config.json 仅作兼容兜底
-local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
-local_config_base_dir = os.path.dirname(os.path.abspath(local_config_path))
-if os.path.exists(local_config_path):
-    try:
-        import json
-        with open(local_config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        if isinstance(config, dict):
-            if "model_dir" in config and isinstance(config["model_dir"], str):
-                p = config["model_dir"]
-                if not os.path.isabs(p):
-                    p = os.path.abspath(os.path.join(local_config_base_dir, p))
-                MODEL_DIR = p
-
-            if "model_name" in config and isinstance(config["model_name"], str) and config["model_name"].strip():
-                MODEL_NAME = config["model_name"].strip()
-
-            if "api_key" in config and isinstance(config["api_key"], str) and config["api_key"].strip():
-                API_KEY = config["api_key"].strip()
-
-            if "api_url" in config and isinstance(config["api_url"], str) and config["api_url"].strip():
-                API_URL = config["api_url"].strip()
-    except Exception:
-        pass
-
-# PCM 音频参数
-SAMPLE_RATE = 16000
-BYTES_PER_SAMPLE = 2  # Int16
-BYTES_PER_SEC = SAMPLE_RATE * BYTES_PER_SAMPLE  # 32000
-
-# ---- VAD（语音活动检测）参数 ----
-SILENCE_THRESHOLD = 300       # Int16 振幅阈值，低于此视为静音
-SILENCE_DURATION_SEC = 1.2    # 连续静音多久才算"说完一句"
-MAX_UTTERANCE_SEC = 20.0      # 不间断说话的安全上限（超过强制识别）
-MIN_UTTERANCE_SEC = 0.3       # 最短有效语段（低于此不值得识别）
-
-logging.basicConfig(level=logging.WARNING, format="[ASR] %(message)s")
-log = logging.getLogger("asr")
-log.setLevel(logging.WARNING)
+log = configure_asr_logging(VERBOSE_LOG)
 
 # 模型类型检测：SenseVoice 系列需要不同的参数和后处理
 _is_sensevoice = "sensevoice" in MODEL_NAME.lower().replace("-", "").replace("_", "")
-USE_ALIYUN_QWEN_ASR = MODEL_NAME.lower().startswith("aliyun/")
-ALIYUN_MODEL_NAME = MODEL_NAME.split("/", 1)[1] if USE_ALIYUN_QWEN_ASR and "/" in MODEL_NAME else MODEL_NAME
 
 app = FastAPI(title="ASR Worker", version="0.3.0")
 
@@ -121,6 +83,7 @@ app = FastAPI(title="ASR Worker", version="0.3.0")
 asr_engine = None
 model_loaded = False
 resolved_model_path = None
+_provider_registry = None
 
 
 # ==================== 模型加载 ====================
@@ -174,7 +137,7 @@ def has_model_weight_file(path: str) -> bool:
         return False
 
     try:
-        for root, dirs, files in os.walk(path):
+        for _root, dirs, files in os.walk(path):
             dirs[:] = [name for name in dirs if name not in MODEL_TEMP_DIR_NAMES and not name.startswith("._____")]
             for filename in files:
                 if filename.lower().endswith(MODEL_WEIGHT_EXTENSIONS):
@@ -265,20 +228,51 @@ def load_asr_model():
     log.info(f"模型加载完成，耗时 {elapsed:.1f}s")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时加载模型（在线程池中执行，不阻塞事件循环）"""
-    global model_loaded
-    if USE_ALIYUN_QWEN_ASR:
-        model_loaded = True
-        log.info(
-            f"使用阿里云实时语音识别: model={ALIYUN_MODEL_NAME}, "
-            f"api_url={API_URL}, api_key={'已配置' if API_KEY else '未配置'}"
-        )
-        return
-
+async def startup_local_provider() -> None:
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, load_asr_model)
+
+
+def build_provider_registry() -> ProviderRegistry:
+    registry = ProviderRegistry()
+    registry.register(
+        AliyunAsrProvider(
+            model_name=ALIYUN_MODEL_NAME,
+            model_dir=MODEL_DIR,
+            api_url=API_URL,
+            api_key=API_KEY,
+        )
+    )
+    registry.register(
+        LocalAsrProvider(
+            model_name=MODEL_NAME,
+            model_dir=MODEL_DIR,
+            get_model_loaded=lambda: model_loaded,
+            get_resolved_model_path=lambda: resolved_model_path,
+            startup_cb=startup_local_provider,
+            transcribe_cb=transcribe_async,
+            chunk_energy_cb=check_chunk_energy,
+        )
+    )
+    return registry
+
+
+def get_provider_registry() -> ProviderRegistry:
+    global _provider_registry
+    if _provider_registry is None:
+        _provider_registry = build_provider_registry()
+    return _provider_registry
+
+
+def get_active_provider():
+    provider_name = "aliyun" if USE_ALIYUN_QWEN_ASR else "local"
+    return get_provider_registry().get(provider_name)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时加载当前 provider（在线程池中执行，不阻塞事件循环）"""
+    await get_active_provider().startup()
 
 
 # ==================== HTTP 接口 ====================
@@ -286,22 +280,12 @@ async def startup_event():
 @app.get("/health")
 async def health():
     """健康检查"""
-    resp = {
-        "status": "ok",
-        "model_loaded": model_loaded,
-        "provider": "aliyun" if USE_ALIYUN_QWEN_ASR else "local",
-        "model_name": ALIYUN_MODEL_NAME if USE_ALIYUN_QWEN_ASR else MODEL_NAME,
-        "model_dir": MODEL_DIR,
-        "resolved_model_path": None if USE_ALIYUN_QWEN_ASR else resolved_model_path,
-    }
-    if USE_ALIYUN_QWEN_ASR:
-        resp["api_key_configured"] = bool(API_KEY)
-        resp["api_url"] = API_URL
+    resp = await get_active_provider().health()
     return JSONResponse(resp)
 
 
 @app.post("/api/test")
-async def test_asr(request: dict = None):
+async def test_asr(_request: dict = None):
     """
     实际测试 ASR Worker。
 
@@ -309,26 +293,10 @@ async def test_asr(request: dict = None):
     - 阿里云模型：真实建立 WebSocket 会话，发送 session.update / 音频 / session.finish。
     """
     started_at = time.time()
+    provider = get_active_provider()
 
     try:
-        if USE_ALIYUN_QWEN_ASR:
-            result = await test_aliyun_asr_session()
-        else:
-            if not model_loaded:
-                raise RuntimeError("ASR 模型尚未加载完成")
-
-            seconds = 0.8
-            pcm_bytes = bytes(int(BYTES_PER_SEC * seconds))
-            transcribe_result = await transcribe_async(pcm_bytes)
-            result = {
-                "provider": "local",
-                "model_name": MODEL_NAME,
-                "sample_seconds": seconds,
-                "text": transcribe_result.get("text", ""),
-                "inference_latency_ms": transcribe_result.get("latency_ms", 0),
-                "message": "本地 ASR 推理链路测试完成",
-            }
-
+        result = await provider.run_test()
         result["ok"] = True
         result["latency_ms"] = int((time.time() - started_at) * 1000)
         return JSONResponse(result)
@@ -336,8 +304,8 @@ async def test_asr(request: dict = None):
         return JSONResponse(
             {
                 "ok": False,
-                "provider": "aliyun" if USE_ALIYUN_QWEN_ASR else "local",
-                "model_name": ALIYUN_MODEL_NAME if USE_ALIYUN_QWEN_ASR else MODEL_NAME,
+                "provider": provider.name,
+                "model_name": provider.model_name,
                 "latency_ms": int((time.time() - started_at) * 1000),
                 "error": str(e),
             },
@@ -518,719 +486,12 @@ async def transcribe_async(pcm_bytes: bytes) -> dict:
     return await loop.run_in_executor(None, do_transcribe, pcm_bytes)
 
 
-# ==================== 阿里云 Qwen-ASR-Realtime 适配 ====================
-
-def build_aliyun_realtime_url() -> str:
-    """构建百炼实时语音识别 WebSocket 地址。"""
-    base_url = (API_URL or DEFAULT_ALIYUN_ASR_API_URL).strip()
-    parsed = urllib.parse.urlsplit(base_url)
-    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-
-    if not any(key == "model" for key, _ in query):
-        query.append(("model", ALIYUN_MODEL_NAME))
-
-    return urllib.parse.urlunsplit(
-        (
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            urllib.parse.urlencode(query),
-            parsed.fragment,
-        )
-    )
-
-
-async def connect_aliyun_ws(url: str):
-    """兼容 websockets 14+ 的 additional_headers 与旧版 extra_headers。"""
-    import websockets
-
-    headers = {"Authorization": f"bearer {API_KEY}"}
-    kwargs = {
-        "ping_interval": 20,
-        "ping_timeout": 20,
-        "max_size": 16 * 1024 * 1024,
-    }
-
-    try:
-        return await websockets.connect(url, additional_headers=headers, **kwargs)
-    except TypeError:
-        return await websockets.connect(url, extra_headers=headers, **kwargs)
-
-
-def extract_aliyun_text(event: dict) -> str:
-    """从百炼实时识别事件中提取文本，兼容 delta/completed 的不同字段形态。"""
-    for key in ("transcript", "text", "delta"):
-        value = event.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    item = event.get("item")
-    if isinstance(item, dict):
-        for key in ("transcript", "text", "delta"):
-            value = item.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-
-        content = item.get("content")
-        if isinstance(content, list):
-            texts = []
-            for part in content:
-                if not isinstance(part, dict):
-                    continue
-                for key in ("transcript", "text"):
-                    value = part.get(key)
-                    if isinstance(value, str) and value.strip():
-                        texts.append(value.strip())
-            if texts:
-                return "".join(texts).strip()
-
-    output = event.get("output")
-    if isinstance(output, dict):
-        for key in ("transcript", "text"):
-            value = output.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-
-    return ""
-
-
-def should_insert_space(before: str, after: str) -> bool:
-    return bool(re.search(r"[a-zA-Z0-9]$", before)) and bool(re.search(r"^[a-zA-Z0-9]", after))
-
-
-def find_text_overlap(before: str, after: str, max_chars: int = 40) -> int:
-    before_chars = list(before)
-    after_chars = list(after)
-    max_overlap = min(len(before_chars), len(after_chars), max_chars)
-
-    for length in range(max_overlap, 0, -1):
-        if before_chars[-length:] == after_chars[:length]:
-            return length
-
-    return 0
-
-
-def merge_transcript_text(before: str, after: str) -> str:
-    base = (before or "").strip()
-    next_text = (after or "").strip()
-    if not base:
-        return next_text
-    if not next_text or next_text == base or next_text in base:
-        return base
-    if next_text.startswith(base) or base in next_text:
-        return next_text
-
-    overlap = find_text_overlap(base, next_text)
-    separator = " " if overlap == 0 and should_insert_space(base, next_text) else ""
-    return f"{base}{separator}{next_text[overlap:]}"
-
-
-def build_aliyun_session_update() -> dict:
-    """构建百炼实时识别 session 配置。前端仍然固定发送 16k PCM。"""
-    return {
-        "event_id": str(uuid.uuid4()),
-        "type": "session.update",
-        "session": {
-            "input_audio_format": "pcm",
-            "sample_rate": SAMPLE_RATE,
-            "input_audio_transcription": {
-                "language": "zh",
-            },
-            "turn_detection": {
-                "type": "server_vad",
-                "threshold": 0.0,
-                "silence_duration_ms": 400,
-            },
-        },
-    }
-
-
-async def safe_send_json(ws: WebSocket, payload: dict) -> bool:
-    try:
-        await ws.send_json(payload)
-        return True
-    except Exception:
-        return False
-
-
-async def test_aliyun_asr_session() -> dict:
-    """真实建立一次百炼 Qwen-ASR-Realtime 会话，验证配置和协议链路。"""
-    if not API_KEY:
-        raise RuntimeError("未配置阿里云 DashScope API Key")
-
-    target_url = build_aliyun_realtime_url()
-    aliyun_ws = await connect_aliyun_ws(target_url)
-    event_types = []
-
-    async def read_event(timeout: float = 8.0) -> dict:
-        raw = await asyncio.wait_for(aliyun_ws.recv(), timeout=timeout)
-        if not isinstance(raw, str):
-            return {"type": "binary"}
-        try:
-            event = json.loads(raw)
-        except json.JSONDecodeError:
-            return {"type": "unknown", "raw": raw[:120]}
-
-        event_type = str(event.get("type", ""))
-        if event_type:
-            event_types.append(event_type)
-
-        if event_type.endswith(".failed") or event_type in {"error", "session.failed"}:
-            error = event.get("error")
-            if isinstance(error, dict):
-                message = error.get("message") or error.get("code")
-            else:
-                message = event.get("message") or error
-            raise RuntimeError(str(message or "阿里云实时 ASR 测试失败"))
-
-        return event
-
-    try:
-        await aliyun_ws.send(json.dumps(build_aliyun_session_update(), ensure_ascii=False))
-
-        for _ in range(4):
-            event = await read_event()
-            if event.get("type") == "session.updated":
-                break
-
-        silence = bytes(int(BYTES_PER_SEC * 0.8))
-        await aliyun_ws.send(
-            json.dumps(
-                {
-                    "event_id": str(uuid.uuid4()),
-                    "type": "input_audio_buffer.append",
-                    "audio": base64.b64encode(silence).decode("ascii"),
-                },
-                ensure_ascii=False,
-            )
-        )
-        await aliyun_ws.send(
-            json.dumps(
-                {
-                    "event_id": str(uuid.uuid4()),
-                    "type": "session.finish",
-                },
-                ensure_ascii=False,
-            )
-        )
-
-        for _ in range(8):
-            event = await read_event(timeout=12.0)
-            if event.get("type") == "session.finished":
-                break
-        else:
-            raise RuntimeError("等待 session.finished 超时")
-
-        return {
-            "provider": "aliyun",
-            "model_name": ALIYUN_MODEL_NAME,
-            "api_url": API_URL or DEFAULT_ALIYUN_ASR_API_URL,
-            "events": event_types,
-            "message": "阿里云 ASR WebSocket 会话测试完成",
-        }
-    finally:
-        with contextlib.suppress(Exception):
-            await aliyun_ws.close()
-
-
-async def aliyun_asr_stream(ws: WebSocket):
-    """
-    阿里云 Qwen-ASR-Realtime 适配。
-
-    对外保持 coobee worker 协议：
-      - 客户端继续发送 PCM Int16 LE 16kHz 二进制流
-      - 服务端继续返回 {"partial": "..."} / {"final": "..."}
-    对内转换为百炼 realtime 事件协议。
-    """
-    await ws.accept()
-
-    if not API_KEY:
-        await safe_send_json(ws, {"error": "未配置阿里云 DashScope API Key"})
-        await ws.close(code=1008)
-        return
-
-    try:
-        aliyun_ws = await connect_aliyun_ws(build_aliyun_realtime_url())
-    except Exception as e:
-        log.warning(f"连接阿里云实时 ASR 失败: {e}")
-        await safe_send_json(ws, {"error": f"连接阿里云实时 ASR 失败: {e}"})
-        await ws.close(code=1011)
-        return
-
-    last_partial = ""
-    committed_text = ""
-    current_turn_id = ""
-    current_revision = 0
-    transcript_seq = 0
-    turn_count = 0
-
-    def next_turn_id() -> str:
-        nonlocal turn_count
-        turn_count += 1
-        return f"turn-{turn_count}"
-
-    async def send_transcript_event(
-        transcript_event: str,
-        *,
-        committed: str,
-        draft: str = "",
-        turn_id: str = "",
-        revision: int = 0,
-        is_final_turn: bool = False,
-        is_final_session: bool = False,
-        legacy_partial: str | None = None,
-        legacy_final: str | None = None,
-        **payload,
-    ) -> bool:
-        nonlocal transcript_seq
-
-        transcript_seq += 1
-        display_text = merge_transcript_text(committed, draft)
-        message = {
-            "transcript_event": transcript_event,
-            "provider": "aliyun",
-            "seq": transcript_seq,
-            "turn_id": turn_id or None,
-            "revision": revision,
-            "committed_text": committed,
-            "draft_text": draft,
-            "display_text": display_text,
-            "is_final_turn": is_final_turn,
-            "is_final_session": is_final_session,
-            **payload,
-        }
-        if legacy_partial is not None:
-            message["partial"] = legacy_partial
-        if legacy_final is not None:
-            message["final"] = legacy_final
-        return await safe_send_json(ws, message)
-
-    async def forward_audio():
-        try:
-            while True:
-                message = await ws.receive()
-                if message.get("type") == "websocket.disconnect":
-                    break
-
-                audio = message.get("bytes")
-                if not audio:
-                    continue
-
-                await aliyun_ws.send(
-                    json.dumps(
-                        {
-                            "event_id": str(uuid.uuid4()),
-                            "type": "input_audio_buffer.append",
-                            "audio": base64.b64encode(audio).decode("ascii"),
-                        },
-                        ensure_ascii=False,
-                    )
-                )
-        except Exception:
-            pass
-        finally:
-            with contextlib.suppress(Exception):
-                await aliyun_ws.send(
-                    json.dumps(
-                        {
-                            "event_id": str(uuid.uuid4()),
-                            "type": "session.finish",
-                        },
-                        ensure_ascii=False,
-                    )
-                )
-
-    async def forward_events():
-        nonlocal committed_text, current_revision, current_turn_id, last_partial
-        try:
-            async for raw in aliyun_ws:
-                if not isinstance(raw, str):
-                    continue
-
-                try:
-                    event = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-
-                event_type = str(event.get("type", ""))
-                if event_type.endswith(".failed") or event_type in {"error", "session.failed"}:
-                    error = event.get("error")
-                    if isinstance(error, dict):
-                        message = error.get("message") or error.get("code")
-                    else:
-                        message = event.get("message") or error
-                    message = message or "阿里云实时 ASR 识别失败"
-                    await safe_send_json(ws, {"error": str(message)})
-                    continue
-
-                if "input_audio_transcription" not in event_type:
-                    if event_type == "session.finished":
-                        break
-                    continue
-
-                text = extract_aliyun_text(event)
-                if not text:
-                    continue
-
-                if event_type.endswith(".completed"):
-                    if not current_turn_id:
-                        current_turn_id = next_turn_id()
-                    revision = current_revision or 1
-                    committed_text = merge_transcript_text(committed_text, text)
-                    last_partial = ""
-                    if not await send_transcript_event(
-                        "turn_final",
-                        committed=committed_text,
-                        draft="",
-                        turn_id=current_turn_id,
-                        revision=revision,
-                        is_final_turn=True,
-                        legacy_final=text,
-                    ):
-                        break
-                    current_turn_id = ""
-                    current_revision = 0
-                elif text != last_partial:
-                    if not current_turn_id:
-                        current_turn_id = next_turn_id()
-                    current_revision += 1
-                    last_partial = text
-                    if not await send_transcript_event(
-                        "update",
-                        committed=committed_text,
-                        draft=text,
-                        turn_id=current_turn_id,
-                        revision=current_revision,
-                        legacy_partial=text,
-                    ):
-                        break
-        except Exception as e:
-            log.debug(f"阿里云实时 ASR 事件转发结束: {type(e).__name__}: {e}")
-
-    try:
-        await aliyun_ws.send(json.dumps(build_aliyun_session_update(), ensure_ascii=False))
-
-        audio_task = asyncio.create_task(forward_audio())
-        event_task = asyncio.create_task(forward_events())
-        done, pending = await asyncio.wait(
-            {audio_task, event_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-        for task in pending:
-            task.cancel()
-        for task in pending:
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
-        for task in done:
-            with contextlib.suppress(Exception):
-                await task
-        if last_partial:
-            if not current_turn_id:
-                current_turn_id = next_turn_id()
-            current_revision = current_revision or 1
-            committed_text = merge_transcript_text(committed_text, last_partial)
-            last_partial = ""
-        if committed_text:
-            await send_transcript_event(
-                "session_final",
-                committed=committed_text,
-                turn_id=current_turn_id,
-                revision=current_revision,
-                is_final_session=True,
-                legacy_final=committed_text,
-            )
-    finally:
-        with contextlib.suppress(Exception):
-            await aliyun_ws.close()
-        with contextlib.suppress(Exception):
-            await ws.close()
-
-
 # ==================== WebSocket 流式 ASR ====================
-
-# 预计算常量
-MAX_UTTERANCE_BYTES = int(MAX_UTTERANCE_SEC * BYTES_PER_SEC)
-MIN_UTTERANCE_BYTES = int(MIN_UTTERANCE_SEC * BYTES_PER_SEC)
-SILENCE_BYTES = int(SILENCE_DURATION_SEC * BYTES_PER_SEC)
 
 
 @app.websocket("/ws/asr")
 async def asr_stream(ws: WebSocket):
-    if USE_ALIYUN_QWEN_ASR:
-        await aliyun_asr_stream(ws)
-    else:
-        await local_asr_stream(ws)
-
-
-async def local_asr_stream(ws: WebSocket):
-    """
-    流式 ASR — VAD 触发识别
-    
-    策略：检测说话停顿才触发识别，保证句子完整性。
-    - 持续接收 PCM Int16 LE 音频，跟踪每个 chunk 的音量
-    - 当检测到"有说话 → 静音超过阈值"时，将整段语音送去识别
-    - 安全阀：连续说话超过 MAX_UTTERANCE_SEC 时强制切一次
-    """
-    await ws.accept()
-    log.debug("WebSocket 客户端已连接")
-    
-    if not model_loaded:
-        await ws.send_json({"status": "loading", "message": "模型加载中..."})
-        while not model_loaded:
-            await asyncio.sleep(0.5)
-    await ws.send_json({"status": "ready", "message": "模型已就绪"})
-    
-    # ---- 会话状态 ----
-    buffer = bytearray()
-    recognized_pos = 0
-    committed_text = ""
-    connected = True
-    pending = asyncio.Event()
-    send_lock = asyncio.Lock()
-    last_status_sent_at = 0.0
-    transcript_seq = 0
-    transcript_revision = 0
-    turn_count = 0
-    
-    # VAD 状态
-    speech_start_pos = -1      # 当前语音段的起始位置（-1=没在说话）
-    silence_start_pos = -1     # 静音开始的位置
-
-    async def send_json(payload: dict) -> bool:
-        try:
-            async with send_lock:
-                await ws.send_json(payload)
-            return True
-        except Exception:
-            return False
-
-    def next_turn_id() -> str:
-        nonlocal turn_count
-        turn_count += 1
-        return f"turn-{turn_count}"
-
-    async def send_asr_status(asr_status: str, throttle_ms: int = 0, **payload) -> bool:
-        """向前端推送 ASR 处理状态，文本结果仍走 partial/final。"""
-        nonlocal last_status_sent_at
-
-        now = time.time()
-        if throttle_ms > 0 and (now - last_status_sent_at) * 1000 < throttle_ms:
-            return True
-
-        last_status_sent_at = now
-        message = {
-            "asr_status": asr_status,
-            **payload,
-        }
-        return await send_json(message)
-
-    async def send_transcript_event(
-        transcript_event: str,
-        *,
-        committed: str,
-        draft: str = "",
-        turn_id: str = "",
-        is_final_turn: bool = False,
-        is_final_session: bool = False,
-        legacy_partial: str | None = None,
-        legacy_final: str | None = None,
-        **payload,
-    ) -> bool:
-        nonlocal transcript_seq, transcript_revision
-
-        transcript_seq += 1
-        transcript_revision += 1
-        display_text = merge_transcript_text(committed, draft)
-        message = {
-            "transcript_event": transcript_event,
-            "provider": "local",
-            "seq": transcript_seq,
-            "turn_id": turn_id or None,
-            "revision": transcript_revision,
-            "committed_text": committed,
-            "draft_text": draft,
-            "display_text": display_text,
-            "is_final_turn": is_final_turn,
-            "is_final_session": is_final_session,
-            **payload,
-        }
-        if legacy_partial is not None:
-            message["partial"] = legacy_partial
-        if legacy_final is not None:
-            message["final"] = legacy_final
-        return await send_json(message)
-    
-    async def receive_chunks():
-        """接收 PCM 字节流，做 VAD 检测，在停顿时触发识别"""
-        nonlocal connected, speech_start_pos, silence_start_pos, recognized_pos
-        
-        try:
-            while True:
-                data = await ws.receive_bytes()
-                buf_pos_before = len(buffer)
-                buffer.extend(data)
-                
-                energy = check_chunk_energy(data)
-                is_speech = energy > SILENCE_THRESHOLD
-                
-                if is_speech:
-                    # 正在说话
-                    if speech_start_pos < 0:
-                        speech_start_pos = buf_pos_before
-                        # 跳过前面的静音，把 recognized_pos 推进到语音起始前 0.2s
-                        margin = int(0.2 * BYTES_PER_SEC)
-                        skip_to = max(recognized_pos, buf_pos_before - margin)
-                        if skip_to > recognized_pos:
-                            recognized_pos = skip_to
-                        log.debug(f"[VAD] 开始说话 pos={speech_start_pos}")
-                        if not await send_asr_status("speech_start", energy=energy):
-                            break
-                    else:
-                        speech_ms = int((len(buffer) - speech_start_pos) / BYTES_PER_SEC * 1000)
-                        if not await send_asr_status(
-                            "speech_active",
-                            throttle_ms=500,
-                            buffered_ms=speech_ms,
-                            energy=energy,
-                        ):
-                            break
-                    silence_start_pos = -1
-                    
-                    # 安全阀：连续说话太久，强制触发识别
-                    speech_len = len(buffer) - speech_start_pos
-                    if speech_len >= MAX_UTTERANCE_BYTES:
-                        log.debug(
-                            f"[VAD] 连续说话 {speech_len / BYTES_PER_SEC:.1f}s，"
-                            f"强制触发"
-                        )
-                        pending.set()
-                else:
-                    # 静音
-                    if silence_start_pos < 0:
-                        silence_start_pos = buf_pos_before
-                    
-                    # 如果之前在说话，检查静音是否够长
-                    if speech_start_pos >= 0:
-                        silence_len = len(buffer) - silence_start_pos
-                        if silence_len >= SILENCE_BYTES:
-                            utterance_bytes = silence_start_pos - recognized_pos
-                            utterance_ms = int(utterance_bytes / BYTES_PER_SEC * 1000)
-                            log.debug(
-                                f"[VAD] 停顿 "
-                                f"(语音 {utterance_bytes / BYTES_PER_SEC:.1f}s)"
-                            )
-                            if utterance_bytes >= MIN_UTTERANCE_BYTES:
-                                if not await send_asr_status("speech_end", buffered_ms=utterance_ms):
-                                    break
-                                pending.set()
-                            else:
-                                recognized_pos = len(buffer)
-                            speech_start_pos = -1
-                            silence_start_pos = -1
-        
-        except (WebSocketDisconnect, Exception) as e:
-            log.debug(f"连接断开: {type(e).__name__}")
-            connected = False
-            pending.set()
-    
-    async def recognize_loop():
-        """等待 VAD 触发，识别完整语段"""
-        nonlocal committed_text, recognized_pos, speech_start_pos
-        
-        while connected:
-            await pending.wait()
-            pending.clear()
-            
-            if not connected:
-                break
-            
-            # 确定识别范围
-            available = len(buffer) - recognized_pos
-            if available < MIN_UTTERANCE_BYTES:
-                continue
-            
-            # 取音频段（含少量尾部静音没关系，模型能处理）
-            end = min(recognized_pos + MAX_UTTERANCE_BYTES, len(buffer))
-            segment = bytes(buffer[recognized_pos:end])
-            segment_ms = int(len(segment) / BYTES_PER_SEC * 1000)
-            
-            try:
-                if not await send_asr_status("recognizing", buffered_ms=segment_ms):
-                    break
-
-                result = await transcribe_async(segment)
-                recognized_pos = end
-                
-                if speech_start_pos >= 0 and speech_start_pos < end:
-                    speech_start_pos = end
-                
-                text = result["text"]
-                if text:
-                    turn_id = next_turn_id()
-                    committed_text = merge_transcript_text(committed_text, text)
-                    msg = {"latency_ms": result["latency_ms"]}
-                    if result.get("lang"):
-                        msg["lang"] = result["lang"]
-                    if result.get("emotion"):
-                        msg["emotion"] = result["emotion"]
-                    if result.get("event"):
-                        msg["event"] = result["event"]
-                    if not await send_transcript_event(
-                        "turn_final",
-                        committed=committed_text,
-                        turn_id=turn_id,
-                        is_final_turn=True,
-                        legacy_partial=committed_text,
-                        **msg,
-                    ):
-                        break
-                    if not await send_asr_status(
-                        "recognized",
-                        text_tail=committed_text[-32:],
-                        latency_ms=result["latency_ms"],
-                    ):
-                        break
-            
-            except Exception as e:
-                log.warning(f"识别异常: {e}")
-    
-    # 并发运行
-    recv_task = asyncio.create_task(receive_chunks())
-    recog_task = asyncio.create_task(recognize_loop())
-    
-    await recv_task
-    connected = False
-    pending.set()
-    recog_task.cancel()
-    try:
-        await recog_task
-    except asyncio.CancelledError:
-        pass
-    
-    # 最终识别：处理断开时尚未识别的尾部
-    remaining = len(buffer) - recognized_pos
-    if remaining > MIN_UTTERANCE_BYTES:
-        segment = bytes(buffer[recognized_pos:])
-        try:
-            result = await transcribe_async(segment)
-            if result["text"]:
-                committed_text = merge_transcript_text(committed_text, result["text"])
-        except Exception:
-            pass
-    
-    if committed_text:
-        await send_transcript_event(
-            "session_final",
-            committed=committed_text,
-            is_final_session=True,
-            legacy_final=committed_text,
-        )
-    
-    log.debug(
-        f"会话结束: {len(buffer)} bytes, "
-        f"已识别到 {recognized_pos} bytes"
-    )
+    await get_active_provider().handle_ws(ws)
 
 
 # ==================== 启动 ====================

@@ -22,7 +22,6 @@ import DimensionRenderer from '@/components/insight/DimensionRenderer.vue';
 import Popup from '@/components/Popup/index.vue';
 import { getAgents, type AgentEntry } from '@/api/agents';
 import {
-  analyzeInsightSession,
   appendInsightTranscript,
   completeInsightSession,
   createInsightSession,
@@ -51,7 +50,6 @@ const showTemplateSelector = ref(false);
 const tab = ref<'active' | 'history'>('active');
 const loading = ref(false);
 const creating = ref(false);
-const analyzing = ref(false);
 const deletingTemplateId = ref('');
 const error = ref('');
 const transcriptPanelRef = ref<HTMLElement | null>(null);
@@ -89,13 +87,11 @@ const displayedChanges = computed<DimensionChange[]>(() => activeSnapshot.value?
 const displayedTranscript = computed(() =>
   mergeTranscriptDisplay(transcriptBaseAtOffset.value, liveTranscriptSegment.value)
 );
-const isAnalyzing = computed(() => currentSession.value?.status === 'analyzing' || analyzing.value);
 const isPaused = computed(() => currentSession.value?.status === 'paused');
 const isRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
 const canMuteRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
 const transcriptStatusTitle = computed(() => {
   if (isPaused.value) return '语音已暂停';
-  if (isAnalyzing.value) return '正在分析';
   if (audioRecorder.isRecording.value) return '正在聆听';
   if (audioRecorder.isConnected.value) return '正在连接麦克风';
   return '等待语音输入';
@@ -188,6 +184,19 @@ const elapsedTime = ref('00:00:00');
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
 let lastCommittedSegment = '';
 
+function isAsrDebugEnabled(): boolean {
+  return window.localStorage.getItem('coobee.asr.debug') === '1';
+}
+
+function debugInsightTranscript(event: string, payload?: Record<string, unknown>): void {
+  if (!isAsrDebugEnabled()) return;
+  if (payload) {
+    console.log(`[InsightView] ${event}`, payload);
+    return;
+  }
+  console.log(`[InsightView] ${event}`);
+}
+
 function shouldInsertSpace(before: string, after: string): boolean {
   return /[a-zA-Z0-9]$/.test(before) && /^[a-zA-Z0-9]/.test(after);
 }
@@ -266,7 +275,16 @@ const audioRecorder = useAudioRecorder({
   onTranscriptUpdate: (payload) => {
     if (!currentSession.value) return;
 
-    liveTranscriptSegment.value = payload.displayText;
+    liveTranscriptSegment.value = payload.draftText;
+
+    debugInsightTranscript('transcript_update', {
+      seq: payload.seq,
+      turnId: payload.turnId,
+      event: payload.event,
+      committedLength: payload.committedText.length,
+      draftLength: payload.draftText.length,
+      displayLength: payload.displayText.length
+    });
 
     const liveText = payload.draftText.trim() || payload.displayText.trim();
     if (liveText) {
@@ -275,6 +293,8 @@ const audioRecorder = useAudioRecorder({
     }
 
     const committedText = payload.committedText;
+    const mergedCommittedTranscript = mergeTranscriptDisplay(transcriptBaseAtOffset.value, committedText);
+    transcriptBaseAtOffset.value = mergedCommittedTranscript;
     const delta = committedText.startsWith(lastCommittedSegment)
       ? committedText.substring(lastCommittedSegment.length)
       : committedText;
@@ -283,7 +303,7 @@ const audioRecorder = useAudioRecorder({
 
     currentSession.value = {
       ...currentSession.value,
-      transcript: `${transcriptBaseAtOffset.value}${committedText}`,
+      transcript: mergedCommittedTranscript,
       updatedAt: Date.now()
     };
 
@@ -292,7 +312,22 @@ const audioRecorder = useAudioRecorder({
         if (!response.success || !response.data || currentSession.value?.id !== response.data.session.id) {
           return;
         }
-        currentSession.value = response.data.session;
+
+        if (response.data.session.transcript.length >= currentSession.value.transcript.length) {
+          currentSession.value = response.data.session;
+          transcriptBaseAtOffset.value = response.data.session.transcript;
+          debugInsightTranscript('transcript_sync_applied', {
+            transcriptLength: response.data.session.transcript.length,
+            appendedLength: response.data.appendedLength
+          });
+          return;
+        }
+
+        debugInsightTranscript('transcript_sync_skipped', {
+          localLength: currentSession.value.transcript.length,
+          remoteLength: response.data.session.transcript.length,
+          appendedLength: response.data.appendedLength
+        });
       })
       .catch(() => {
         // ignore realtime transcript sync failures
@@ -321,12 +356,6 @@ const audioRecorder = useAudioRecorder({
       liveCaptionTone.value = 'active';
       liveCaptionText.value = '听到声音，正在接收';
     }
-  },
-  onSilence: () => {
-    if (!currentSession.value || analyzing.value) return;
-    liveCaptionTone.value = 'processing';
-    liveCaptionText.value = '检测到停顿，正在准备分析';
-    void triggerSilenceAnalysis();
   }
 });
 
@@ -689,38 +718,6 @@ function toggleRecordingMute(): void {
   liveCaptionText.value = '录音已静音';
 }
 
-async function runAnalysis(trigger: 'manual' | 'silence'): Promise<void> {
-  if (!currentSession.value || analyzing.value) return;
-
-  analyzing.value = true;
-  error.value = '';
-  try {
-    const response = await analyzeInsightSession(currentSession.value.id, trigger);
-    if (!response.success || !response.data) {
-      throw new Error(response.error || '分析失败');
-    }
-
-    currentSession.value = response.data.session;
-    snapshots.value = [...snapshots.value, response.data.snapshot];
-    activeSnapshotId.value = response.data.snapshot.id;
-    audioRecorder.resetSentOffset();
-    resetTranscriptWindow(response.data.session.transcript);
-    await refreshSessions();
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '分析失败';
-  } finally {
-    analyzing.value = false;
-  }
-}
-
-async function manualAnalyze(): Promise<void> {
-  await runAnalysis('manual');
-}
-
-async function triggerSilenceAnalysis(): Promise<void> {
-  await runAnalysis('silence');
-}
-
 async function selectSession(sessionId: string): Promise<void> {
   loading.value = true;
   error.value = '';
@@ -1011,21 +1008,20 @@ function isIconClass(icon?: string): boolean {
             <!-- Left: Status Info -->
             <div class="flex items-center gap-3">
               <div class="flex items-center gap-2">
-                <span class="relative flex h-2.5 w-2.5" :class="{ 'animate-pulse': isAnalyzing || isRecording }">
+                <span class="relative flex h-2.5 w-2.5" :class="{ 'animate-pulse': isRecording }">
                   <span
                     v-if="isRecording"
                     class="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive/50" />
                   <span
                     class="relative inline-flex h-2.5 w-2.5 rounded-full"
                     :class="{
-                      'bg-info': isAnalyzing,
                       'bg-destructive': isRecording,
                       'bg-warning': isPaused,
-                      'bg-muted-foreground/30': !isAnalyzing && !isRecording && !isPaused
+                      'bg-muted-foreground/30': !isRecording && !isPaused
                     }" />
                 </span>
                 <span class="text-xs font-bold text-foreground/80">
-                  {{ isAnalyzing ? '分析中' : isRecording ? '采集中' : isPaused ? '已暂停' : '就绪' }}
+                  {{ isRecording ? '采集中' : isPaused ? '已暂停' : '就绪' }}
                 </span>
               </div>
               <div class="h-4 w-px bg-border/70" />
@@ -1053,13 +1049,6 @@ function isIconClass(icon?: string): boolean {
 
             <!-- Right: Controls -->
             <div class="flex items-center gap-2">
-              <button
-                class="inline-flex h-8 items-center gap-1.5 rounded-xl border border-primary/20 bg-primary/10 px-3 text-[11px] font-semibold text-primary transition-all hover:bg-primary/15 active:scale-95"
-                title="手动触发分析"
-                @click="manualAnalyze">
-                <span class="i-carbon-analytics inline-block h-4 w-4" />
-                分析
-              </button>
               <button
                 class="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border/70 bg-background/78 px-3 text-[11px] font-semibold text-foreground/72 transition-all hover:bg-accent hover:text-foreground active:scale-95"
                 title="查看会话详情"
@@ -1106,8 +1095,8 @@ function isIconClass(icon?: string): boolean {
                       class="h-2 w-2 shrink-0 rounded-full"
                       :class="{
                         'bg-primary': isRecording && !audioRecorder.isMuted.value,
-                        'bg-warning': isAnalyzing || isPaused || audioRecorder.isMuted.value,
-                        'bg-muted-foreground/35': !isRecording && !isAnalyzing && !isPaused
+                        'bg-warning': isPaused || audioRecorder.isMuted.value,
+                        'bg-muted-foreground/35': !isRecording && !isPaused
                       }" />
                     <span class="text-xs font-medium leading-none text-foreground/72">{{ transcriptStatusTitle }}</span>
                   </div>
@@ -1115,10 +1104,7 @@ function isIconClass(icon?: string): boolean {
                     class="inline-flex h-8 items-center font-mono text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
                     {{ elapsedTime }}
                   </span>
-                  <div
-                    v-if="isRecording || isAnalyzing || isPaused"
-                    class="flex h-8 items-center gap-1"
-                    aria-hidden="true">
+                  <div v-if="isRecording || isPaused" class="flex h-8 items-center gap-1" aria-hidden="true">
                     <span
                       v-for="(bar, index) in waveBars"
                       :key="index"
@@ -1146,7 +1132,6 @@ function isIconClass(icon?: string): boolean {
                   <button
                     v-else-if="!isRecording"
                     class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-[11px] font-semibold text-primary transition-all hover:bg-primary/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                    :disabled="isAnalyzing"
                     @click="startRecordingCapture">
                     <span class="i-carbon-play inline-block h-4 w-4" />
                     开始
@@ -1154,7 +1139,6 @@ function isIconClass(icon?: string): boolean {
                   <button
                     v-else
                     class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-warning/25 bg-warning/10 px-3 text-[11px] font-semibold text-warning transition-all hover:bg-warning/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                    :disabled="isAnalyzing"
                     @click="pauseCurrentSession">
                     <span class="i-carbon-pause inline-block h-4 w-4" />
                     暂停

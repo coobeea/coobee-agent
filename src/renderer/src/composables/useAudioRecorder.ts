@@ -126,6 +126,20 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
   let prevPartialText = '';
   let lastTranscriptSeq = 0;
 
+  function isAsrDebugEnabled(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('coobee.asr.debug') === '1';
+  }
+
+  function debugAsrLog(event: string, payload?: Record<string, unknown>): void {
+    if (!isAsrDebugEnabled()) return;
+    if (payload) {
+      console.log(`[useAudioRecorder] ${event}`, payload);
+      return;
+    }
+    console.log(`[useAudioRecorder] ${event}`);
+  }
+
   // ==================== 工具方法 ====================
 
   const resetSentOffset = (): void => {
@@ -282,6 +296,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
 
     ws.onopen = () => {
       isConnected.value = true;
+      debugAsrLog('ws_open', { url });
     };
 
     ws.onmessage = (event) => {
@@ -290,11 +305,13 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
 
     ws.onclose = () => {
       isConnected.value = false;
+      debugAsrLog('ws_close');
       stopRecording();
     };
 
     ws.onerror = () => {
       isConnected.value = false;
+      debugAsrLog('ws_error');
     };
   };
 
@@ -315,6 +332,12 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
       };
 
       if (asrStatus && !isMuted.value) {
+        debugAsrLog('status', {
+          status: asrStatus,
+          bufferedMs: typeof data.buffered_ms === 'number' ? data.buffered_ms : undefined,
+          latencyMs: typeof data.latency_ms === 'number' ? data.latency_ms : undefined,
+          textTail: typeof data.text_tail === 'string' ? data.text_tail : undefined
+        });
         options.onStatus?.({
           status: asrStatus,
           bufferedMs: typeof data.buffered_ms === 'number' ? data.buffered_ms : undefined,
@@ -327,9 +350,22 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
       const transcriptPayload = buildTranscriptPayload(data, meta);
       if (transcriptPayload && !isMuted.value) {
         if (shouldIgnoreTranscriptPayload(transcriptPayload)) {
+          debugAsrLog('transcript_ignored', {
+            seq: transcriptPayload.seq,
+            turnId: transcriptPayload.turnId,
+            event: transcriptPayload.event
+          });
           return;
         }
 
+        debugAsrLog('transcript', {
+          seq: transcriptPayload.seq,
+          turnId: transcriptPayload.turnId,
+          event: transcriptPayload.event,
+          committedLength: transcriptPayload.committedText.length,
+          draftLength: transcriptPayload.draftText.length,
+          displayLength: transcriptPayload.displayText.length
+        });
         options.onTranscriptUpdate?.(transcriptPayload);
 
         if (transcriptPayload.displayText.trim() && transcriptPayload.displayText !== prevPartialText) {
@@ -523,6 +559,9 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
       ws = null;
     }
     isConnected.value = false;
+    textOffset = 0;
+    lastKnownDisplayText = '';
+    prevPartialText = '';
     lastTranscriptSeq = 0;
   };
 
