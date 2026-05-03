@@ -6,6 +6,7 @@ const props = defineProps<{
   change?: DimensionChange;
   icon?: string;
   showTrend?: boolean;
+  plain?: boolean;
 }>();
 
 function getTrendIcon(direction?: string): string {
@@ -31,15 +32,25 @@ function getEnumBadgeClass(value: unknown): string {
   if (['观望', '较差', '低', '不推荐', '拒绝', '阻塞'].includes(s)) return 'bg-destructive/12 text-destructive';
   return 'bg-muted text-muted-foreground';
 }
+
+function isIconClass(icon?: string): boolean {
+  return Boolean(icon && icon.startsWith('i-carbon-'));
+}
 </script>
 
 <template>
   <div
-    class="group rounded-2xl border border-border/70 bg-background/74 px-4 py-4 shadow-[0_12px_32px_-20px_rgba(0,0,0,0.24)] backdrop-blur-sm transition-all hover:border-primary/20 hover:bg-background/88 hover:shadow-[0_18px_38px_-24px_rgba(0,0,0,0.26)]">
-    <div class="mb-3 flex items-start gap-3">
+    class="group px-4 py-4 transition-all"
+    :class="
+      props.plain
+        ? 'rounded-none border-0 bg-transparent shadow-none'
+        : 'rounded-2xl border border-border/70 bg-background/74 shadow-[0_12px_32px_-20px_rgba(0,0,0,0.24)] backdrop-blur-sm hover:border-primary/20 hover:bg-background/88 hover:shadow-[0_18px_38px_-24px_rgba(0,0,0,0.26)]'
+    ">
+    <div v-if="!props.plain" class="mb-3 flex items-start gap-3">
       <div
-        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-surface/75 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-        <span v-if="props.icon" class="text-base">{{ props.icon }}</span>
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-primary/12 bg-primary/8 text-foreground/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <span v-if="isIconClass(props.icon)" :class="props.icon" class="inline-block h-4 w-4" />
+        <span v-else-if="props.icon" class="text-base">{{ props.icon }}</span>
         <span v-else class="i-carbon-chart-line-data inline-block h-4 w-4" />
       </div>
       <div class="min-w-0 flex-1">

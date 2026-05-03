@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type {
   AnalysisDimension,
@@ -45,11 +45,15 @@ const creating = ref(false);
 const analyzing = ref(false);
 const deletingTemplateId = ref('');
 const error = ref('');
+const transcriptPanelRef = ref<HTMLElement | null>(null);
 
 const currentTemplate = computed<AnalysisTemplate | null>(() => {
   if (!currentSession.value) return null;
   return templates.value.find((t) => t.id === currentSession.value?.templateId) ?? null;
 });
+const selectedTemplate = computed<AnalysisTemplate | null>(
+  () => templates.value.find((item) => item.id === selectedTemplateId.value) ?? null
+);
 const selectedAgent = computed<AgentEntry | null>(
   () => agents.value.find((agent) => agent.id === selectedAgentId.value) ?? null
 );
@@ -68,6 +72,7 @@ const displayedResult = computed<AnalysisResult | null>(
   () => activeSnapshot.value?.result ?? currentSession.value?.latestResult ?? null
 );
 const displayedChanges = computed<DimensionChange[]>(() => activeSnapshot.value?.changes ?? []);
+const displayedTranscript = computed(() => currentSession.value?.transcript || '');
 const isAnalyzing = computed(() => currentSession.value?.status === 'analyzing' || analyzing.value);
 const isPaused = computed(() => currentSession.value?.status === 'paused');
 const isRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
@@ -102,6 +107,31 @@ const displayedDimensions = computed<
   return [...ordered, ...extras];
 });
 const changesMap = computed(() => new Map(displayedChanges.value.map((item) => [item.key, item])));
+const previewTemplate = computed<AnalysisTemplate | null>(
+  () =>
+    currentTemplate.value ??
+    selectedTemplate.value ??
+    templates.value.find((item) => item.dimensions.length >= 3) ??
+    templates.value[0] ??
+    null
+);
+const simulatedDimensions = computed<
+  Array<{
+    key: string;
+    dimension: AnalysisResult['dimensions'][string];
+    templateDimension?: AnalysisDimension;
+  }>
+>(() =>
+  (previewTemplate.value?.dimensions ?? []).map((item, index) => ({
+    key: item.key,
+    dimension: buildPreviewDimension(item, index),
+    templateDimension: item
+  }))
+);
+const moduleItems = computed(() =>
+  displayedDimensions.value.length ? displayedDimensions.value : simulatedDimensions.value
+);
+const expandedModuleKey = ref('');
 
 const triggerLabel = computed(() => {
   const strategy = currentTemplate.value?.refreshStrategy;
@@ -160,6 +190,114 @@ onUnmounted(() => {
   audioRecorder.stopRecording();
   audioRecorder.disconnect();
 });
+
+watch(displayedTranscript, async () => {
+  await nextTick();
+  if (transcriptPanelRef.value) {
+    transcriptPanelRef.value.scrollTop = transcriptPanelRef.value.scrollHeight;
+  }
+});
+
+watch(
+  [moduleItems, displayedChanges],
+  ([items, changes]) => {
+    if (!items.length) {
+      expandedModuleKey.value = '';
+      return;
+    }
+
+    const changedKey = changes.find((item) => items.some((entry) => entry.key === item.key))?.key;
+    if (changedKey) {
+      expandedModuleKey.value = changedKey;
+      return;
+    }
+
+    if (items.some((item) => item.key === expandedModuleKey.value)) {
+      return;
+    }
+
+    expandedModuleKey.value = items[0]?.key ?? '';
+  },
+  { immediate: true }
+);
+
+function toggleModule(key: string): void {
+  expandedModuleKey.value = expandedModuleKey.value === key ? '' : key;
+}
+
+function getDimensionSummary(dimension: AnalysisResult['dimensions'][string]): string {
+  if (Array.isArray(dimension.value)) {
+    return (dimension.value as string[]).slice(0, 2).join('、') || '暂无结果';
+  }
+  if (dimension.type === 'boolean') {
+    return dimension.value ? '已达成' : '未达成';
+  }
+  const text = String(dimension.value ?? '').trim();
+  return text || '暂无结果';
+}
+
+function buildPreviewDimension(
+  templateDimension: AnalysisDimension,
+  index: number
+): AnalysisResult['dimensions'][string] {
+  const base = {
+    key: templateDimension.key,
+    label: templateDimension.label,
+    type: templateDimension.type
+  } as const;
+
+  switch (templateDimension.type) {
+    case 'enum':
+      return {
+        ...base,
+        value: templateDimension.options?.[0] || '推荐',
+        rawText: '这里展示该模块的最新枚举判断结果'
+      };
+    case 'score':
+      return {
+        ...base,
+        value: 78,
+        rawText: '这里展示该模块的评分依据'
+      };
+    case 'list':
+      return {
+        ...base,
+        value: ['要点一', '要点二', '要点三'],
+        rawText: '这里展示该模块提取出的列表信息'
+      };
+    case 'tags':
+      return {
+        ...base,
+        value: ['标签A', '标签B', '标签C'],
+        rawText: '这里展示该模块识别出的标签'
+      };
+    case 'boolean':
+      return {
+        ...base,
+        value: index % 2 === 0,
+        rawText: '这里展示该模块是否满足条件'
+      };
+    case 'progress':
+      return {
+        ...base,
+        value: '推进中',
+        rawText: '这里展示当前阶段或推进状态'
+      };
+    case 'comparison':
+      return {
+        ...base,
+        value: '较上次更积极',
+        rawText: '这里展示该模块的对比变化'
+      };
+    case 'text':
+    default:
+      return {
+        ...base,
+        value: '这里展示该模块最新分析内容，用于预览多模块排版效果。',
+        rawText: '这里会随着每次分析持续刷新'
+      };
+  }
+}
 
 async function init(): Promise<void> {
   loading.value = true;
@@ -755,41 +893,82 @@ function isIconClass(icon?: string): boolean {
           </div>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto bg-background/94 px-5 py-5">
-          <div v-if="displayedResult" class="space-y-4">
-            <div class="flex items-center justify-between rounded-2xl border border-border/60 bg-card/88 px-4 py-3">
-              <div>
-                <div class="text-sm font-semibold text-foreground">当前分析维度</div>
-                <div class="mt-1 text-xs text-muted-foreground">
-                  按模板配置顺序展示{{ displayedDimensions.length ? `，共 ${displayedDimensions.length} 个维度` : '' }}
+        <div class="min-h-0 flex-1 overflow-hidden bg-background/94">
+          <div class="flex h-full min-h-0">
+            <section class="flex min-h-0 min-w-0 flex-1 flex-col pr-5">
+              <div ref="transcriptPanelRef" class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <div v-if="displayedTranscript" class="space-y-3">
+                  <div class="px-1 text-[13px] leading-7 text-foreground/88">
+                    {{ displayedTranscript }}
+                  </div>
+                </div>
+                <div v-else class="flex h-full min-h-[280px] flex-col items-center justify-center gap-3">
+                  <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/6 text-primary/28">
+                    <span class="i-carbon-microphone inline-block h-7 w-7" />
+                  </div>
+                  <p class="text-sm font-medium text-muted-foreground/42">等待语音输入</p>
+                  <p class="text-xs text-muted-foreground/28">开始录音后，这里会实时展示语音转文字内容</p>
                 </div>
               </div>
-              <span
-                v-if="displayedResult.confidence"
-                class="rounded-full border border-primary/10 bg-primary/10 px-3 py-1 text-[10px] font-semibold text-primary">
-                {{ Math.round(displayedResult.confidence * 100) }}% 置信度
-              </span>
-            </div>
+            </section>
 
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <DimensionRenderer
-                v-for="item in displayedDimensions"
-                :key="item.key"
-                :dimension="item.dimension"
-                :change="changesMap.get(item.key)"
-                :icon="item.templateDimension?.icon"
-                :show-trend="item.templateDimension?.showTrend" />
-            </div>
-          </div>
+            <section class="flex h-full min-h-0 w-[360px] shrink-0 flex-col border-l border-border/60">
+              <div class="min-h-0 flex-1">
+                <div v-if="moduleItems.length" class="flex h-full min-h-0 flex-col gap-2">
+                  <div
+                    v-for="item in moduleItems"
+                    :key="item.key"
+                    class="min-h-0 overflow-hidden bg-background"
+                    :class="expandedModuleKey === item.key ? 'flex-1' : 'shrink-0'">
+                    <button
+                      class="flex w-full items-center gap-3 border-b border-primary-foreground/12 bg-primary px-3 py-2.5 text-left text-primary-foreground transition-colors hover:bg-primary/95 active:bg-primary/92"
+                      @click="toggleModule(item.key)">
+                      <span
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/12 text-primary-foreground">
+                        <span
+                          v-if="item.templateDimension?.icon?.startsWith('i-carbon-')"
+                          :class="item.templateDimension.icon"
+                          class="inline-block h-4 w-4" />
+                        <span v-else-if="item.templateDimension?.icon" class="text-base">
+                          {{ item.templateDimension.icon }}
+                        </span>
+                        <span v-else class="i-carbon-chart-line-data inline-block h-4 w-4" />
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-sm font-semibold text-primary-foreground">
+                          {{ item.dimension.label }}
+                        </div>
+                        <div class="mt-0.5 line-clamp-1 text-[11px] text-primary-foreground/70">
+                          {{ getDimensionSummary(item.dimension) }}
+                        </div>
+                      </div>
+                      <span
+                        class="inline-block h-4 w-4 shrink-0 text-primary-foreground/80 transition-transform"
+                        :class="expandedModuleKey === item.key ? 'i-carbon-chevron-down' : 'i-carbon-chevron-right'" />
+                    </button>
 
-          <div
-            v-else
-            class="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-card/50">
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/5 text-accent/30">
-              <span class="i-carbon-chart-line-data inline-block h-7 w-7" />
-            </div>
-            <p class="text-sm font-medium text-muted-foreground/40">等待首次分析</p>
-            <p class="text-xs text-muted-foreground/25">录音后会按维度生成分析结果</p>
+                    <div
+                      v-if="expandedModuleKey === item.key"
+                      class="min-h-0 flex-1 overflow-y-auto border-t border-primary/10 bg-background px-2 py-2">
+                      <DimensionRenderer
+                        :dimension="item.dimension"
+                        :change="changesMap.get(item.key)"
+                        :icon="item.templateDimension?.icon"
+                        :show-trend="item.templateDimension?.showTrend"
+                        plain />
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else class="flex h-full min-h-[280px] flex-col items-center justify-center gap-3">
+                  <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/8 text-primary/35">
+                    <span class="i-carbon-chart-line-data inline-block h-7 w-7" />
+                  </div>
+                  <p class="text-sm font-medium text-muted-foreground/40">等待首次分析</p>
+                  <p class="text-xs text-muted-foreground/25">触发分析后，这里会按模块更新最新结果</p>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </template>
