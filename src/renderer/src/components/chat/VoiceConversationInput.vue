@@ -8,6 +8,13 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useWorkerStore } from '@/stores/worker';
 import { useAudioRecorder, type AsrStatusPayload } from '@/composables/useAudioRecorder';
+import {
+  getTextTail,
+  mapAsrStatusToCaption,
+  smoothVoiceLevel,
+  SPEECH_VOLUME_THRESHOLD,
+  type LiveCaptionTone
+} from '@/composables/audio-recorder-ui';
 
 const props = withDefaults(
   defineProps<{
@@ -32,7 +39,7 @@ const workerStore = useWorkerStore();
 const rootRef = ref<HTMLElement | null>(null);
 const partialText = ref('');
 const liveCaptionText = ref('');
-const liveCaptionTone = ref<'active' | 'processing' | 'recognized'>('active');
+const liveCaptionTone = ref<LiveCaptionTone>('active');
 const micError = ref('');
 const voiceLevel = ref(0);
 const recordingStartedAt = ref<number | null>(null);
@@ -48,15 +55,11 @@ let resumeDelayTimer: ReturnType<typeof setTimeout> | null = null;
 // ==================== ASR 录音 Composable ====================
 
 const MIN_EFFECTIVE_CHARS = 4;
-const LIVE_CAPTION_TAIL_CHARS = 36;
 const MAX_MERGE_OVERLAP_CHARS = 40;
 const AUTO_SUBMIT_IDLE_MS = 3500;
 const AUTO_SUBMIT_RETRY_MS = 500;
 const RESUME_LISTEN_DELAY_MS = 3000;
 const RECENT_SPEECH_GRACE_MS = 1500;
-const ASR_SPEECH_END_BUSY_MS = 2500;
-const ASR_RECOGNIZING_BUSY_MS = 6000;
-const SPEECH_VOLUME_THRESHOLD = 2;
 
 function countEffectiveChars(text: string): number {
   const matches = text.match(/[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]/g);
@@ -69,12 +72,6 @@ function trySendOrQueue(text: string): boolean {
   if (props.disabled) return false;
   emit('send', { text: cleaned, files: [] });
   return true;
-}
-
-function getTextTail(text: string, maxChars = LIVE_CAPTION_TAIL_CHARS): string {
-  const chars = Array.from(text.trim());
-  if (chars.length <= maxChars) return chars.join('');
-  return `...${chars.slice(-maxChars).join('')}`;
 }
 
 function shouldInsertSpace(before: string, after: string): boolean {
@@ -106,11 +103,6 @@ function mergeRecognizedText(current: string, incoming: string): string {
   const nextChars = Array.from(next);
   const separator = overlap === 0 && shouldInsertSpace(base, next) ? ' ' : '';
   return `${base}${separator}${nextChars.slice(overlap).join('')}`;
-}
-
-function formatBufferedDuration(ms?: number): string {
-  if (!ms || ms < 1000) return '';
-  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function clearAutoSubmitTimer(): void {
@@ -215,43 +207,25 @@ function trySubmitPendingText(): void {
 }
 
 function updateLiveCaptionFromStatus(payload: AsrStatusPayload): void {
-  switch (payload.status) {
-    case 'speech_start':
-      markSpeechActivity();
-      clearAsrBusy();
-      liveCaptionTone.value = 'active';
-      liveCaptionText.value = '听到声音，正在接收';
-      break;
-    case 'speech_active': {
-      const duration = formatBufferedDuration(payload.bufferedMs);
-      markSpeechActivity();
-      clearAsrBusy();
-      liveCaptionTone.value = 'active';
-      liveCaptionText.value = duration ? `正在接收语音 ${duration}` : '正在接收语音';
-      break;
-    }
-    case 'speech_end':
-      markAsrBusy(ASR_SPEECH_END_BUSY_MS);
-      liveCaptionTone.value = 'processing';
-      liveCaptionText.value = '正在整理这句话';
-      break;
-    case 'recognizing': {
-      const duration = formatBufferedDuration(payload.bufferedMs);
-      markAsrBusy(ASR_RECOGNIZING_BUSY_MS);
-      liveCaptionTone.value = 'processing';
-      liveCaptionText.value = duration ? `正在识别 ${duration} 语音` : '正在识别语音';
-      break;
-    }
-    case 'recognized':
-      clearAsrBusy();
-      schedulePendingSubmit(AUTO_SUBMIT_RETRY_MS);
-      liveCaptionTone.value = 'recognized';
-      liveCaptionText.value = payload.textTail ? `识别到：${getTextTail(payload.textTail)}` : '识别完成';
-      break;
-    default:
-      liveCaptionTone.value = 'processing';
-      liveCaptionText.value = '正在处理语音';
-      break;
+  const snapshot = mapAsrStatusToCaption(payload);
+
+  if (snapshot.speechActivity) {
+    markSpeechActivity();
+  }
+
+  if (snapshot.clearBusy) {
+    clearAsrBusy();
+  }
+
+  if (snapshot.busyDurationMs) {
+    markAsrBusy(snapshot.busyDurationMs);
+  }
+
+  liveCaptionTone.value = snapshot.tone;
+  liveCaptionText.value = snapshot.text;
+
+  if (payload.status === 'recognized') {
+    schedulePendingSubmit(AUTO_SUBMIT_RETRY_MS);
   }
 }
 
@@ -266,9 +240,7 @@ const recorder = useAudioRecorder({
   },
   onStatus: updateLiveCaptionFromStatus,
   onVolumeChange: (vol) => {
-    // composable 返回 0-100，转为 0-1 并带平滑衰减
-    const nextLevel = Math.min(1, vol / 100);
-    voiceLevel.value = Math.max(nextLevel, voiceLevel.value * 0.72);
+    voiceLevel.value = smoothVoiceLevel(voiceLevel.value, vol);
     if (vol >= SPEECH_VOLUME_THRESHOLD) {
       markSpeechActivity();
     }

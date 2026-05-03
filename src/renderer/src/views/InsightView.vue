@@ -10,6 +10,13 @@ import type {
   InsightSession
 } from '@shared/types/insight';
 import { useAudioRecorder } from '@/composables/useAudioRecorder';
+import {
+  getTextTail,
+  mapAsrStatusToCaption,
+  smoothVoiceLevel,
+  SPEECH_VOLUME_THRESHOLD,
+  type LiveCaptionTone
+} from '@/composables/audio-recorder-ui';
 import DimensionRenderer from '@/components/insight/DimensionRenderer.vue';
 import Popup from '@/components/Popup/index.vue';
 import { getAgents, type AgentEntry } from '@/api/agents';
@@ -46,6 +53,9 @@ const analyzing = ref(false);
 const deletingTemplateId = ref('');
 const error = ref('');
 const transcriptPanelRef = ref<HTMLElement | null>(null);
+const liveCaptionText = ref('');
+const liveCaptionTone = ref<LiveCaptionTone>('active');
+const voiceLevel = ref(0);
 
 const currentTemplate = computed<AnalysisTemplate | null>(() => {
   if (!currentSession.value) return null;
@@ -76,6 +86,27 @@ const displayedTranscript = computed(() => currentSession.value?.transcript || '
 const isAnalyzing = computed(() => currentSession.value?.status === 'analyzing' || analyzing.value);
 const isPaused = computed(() => currentSession.value?.status === 'paused');
 const isRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
+const canMuteRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
+const transcriptStatusTitle = computed(() => {
+  if (isPaused.value) return '语音已暂停';
+  if (isAnalyzing.value) return '正在分析';
+  if (audioRecorder.isRecording.value) return '正在聆听';
+  if (audioRecorder.isConnected.value) return '正在连接麦克风';
+  return '等待语音输入';
+});
+const waveBars = computed(() => {
+  const level = audioRecorder.isRecording.value ? voiceLevel.value : 0;
+  const weights = [0.35, 0.58, 0.82, 1, 0.76, 0.52, 0.38];
+
+  return weights.map((weight, index) => {
+    const activity = Math.max(0.12, Math.min(1, level * weight + (audioRecorder.isRecording.value ? 0.18 : 0)));
+    return {
+      height: `${Math.round(6 + activity * 18)}px`,
+      opacity: `${0.3 + activity * 0.58}`,
+      transitionDelay: `${index * 12}ms`
+    };
+  });
+});
 const displayedDimensions = computed<
   Array<{
     key: string;
@@ -154,6 +185,10 @@ let lastPartialLength = 0;
 const audioRecorder = useAudioRecorder({
   onPartialResult: (text: string) => {
     if (!currentSession.value) return;
+    if (text.trim()) {
+      liveCaptionTone.value = 'active';
+      liveCaptionText.value = `当前识别：${getTextTail(text)}`;
+    }
     const delta = text.substring(lastPartialLength);
     lastPartialLength = text.length;
     if (!delta) return;
@@ -175,8 +210,27 @@ const audioRecorder = useAudioRecorder({
         // ignore realtime transcript sync failures
       });
   },
+  onFinalResult: (text: string) => {
+    if (!text.trim()) return;
+    liveCaptionTone.value = 'recognized';
+    liveCaptionText.value = `识别到：${getTextTail(text)}`;
+  },
+  onStatus: (payload) => {
+    const snapshot = mapAsrStatusToCaption(payload);
+    liveCaptionTone.value = snapshot.tone;
+    liveCaptionText.value = snapshot.text;
+  },
+  onVolumeChange: (volume) => {
+    voiceLevel.value = smoothVoiceLevel(voiceLevel.value, volume);
+    if (volume >= SPEECH_VOLUME_THRESHOLD && !liveCaptionText.value) {
+      liveCaptionTone.value = 'active';
+      liveCaptionText.value = '听到声音，正在接收';
+    }
+  },
   onSilence: () => {
     if (!currentSession.value || analyzing.value) return;
+    liveCaptionTone.value = 'processing';
+    liveCaptionText.value = '检测到停顿，正在准备分析';
     void triggerSilenceAnalysis();
   }
 });
@@ -197,6 +251,12 @@ watch(displayedTranscript, async () => {
     transcriptPanelRef.value.scrollTop = transcriptPanelRef.value.scrollHeight;
   }
 });
+
+function resetVoicePanelFeedback(): void {
+  liveCaptionText.value = '';
+  liveCaptionTone.value = 'active';
+  voiceLevel.value = 0;
+}
 
 watch(
   [moduleItems, displayedChanges],
@@ -446,6 +506,7 @@ async function completeCurrentSession(): Promise<void> {
     currentSession.value = null;
     snapshots.value = [];
     activeSnapshotId.value = '';
+    resetVoicePanelFeedback();
     stopElapsedTimer();
     await refreshSessions();
   } catch (err) {
@@ -458,6 +519,8 @@ async function startRecordingCapture(): Promise<void> {
   await audioRecorder.connect();
   audioRecorder.resetSentOffset();
   lastPartialLength = 0;
+  resetVoicePanelFeedback();
+  liveCaptionText.value = '开始说话后会实时更新文字与分析';
   await audioRecorder.startRecording();
 }
 
@@ -465,6 +528,9 @@ async function pauseCurrentSession(): Promise<void> {
   if (!currentSession.value) return;
 
   audioRecorder.stopRecording();
+  voiceLevel.value = 0;
+  liveCaptionTone.value = 'processing';
+  liveCaptionText.value = '录音已暂停';
   const response = await pauseInsightSession(currentSession.value.id);
   if (response.success && response.data) {
     currentSession.value = response.data.session;
@@ -483,6 +549,22 @@ async function resumeCurrentSession(): Promise<void> {
   currentSession.value = response.data.session;
   await startRecordingCapture();
   await refreshSessions();
+}
+
+function toggleRecordingMute(): void {
+  if (!canMuteRecording.value) return;
+
+  if (audioRecorder.isMuted.value) {
+    audioRecorder.unmute();
+    liveCaptionTone.value = 'active';
+    liveCaptionText.value = '';
+    return;
+  }
+
+  audioRecorder.mute();
+  voiceLevel.value = 0;
+  liveCaptionTone.value = 'processing';
+  liveCaptionText.value = '录音已静音';
 }
 
 async function runAnalysis(trigger: 'manual' | 'silence'): Promise<void> {
@@ -522,6 +604,7 @@ async function selectSession(sessionId: string): Promise<void> {
   error.value = '';
   try {
     audioRecorder.stopRecording();
+    resetVoicePanelFeedback();
     await loadSessionDetail(sessionId);
   } catch (err) {
     error.value = err instanceof Error ? err.message : '切换会话失败';
@@ -823,10 +906,6 @@ function isIconClass(icon?: string): boolean {
                 </span>
               </div>
               <div class="h-4 w-px bg-border/70" />
-              <span class="font-mono text-sm font-bold tabular-nums tracking-wider text-foreground/55">
-                {{ elapsedTime }}
-              </span>
-              <div class="h-4 w-px bg-border/70" />
               <span
                 class="rounded-lg border border-primary/10 bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 {{ currentTemplate?.name }}
@@ -851,23 +930,6 @@ function isIconClass(icon?: string): boolean {
 
             <!-- Right: Controls -->
             <div class="flex items-center gap-2">
-              <!-- Action Buttons -->
-              <button
-                v-if="isRecording"
-                class="inline-flex h-8 items-center gap-1.5 rounded-xl border border-warning/25 bg-warning/10 px-3 text-[11px] font-semibold text-warning transition-all hover:bg-warning/15 active:scale-95"
-                title="暂停录音"
-                @click="pauseCurrentSession">
-                <span class="i-carbon-pause inline-block h-4 w-4" />
-                暂停
-              </button>
-              <button
-                v-if="isPaused"
-                class="inline-flex h-8 items-center gap-1.5 rounded-xl border border-success/25 bg-success/10 px-3 text-[11px] font-semibold text-success transition-all hover:bg-success/15 active:scale-95"
-                title="继续录音"
-                @click="resumeCurrentSession">
-                <span class="i-carbon-play inline-block h-4 w-4" />
-                继续
-              </button>
               <button
                 class="inline-flex h-8 items-center gap-1.5 rounded-xl border border-primary/20 bg-primary/10 px-3 text-[11px] font-semibold text-primary transition-all hover:bg-primary/15 active:scale-95"
                 title="手动触发分析"
@@ -902,12 +964,78 @@ function isIconClass(icon?: string): boolean {
                     {{ displayedTranscript }}
                   </div>
                 </div>
-                <div v-else class="flex h-full min-h-[280px] flex-col items-center justify-center gap-3">
+                <div v-else class="flex h-full min-h-[220px] flex-col items-center justify-center gap-3 px-1">
                   <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/6 text-primary/28">
                     <span class="i-carbon-microphone inline-block h-7 w-7" />
                   </div>
-                  <p class="text-sm font-medium text-muted-foreground/42">等待语音输入</p>
-                  <p class="text-xs text-muted-foreground/28">开始录音后，这里会实时展示语音转文字内容</p>
+                  <div class="space-y-1 text-center">
+                    <p class="text-sm font-medium text-muted-foreground/46">等待语音输入</p>
+                    <p class="text-xs leading-6 text-muted-foreground/32"> 点击下方开始后，这里会实时展示语音内容 </p>
+                  </div>
+                </div>
+              </div>
+              <div
+                v-if="hasSession"
+                class="flex shrink-0 items-center justify-between border-t border-border/60 px-4 py-2.5">
+                <div class="flex min-h-8 items-center gap-3">
+                  <div class="inline-flex h-8 items-center gap-2">
+                    <span
+                      class="h-2 w-2 shrink-0 rounded-full"
+                      :class="{
+                        'bg-primary': isRecording && !audioRecorder.isMuted.value,
+                        'bg-warning': isAnalyzing || isPaused || audioRecorder.isMuted.value,
+                        'bg-muted-foreground/35': !isRecording && !isAnalyzing && !isPaused
+                      }" />
+                    <span class="text-xs font-medium leading-none text-foreground/72">{{ transcriptStatusTitle }}</span>
+                  </div>
+                  <span
+                    class="inline-flex h-8 items-center font-mono text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
+                    {{ elapsedTime }}
+                  </span>
+                  <div
+                    v-if="isRecording || isAnalyzing || isPaused"
+                    class="flex h-8 items-center gap-1"
+                    aria-hidden="true">
+                    <span
+                      v-for="(bar, index) in waveBars"
+                      :key="index"
+                      class="w-1 rounded-full bg-primary/70 transition-all duration-150"
+                      :style="{ height: bar.height, opacity: bar.opacity, transitionDelay: bar.transitionDelay }" />
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground/78 transition-all hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                    :disabled="!canMuteRecording"
+                    @click="toggleRecordingMute">
+                    <span
+                      class="inline-block h-4 w-4"
+                      :class="audioRecorder.isMuted.value ? 'i-carbon-microphone-off' : 'i-carbon-volume-up'" />
+                    {{ audioRecorder.isMuted.value ? '取消静音' : '静音' }}
+                  </button>
+                  <button
+                    v-if="isPaused"
+                    class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-success/25 bg-success/10 px-3 text-[11px] font-semibold text-success transition-all hover:bg-success/15 active:scale-95"
+                    @click="resumeCurrentSession">
+                    <span class="i-carbon-play inline-block h-4 w-4" />
+                    开始
+                  </button>
+                  <button
+                    v-else-if="!isRecording"
+                    class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-[11px] font-semibold text-primary transition-all hover:bg-primary/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="isAnalyzing"
+                    @click="startRecordingCapture">
+                    <span class="i-carbon-play inline-block h-4 w-4" />
+                    开始
+                  </button>
+                  <button
+                    v-else
+                    class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-warning/25 bg-warning/10 px-3 text-[11px] font-semibold text-warning transition-all hover:bg-warning/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="isAnalyzing"
+                    @click="pauseCurrentSession">
+                    <span class="i-carbon-pause inline-block h-4 w-4" />
+                    暂停
+                  </button>
                 </div>
               </div>
             </section>
