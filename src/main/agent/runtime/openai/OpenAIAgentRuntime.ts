@@ -16,7 +16,10 @@ import { run, Agent, tool, OpenAIResponsesModel, retryPolicies } from '@openai/a
 import type { StreamedRunResult, Tool, Model, ModelSettings } from '@openai/agents';
 import OpenAI from 'openai';
 
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import { CompressedFileSession } from './CompressedFileSession';
+import type { SessionCompressionOptions } from './types';
 import { ThinkTagParser, stripThinkTags } from './ThinkTagParser';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import {
@@ -80,26 +83,33 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       modelSettings: this.buildModelSettings(runtimeOptions),
       ...(allTools.length > 0 ? { tools: allTools } : {})
     });
+    const compressionOpts: Record<string, unknown> = {
+      enabled: runtimeOptions.compaction?.enabled !== false,
+      onEvent: (type: string, data: Record<string, unknown>) => {
+        pendingRuntimeChunks.push({
+          type: type as AgentStreamChunk['type'],
+          content:
+            type === 'compression:start'
+              ? `Compression started: ${data.reason || ''}`
+              : `Compressed ${(data.summarizedSeqs as number[])?.length || 0} messages`,
+          data: data as AgentStreamChunk['data']
+        });
+      }
+    };
+    // 只传有值的字段，避免 undefined 覆盖 SessionCompressor 的默认值
+    if (runtimeOptions.compaction?.contextWindowSize != null)
+      compressionOpts.contextWindowSize = runtimeOptions.compaction.contextWindowSize;
+    if (runtimeOptions.compaction?.thresholdRatio != null)
+      compressionOpts.thresholdRatio = runtimeOptions.compaction.thresholdRatio;
+    if (runtimeOptions.compaction?.keepRatio != null)
+      compressionOpts.keepRatio = runtimeOptions.compaction.keepRatio;
+    if (runtimeOptions.compaction?.minMessageCount != null)
+      compressionOpts.minMessageCount = runtimeOptions.compaction.minMessageCount;
+    if (runtimeOptions.compaction?.debug != null) compressionOpts.debug = runtimeOptions.compaction.debug;
+
     const session = new CompressedFileSession(sessionId, runtimeOptions.sessionDir, {
       model,
-      compression: {
-        enabled: runtimeOptions.compaction?.enabled !== false,
-        contextWindowSize: runtimeOptions.compaction?.contextWindowSize,
-        thresholdRatio: runtimeOptions.compaction?.thresholdRatio,
-        keepRatio: runtimeOptions.compaction?.keepRatio,
-        minMessageCount: runtimeOptions.compaction?.minMessageCount,
-        debug: runtimeOptions.compaction?.debug,
-        onEvent: (type, data) => {
-          pendingRuntimeChunks.push({
-            type: type as AgentStreamChunk['type'],
-            content:
-              type === 'compression:start'
-                ? `Compression started: ${data.reason || ''}`
-                : `Compressed ${(data.summarizedSeqs as number[])?.length || 0} messages`,
-            data: data as AgentStreamChunk['data']
-          });
-        }
-      }
+      compression: compressionOpts as SessionCompressionOptions
     });
 
     const startTime = Date.now();
@@ -694,11 +704,33 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
 
     const sandboxContext = options.sandboxContext;
 
-    return defs.map((def) =>
-      tool({
-        name: def.name,
-        description: def.description,
-        parameters: def.parameters,
+    return defs.map((def) => {
+      // Zod .optional() without .nullable() 不兼容 OpenAI Structured Outputs (strict: true)。
+      // 使用 strict: false + JSON Schema 绕过此限制。
+      let jsonSchema: Record<string, unknown> | undefined;
+      if (def.parameters) {
+        try {
+          jsonSchema = zodToJsonSchema(def.parameters, { target: 'openApi3_1' }) as Record<string, unknown>;
+        } catch {
+          // 回退：直接传 Zod schema（strict: true），可能在部分工具上报错
+        }
+      }
+
+      const toolOptions = jsonSchema
+        ? {
+            name: def.name,
+            description: def.description,
+            parameters: jsonSchema,
+            strict: false as const
+          }
+        : {
+            name: def.name,
+            description: def.description,
+            parameters: def.parameters
+          };
+
+      return tool({
+        ...toolOptions,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (params: any, _context?: any, details?: any) => {
           // 从 SDK 的 details.toolCall.callId 获取工具调用 ID
@@ -719,8 +751,8 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
           });
           return result.resultText;
         }
-      })
-    );
+      });
+    });
   }
 
   private drainPendingRuntimeChunks(pendingRuntimeChunks: AgentStreamChunk[]): AgentStreamChunk[] {

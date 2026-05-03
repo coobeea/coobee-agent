@@ -232,7 +232,10 @@ export class SessionCompressor {
       return result;
     } catch (error) {
       log.error('压缩失败:', error);
-      // 压缩失败不影响主流程
+      this.options.onEvent?.('compression:done', {
+        error: String(error),
+        compressed: false
+      });
       return { compressed: false };
     }
   }
