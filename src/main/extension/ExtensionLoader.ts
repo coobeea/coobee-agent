@@ -358,7 +358,7 @@ export class ExtensionLoader {
    * @param threadId 任务 ID (thread ID)
    */
   async loadWorkspaceExtensions(threadId: string, workspaceDir?: string): Promise<void> {
-    const { resolveThreadRuntimeLayoutSync } = await import('@main/agent/context/AgentRuntimeLayout');
+    const { resolveThreadRuntimeLayoutSync } = await import('@main/agent/AgentEnv');
     const workspace = workspaceDir || resolveThreadRuntimeLayoutSync(threadId).agentProjectPath;
     const workspaceExtDir = path.join(workspace, 'extensions');
 

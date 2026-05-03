@@ -422,6 +422,7 @@ export function setupEventSubscription(
         break;
 
       default:
+        log.debug(`[StreamAdapter] Unhandled SDK event: ${evt.type}`);
         break;
     }
   });

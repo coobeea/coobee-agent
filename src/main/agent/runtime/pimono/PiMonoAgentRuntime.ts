@@ -287,12 +287,17 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           }
 
           // 等待 SDK 内部事件队列排空（含 auto-compaction 检查）
-          // prompt() 不会 await 内部 _agentEventQueue，compaction 在其中异步执行
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const eventQueue = (piSession as any)._agentEventQueue as Promise<void> | undefined;
+          log.info(
+            `[PiMonoRuntime] prompt() resolved, awaiting _agentEventQueue (exists: ${!!eventQueue}), isCompacting: ${piSession.isCompacting}`
+          );
           if (eventQueue) {
             await eventQueue;
           }
+          log.info(
+            `[PiMonoRuntime] _agentEventQueue drained, isCompacting: ${piSession.isCompacting}`
+          );
 
           // 若 compaction 已触发（异步 LLM 调用），等待其完成
           const pollInterval = 500;
@@ -300,6 +305,9 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           const start = Date.now();
           while (piSession.isCompacting && Date.now() - start < maxWait) {
             await new Promise((r) => setTimeout(r, pollInterval));
+          }
+          if (Date.now() - start > pollInterval) {
+            log.info(`[PiMonoRuntime] Compaction wait finished after ${Date.now() - start}ms`);
           }
 
           unsubscribe();

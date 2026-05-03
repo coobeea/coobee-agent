@@ -120,11 +120,11 @@ function createExtensionServices(): ExtensionServices {
     },
     paths: {
       async getProject(sessionId) {
-        const { resolveThreadRuntimeLayoutSync } = await import('../agent/context/AgentRuntimeLayout');
+        const { resolveThreadRuntimeLayoutSync } = await import('../agent/AgentEnv');
         return resolveThreadRuntimeLayoutSync(sessionId).agentProjectPath;
       },
       async getWorkspace(sessionId) {
-        const { resolveThreadRuntimeLayoutSync } = await import('../agent/context/AgentRuntimeLayout');
+        const { resolveThreadRuntimeLayoutSync } = await import('../agent/AgentEnv');
         return resolveThreadRuntimeLayoutSync(sessionId).agentProjectPath;
       },
       async getAgentHome(agentId) {
