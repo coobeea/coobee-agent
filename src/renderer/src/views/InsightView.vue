@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type {
+  AnalysisDimension,
   AnalysisResult,
   AnalysisSnapshot,
   AnalysisTemplate,
@@ -39,13 +40,11 @@ const selectedTemplateId = ref('');
 const selectedAgentId = ref('');
 const showTemplateSelector = ref(false);
 const tab = ref<'active' | 'history'>('active');
-const copySuccess = ref('');
 const loading = ref(false);
 const creating = ref(false);
 const analyzing = ref(false);
 const deletingTemplateId = ref('');
 const error = ref('');
-const recorderVolume = ref(0);
 
 const currentTemplate = computed<AnalysisTemplate | null>(() => {
   if (!currentSession.value) return null;
@@ -69,11 +68,40 @@ const displayedResult = computed<AnalysisResult | null>(
   () => activeSnapshot.value?.result ?? currentSession.value?.latestResult ?? null
 );
 const displayedChanges = computed<DimensionChange[]>(() => activeSnapshot.value?.changes ?? []);
-const displayedTranscript = computed(() => currentSession.value?.transcript || '');
 const isAnalyzing = computed(() => currentSession.value?.status === 'analyzing' || analyzing.value);
 const isPaused = computed(() => currentSession.value?.status === 'paused');
 const isRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
-const recorderVolumeWidth = computed(() => `${Math.max(4, Math.min(100, recorderVolume.value))}%`);
+const displayedDimensions = computed<
+  Array<{
+    key: string;
+    dimension: AnalysisResult['dimensions'][string];
+    templateDimension?: AnalysisDimension;
+  }>
+>(() => {
+  if (!displayedResult.value) return [];
+
+  const resultDimensions = displayedResult.value.dimensions;
+  const templateDimensions = currentTemplate.value?.dimensions ?? [];
+  const ordered = templateDimensions
+    .filter((item) => Boolean(resultDimensions[item.key]))
+    .map((item) => ({
+      key: item.key,
+      dimension: resultDimensions[item.key],
+      templateDimension: item
+    }));
+
+  const templateKeys = new Set(templateDimensions.map((item) => item.key));
+  const extras = Object.entries(resultDimensions)
+    .filter(([key]) => !templateKeys.has(key))
+    .map(([key, dimension]) => ({
+      key,
+      dimension,
+      templateDimension: undefined
+    }));
+
+  return [...ordered, ...extras];
+});
+const changesMap = computed(() => new Map(displayedChanges.value.map((item) => [item.key, item])));
 
 const triggerLabel = computed(() => {
   const strategy = currentTemplate.value?.refreshStrategy;
@@ -116,9 +144,6 @@ const audioRecorder = useAudioRecorder({
       .catch(() => {
         // ignore realtime transcript sync failures
       });
-  },
-  onVolumeChange: (volume: number) => {
-    recorderVolume.value = Math.round(volume);
   },
   onSilence: () => {
     if (!currentSession.value || analyzing.value) return;
@@ -283,7 +308,6 @@ async function completeCurrentSession(): Promise<void> {
     currentSession.value = null;
     snapshots.value = [];
     activeSnapshotId.value = '';
-    recorderVolume.value = 0;
     stopElapsedTimer();
     await refreshSessions();
   } catch (err) {
@@ -303,7 +327,6 @@ async function pauseCurrentSession(): Promise<void> {
   if (!currentSession.value) return;
 
   audioRecorder.stopRecording();
-  recorderVolume.value = 0;
   const response = await pauseInsightSession(currentSession.value.id);
   if (response.success && response.data) {
     currentSession.value = response.data.session;
@@ -361,45 +384,11 @@ async function selectSession(sessionId: string): Promise<void> {
   error.value = '';
   try {
     audioRecorder.stopRecording();
-    recorderVolume.value = 0;
     await loadSessionDetail(sessionId);
   } catch (err) {
     error.value = err instanceof Error ? err.message : '切换会话失败';
   } finally {
     loading.value = false;
-  }
-}
-
-function getChangesMap(): Map<string, DimensionChange> {
-  return new Map(displayedChanges.value.map((item) => [item.key, item]));
-}
-
-function copyTranscript(): void {
-  copyToClipboard(displayedTranscript.value, 'transcript');
-}
-
-function copyResult(): void {
-  if (!displayedResult.value) return;
-  const lines: string[] = [];
-  if (displayedResult.value.summary) lines.push(`摘要：${displayedResult.value.summary}\n`);
-  for (const [, dim] of Object.entries(displayedResult.value.dimensions)) {
-    const val = Array.isArray(dim.value) ? (dim.value as string[]).join('、') : String(dim.value);
-    lines.push(`${dim.label}：${val}`);
-    if (dim.rawText) lines.push(`  → ${dim.rawText}`);
-  }
-  copyToClipboard(lines.join('\n'), 'result');
-}
-
-async function copyToClipboard(text: string, label: string): Promise<void> {
-  if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-    copySuccess.value = label;
-    setTimeout(() => {
-      copySuccess.value = '';
-    }, 2000);
-  } catch {
-    // ignore
   }
 }
 
@@ -766,129 +755,41 @@ function isIconClass(icon?: string): boolean {
           </div>
         </div>
 
-        <!-- Main Panels -->
-        <div class="flex min-h-0 flex-1 overflow-hidden bg-border/60">
-          <!-- Left: Transcript/Input Panel (2/5) -->
-          <div class="flex w-[40%] min-w-0 flex-col border-r border-border/70 bg-background/92 backdrop-blur-sm">
-            <!-- Panel Header -->
-            <div class="flex shrink-0 items-center justify-between border-b border-border/60 bg-surface/28 px-5 py-3">
-              <div class="flex items-center gap-2.5">
-                <div
-                  class="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-primary/10 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                  <span class="i-carbon-text-align-left inline-block h-3.5 w-3.5" />
+        <div class="min-h-0 flex-1 overflow-y-auto bg-background/94 px-5 py-5">
+          <div v-if="displayedResult" class="space-y-4">
+            <div class="flex items-center justify-between rounded-2xl border border-border/60 bg-card/88 px-4 py-3">
+              <div>
+                <div class="text-sm font-semibold text-foreground">当前分析维度</div>
+                <div class="mt-1 text-xs text-muted-foreground">
+                  按模板配置顺序展示{{ displayedDimensions.length ? `，共 ${displayedDimensions.length} 个维度` : '' }}
                 </div>
-                <span class="text-xs font-bold tracking-wide text-foreground/70">实时文字流</span>
               </div>
-              <div class="flex items-center gap-2.5">
-                <div class="flex w-24 items-center gap-1.5">
-                  <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted/60">
-                    <div
-                      class="h-full rounded-full transition-all duration-150"
-                      :class="isRecording ? 'bg-primary' : 'bg-muted-foreground/20'"
-                      :style="{ width: recorderVolumeWidth }" />
-                  </div>
-                </div>
-                <button
-                  v-if="displayedTranscript"
-                  class="flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[11px] font-medium transition-all"
-                  :class="
-                    copySuccess === 'transcript'
-                      ? 'bg-success/10 text-success'
-                      : 'text-muted-foreground/50 hover:bg-accent hover:text-foreground'
-                  "
-                  @click="copyTranscript">
-                  <span
-                    class="inline-block h-3 w-3"
-                    :class="copySuccess === 'transcript' ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
-                  {{ copySuccess === 'transcript' ? '已复制' : '复制' }}
-                </button>
-              </div>
+              <span
+                v-if="displayedResult.confidence"
+                class="rounded-full border border-primary/10 bg-primary/10 px-3 py-1 text-[10px] font-semibold text-primary">
+                {{ Math.round(displayedResult.confidence * 100) }}% 置信度
+              </span>
             </div>
 
-            <!-- Transcript Content -->
-            <div class="flex-1 overflow-y-auto px-5 py-4">
-              <div v-if="displayedTranscript" class="relative">
-                <div class="absolute left-0 top-0 h-full w-0.5 rounded-full bg-primary/12" />
-                <p class="whitespace-pre-wrap break-words pl-4 text-[13px] leading-[1.9] text-foreground/84">
-                  {{ displayedTranscript }}
-                </p>
-              </div>
-              <div v-else class="flex flex-col items-center justify-center gap-2 py-16">
-                <span class="i-carbon-microphone inline-block h-8 w-8 text-muted-foreground/15" />
-                <span class="text-xs text-muted-foreground/30">等待语音输入...</span>
-              </div>
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <DimensionRenderer
+                v-for="item in displayedDimensions"
+                :key="item.key"
+                :dimension="item.dimension"
+                :change="changesMap.get(item.key)"
+                :icon="item.templateDimension?.icon"
+                :show-trend="item.templateDimension?.showTrend" />
             </div>
           </div>
 
-          <!-- Right: Analysis Results Panel (3/5) -->
-          <div class="flex min-w-0 flex-1 flex-col bg-card/72 backdrop-blur-sm">
-            <!-- Panel Header -->
-            <div class="flex shrink-0 items-center justify-between border-b border-border/60 bg-surface/22 px-5 py-3">
-              <div class="flex items-center gap-2.5">
-                <div
-                  class="flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-accent/10 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                  <span class="i-carbon-chart-line-data inline-block h-3.5 w-3.5" />
-                </div>
-                <span class="text-xs font-bold tracking-wide text-foreground/70">分析结果</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span
-                  v-if="displayedResult?.confidence"
-                  class="rounded-full border border-primary/10 bg-primary/10 px-3 py-0.5 text-[10px] font-bold text-primary">
-                  {{ Math.round(displayedResult.confidence * 100) }}% 置信度
-                </span>
-                <button
-                  v-if="displayedResult"
-                  class="flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[11px] font-medium transition-all"
-                  :class="
-                    copySuccess === 'result'
-                      ? 'bg-success/10 text-success'
-                      : 'text-muted-foreground/50 hover:bg-accent hover:text-foreground'
-                  "
-                  @click="copyResult">
-                  <span
-                    class="inline-block h-3 w-3"
-                    :class="copySuccess === 'result' ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
-                  {{ copySuccess === 'result' ? '已复制' : '复制结果' }}
-                </button>
-              </div>
+          <div
+            v-else
+            class="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-card/50">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/5 text-accent/30">
+              <span class="i-carbon-chart-line-data inline-block h-7 w-7" />
             </div>
-
-            <!-- Results Content -->
-            <div v-if="displayedResult" class="flex-1 overflow-y-auto px-5 py-4">
-              <!-- Summary Card -->
-              <div
-                v-if="displayedResult.summary"
-                class="mb-5 rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/7 via-primary/3 to-transparent px-5 py-4 shadow-[0_14px_34px_-24px_rgba(0,0,0,0.2)]">
-                <div class="mb-2 flex items-center gap-2">
-                  <span class="i-carbon-text-creation inline-block h-4 w-4 text-primary/50" />
-                  <span class="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/50"> 摘要 </span>
-                </div>
-                <p class="text-sm leading-7 text-foreground/82">{{ displayedResult.summary }}</p>
-              </div>
-
-              <!-- Dimensions -->
-              <div class="flex flex-col gap-3">
-                <DimensionRenderer
-                  v-for="(dim, key) in displayedResult.dimensions"
-                  :key="String(key)"
-                  :dimension="dim"
-                  :change="getChangesMap().get(String(key))"
-                  :icon="currentTemplate?.dimensions.find((d) => d.key === String(key))?.icon"
-                  :show-trend="currentTemplate?.dimensions.find((d) => d.key === String(key))?.showTrend" />
-              </div>
-            </div>
-
-            <!-- Empty State -->
-            <div
-              v-else
-              class="flex flex-1 flex-col items-center justify-center gap-3 bg-gradient-to-b from-transparent to-background/20">
-              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/5 text-accent/30">
-                <span class="i-carbon-chart-line-data inline-block h-7 w-7" />
-              </div>
-              <p class="text-sm font-medium text-muted-foreground/40">等待首次分析</p>
-              <p class="text-xs text-muted-foreground/25">录音将自动触发分析</p>
-            </div>
+            <p class="text-sm font-medium text-muted-foreground/40">等待首次分析</p>
+            <p class="text-xs text-muted-foreground/25">录音后会按维度生成分析结果</p>
           </div>
         </div>
       </template>
