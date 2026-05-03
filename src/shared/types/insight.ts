@@ -5,6 +5,7 @@
 // ==================== 维度类型 ====================
 
 export type DimensionType = 'enum' | 'score' | 'text' | 'list' | 'boolean' | 'tags' | 'progress' | 'comparison';
+export type InsightAnalysisTrigger = 'silence' | 'interval' | 'manual' | 'content' | 'smart';
 
 // ==================== 分析模板 ====================
 
@@ -85,7 +86,7 @@ export interface AnalysisSnapshot {
   sessionId: string;
   sequence: number;
   timestamp: number;
-  trigger: 'silence' | 'interval' | 'manual';
+  trigger: InsightAnalysisTrigger;
   transcriptRange: { start: number; end: number };
   fullTranscript: string;
   newText: string;
@@ -104,6 +105,8 @@ export interface SessionConfig {
   dimensions?: AnalysisDimension[];
   refreshStrategy?: RefreshStrategy;
   knowledgeBase?: string[];
+  agentId?: string;
+  agentName?: string;
 }
 
 export interface InsightSession {
@@ -113,9 +116,11 @@ export interface InsightSession {
   status: InsightSessionStatus;
   startTime: number;
   endTime?: number;
+  updatedAt: number;
   transcript: string;
   snapshotCount: number;
   latestResult?: AnalysisResult;
+  lastSnapshotAt?: number;
   metadata?: Record<string, unknown>;
   config?: SessionConfig;
 }

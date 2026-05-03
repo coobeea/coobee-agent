@@ -28,6 +28,21 @@ const router = createRouter({
           component: () => import('@/views/AgentView.vue')
         },
         {
+          path: 'insight',
+          name: 'insight',
+          component: () => import('@/views/InsightView.vue')
+        },
+        {
+          path: 'insight/session/:id',
+          name: 'insight-session',
+          component: () => import('@/views/InsightSessionView.vue')
+        },
+        {
+          path: 'insight/templates/create',
+          name: 'insight-template-create',
+          component: () => import('@/views/InsightTemplateEditorView.vue')
+        },
+        {
           path: 'agents/create',
           name: 'agent-create',
           component: () => import('@/views/AgentEditorView.vue')

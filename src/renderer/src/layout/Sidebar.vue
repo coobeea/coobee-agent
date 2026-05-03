@@ -33,6 +33,13 @@ const activeThreadId = ref<string | null>(null);
 const mainMenuItems: MenuItem[] = [
   { id: 'home', label: '主页', description: '任务启动台', icon: 'i-carbon-home', route: '/home' },
   { id: 'agents', label: '智能体', description: '配置与能力', icon: 'i-carbon-bot', route: '/agents' },
+  {
+    id: 'insight',
+    label: '实时洞察',
+    description: '实时洞察分析',
+    icon: 'i-carbon-chart-line-data',
+    route: '/insight'
+  },
   { id: 'settings', label: '系统设置', description: '模型与偏好', icon: 'i-carbon-settings', route: '/settings' }
 ];
 
@@ -54,6 +61,9 @@ function updateActiveState(): void {
     activeThreadId.value = path.split('/')[2];
   } else if (path.startsWith('/agents')) {
     activeMenuId.value = 'agents';
+    activeThreadId.value = null;
+  } else if (path.startsWith('/insight')) {
+    activeMenuId.value = 'insight';
     activeThreadId.value = null;
   } else if (path.startsWith('/settings')) {
     activeMenuId.value = 'settings';
