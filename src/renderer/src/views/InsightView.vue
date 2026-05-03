@@ -10,6 +10,7 @@ import type {
   InsightSession
 } from '@shared/types/insight';
 import { useAudioRecorder } from '@/composables/useAudioRecorder';
+import { useWorkerStore } from '@/stores/worker';
 import {
   getTextTail,
   mapAsrStatusToCaption,
@@ -36,6 +37,7 @@ import {
 
 const route = useRoute();
 const router = useRouter();
+const workerStore = useWorkerStore();
 
 const templates = ref<AnalysisTemplate[]>([]);
 const agents = ref<AgentEntry[]>([]);
@@ -56,6 +58,8 @@ const transcriptPanelRef = ref<HTMLElement | null>(null);
 const liveCaptionText = ref('');
 const liveCaptionTone = ref<LiveCaptionTone>('active');
 const voiceLevel = ref(0);
+const transcriptBaseAtOffset = ref('');
+const liveTranscriptSegment = ref('');
 
 const currentTemplate = computed<AnalysisTemplate | null>(() => {
   if (!currentSession.value) return null;
@@ -82,7 +86,9 @@ const displayedResult = computed<AnalysisResult | null>(
   () => activeSnapshot.value?.result ?? currentSession.value?.latestResult ?? null
 );
 const displayedChanges = computed<DimensionChange[]>(() => activeSnapshot.value?.changes ?? []);
-const displayedTranscript = computed(() => currentSession.value?.transcript || '');
+const displayedTranscript = computed(() =>
+  mergeTranscriptDisplay(transcriptBaseAtOffset.value, liveTranscriptSegment.value)
+);
 const isAnalyzing = computed(() => currentSession.value?.status === 'analyzing' || analyzing.value);
 const isPaused = computed(() => currentSession.value?.status === 'paused');
 const isRecording = computed(() => audioRecorder.isRecording.value && !isPaused.value);
@@ -180,22 +186,104 @@ const triggerLabel = computed(() => {
 
 const elapsedTime = ref('00:00:00');
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
-let lastPartialLength = 0;
+let lastCommittedSegment = '';
+
+function shouldInsertSpace(before: string, after: string): boolean {
+  return /[a-zA-Z0-9]$/.test(before) && /^[a-zA-Z0-9]/.test(after);
+}
+
+function findTextOverlap(before: string, after: string): number {
+  const beforeChars = Array.from(before);
+  const afterChars = Array.from(after);
+  const maxOverlap = Math.min(beforeChars.length, afterChars.length, 40);
+
+  for (let length = maxOverlap; length > 0; length--) {
+    const beforeTail = beforeChars.slice(-length).join('');
+    const afterHead = afterChars.slice(0, length).join('');
+    if (beforeTail === afterHead) return length;
+  }
+
+  return 0;
+}
+
+function mergeTranscriptDisplay(before: string, after: string): string {
+  const base = before.trim();
+  const next = after.trim();
+  if (!base) return next;
+  if (!next || next === base || base.includes(next)) return base;
+  if (next.startsWith(base) || next.includes(base)) return next;
+
+  const overlap = findTextOverlap(base, next);
+  const nextChars = Array.from(next);
+  const separator = overlap === 0 && shouldInsertSpace(base, next) ? ' ' : '';
+  return `${base}${separator}${nextChars.slice(overlap).join('')}`;
+}
+
+function resetTranscriptWindow(baseText?: string): void {
+  transcriptBaseAtOffset.value = baseText ?? currentSession.value?.transcript ?? '';
+  liveTranscriptSegment.value = '';
+  lastCommittedSegment = '';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function ensureAsrWorkerReady(): Promise<void> {
+  await workerStore.requestWorkers();
+
+  const asrWorker = workerStore.getWorker(workerStore.asrWorkerName);
+  if (!asrWorker) {
+    throw new Error('未找到 ASR Worker，请先检查 Worker 配置');
+  }
+
+  if (asrWorker.status === 'stopped' || asrWorker.status === 'error') {
+    await workerStore.startWorker(asrWorker.name);
+  }
+
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    await workerStore.requestWorkers();
+
+    if (workerStore.asrReady) {
+      return;
+    }
+
+    const latestWorker = workerStore.getWorker(workerStore.asrWorkerName);
+    if (latestWorker?.status === 'error') {
+      throw new Error(latestWorker.error || 'ASR Worker 启动失败');
+    }
+
+    await sleep(500);
+  }
+
+  throw new Error('ASR Worker 尚未就绪，请稍后重试');
+}
 
 const audioRecorder = useAudioRecorder({
-  onPartialResult: (text: string) => {
+  onTranscriptUpdate: (payload) => {
     if (!currentSession.value) return;
-    if (text.trim()) {
-      liveCaptionTone.value = 'active';
-      liveCaptionText.value = `当前识别：${getTextTail(text)}`;
+
+    liveTranscriptSegment.value = payload.displayText;
+
+    const liveText = payload.draftText.trim() || payload.displayText.trim();
+    if (liveText) {
+      liveCaptionTone.value = payload.isTurnFinal || payload.isSessionFinal ? 'recognized' : 'active';
+      liveCaptionText.value = `${payload.isTurnFinal || payload.isSessionFinal ? '识别到' : '当前识别'}：${getTextTail(liveText)}`;
     }
-    const delta = text.substring(lastPartialLength);
-    lastPartialLength = text.length;
-    if (!delta) return;
+
+    const committedText = payload.committedText;
+    const delta = committedText.startsWith(lastCommittedSegment)
+      ? committedText.substring(lastCommittedSegment.length)
+      : committedText;
+    lastCommittedSegment = committedText;
+    if (!delta.trim()) return;
 
     currentSession.value = {
       ...currentSession.value,
-      transcript: `${currentSession.value.transcript}${delta}`,
+      transcript: `${transcriptBaseAtOffset.value}${committedText}`,
       updatedAt: Date.now()
     };
 
@@ -210,8 +298,15 @@ const audioRecorder = useAudioRecorder({
         // ignore realtime transcript sync failures
       });
   },
+  onPartialResult: (text: string) => {
+    if (!currentSession.value || !text.trim()) return;
+    liveTranscriptSegment.value = text;
+    liveCaptionTone.value = 'active';
+    liveCaptionText.value = `当前识别：${getTextTail(text)}`;
+  },
   onFinalResult: (text: string) => {
     if (!text.trim()) return;
+    liveTranscriptSegment.value = text;
     liveCaptionTone.value = 'recognized';
     liveCaptionText.value = `识别到：${getTextTail(text)}`;
   },
@@ -457,6 +552,7 @@ async function loadSessionDetail(sessionId: string): Promise<void> {
   currentSession.value = sessionResp.data.session;
   snapshots.value = snapshotsResp.data.snapshots;
   activeSnapshotId.value = snapshots.value[snapshots.value.length - 1]?.id || '';
+  resetTranscriptWindow(sessionResp.data.session.transcript);
   startElapsedTimer();
 }
 
@@ -477,7 +573,7 @@ async function startNewSession(): Promise<void> {
     currentSession.value = response.data.session;
     snapshots.value = [];
     activeSnapshotId.value = '';
-    lastPartialLength = 0;
+    resetTranscriptWindow(response.data.session.transcript);
     showTemplateSelector.value = false;
     tab.value = 'active';
     await refreshSessions();
@@ -506,6 +602,7 @@ async function completeCurrentSession(): Promise<void> {
     currentSession.value = null;
     snapshots.value = [];
     activeSnapshotId.value = '';
+    resetTranscriptWindow('');
     resetVoicePanelFeedback();
     stopElapsedTimer();
     await refreshSessions();
@@ -516,39 +613,64 @@ async function completeCurrentSession(): Promise<void> {
 
 async function startRecordingCapture(): Promise<void> {
   if (!currentSession.value || audioRecorder.isRecording.value) return;
-  await audioRecorder.connect();
-  audioRecorder.resetSentOffset();
-  lastPartialLength = 0;
-  resetVoicePanelFeedback();
-  liveCaptionText.value = '开始说话后会实时更新文字与分析';
-  await audioRecorder.startRecording();
+  error.value = '';
+  liveCaptionTone.value = 'processing';
+  liveCaptionText.value = '正在准备语音服务';
+
+  try {
+    await ensureAsrWorkerReady();
+    await audioRecorder.connect();
+    audioRecorder.resetSentOffset();
+    resetTranscriptWindow();
+    resetVoicePanelFeedback();
+    liveCaptionText.value = '开始说话后会实时更新文字与分析';
+    await audioRecorder.startRecording();
+  } catch (err) {
+    voiceLevel.value = 0;
+    liveTranscriptSegment.value = '';
+    liveCaptionTone.value = 'processing';
+    liveCaptionText.value = '语音服务暂不可用';
+    error.value = err instanceof Error ? err.message : '启动录音失败';
+  }
 }
 
 async function pauseCurrentSession(): Promise<void> {
   if (!currentSession.value) return;
+  error.value = '';
 
-  audioRecorder.stopRecording();
-  voiceLevel.value = 0;
-  liveCaptionTone.value = 'processing';
-  liveCaptionText.value = '录音已暂停';
-  const response = await pauseInsightSession(currentSession.value.id);
-  if (response.success && response.data) {
+  try {
+    audioRecorder.stopRecording();
+    voiceLevel.value = 0;
+    liveCaptionTone.value = 'processing';
+    liveCaptionText.value = '录音已暂停';
+    const response = await pauseInsightSession(currentSession.value.id);
+    if (!response.success || !response.data) {
+      throw new Error(response.error || '暂停会话失败');
+    }
+
     currentSession.value = response.data.session;
     await refreshSessions();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '暂停会话失败';
   }
 }
 
 async function resumeCurrentSession(): Promise<void> {
   if (!currentSession.value) return;
+  error.value = '';
 
-  const response = await resumeInsightSession(currentSession.value.id);
-  if (!response.success || !response.data) {
-    throw new Error(response.error || '恢复会话失败');
+  try {
+    const response = await resumeInsightSession(currentSession.value.id);
+    if (!response.success || !response.data) {
+      throw new Error(response.error || '恢复会话失败');
+    }
+
+    currentSession.value = response.data.session;
+    await startRecordingCapture();
+    await refreshSessions();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '恢复会话失败';
   }
-
-  currentSession.value = response.data.session;
-  await startRecordingCapture();
-  await refreshSessions();
 }
 
 function toggleRecordingMute(): void {
@@ -582,7 +704,7 @@ async function runAnalysis(trigger: 'manual' | 'silence'): Promise<void> {
     snapshots.value = [...snapshots.value, response.data.snapshot];
     activeSnapshotId.value = response.data.snapshot.id;
     audioRecorder.resetSentOffset();
-    lastPartialLength = 0;
+    resetTranscriptWindow(response.data.session.transcript);
     await refreshSessions();
   } catch (err) {
     error.value = err instanceof Error ? err.message : '分析失败';
@@ -605,6 +727,7 @@ async function selectSession(sessionId: string): Promise<void> {
   try {
     audioRecorder.stopRecording();
     resetVoicePanelFeedback();
+    resetTranscriptWindow();
     await loadSessionDetail(sessionId);
   } catch (err) {
     error.value = err instanceof Error ? err.message : '切换会话失败';

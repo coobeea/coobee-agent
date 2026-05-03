@@ -31,7 +31,27 @@ export interface AsrStatusPayload {
   energy?: number;
 }
 
+export type AsrTranscriptEvent = 'update' | 'turn_final' | 'session_final';
+
+export interface AsrTranscriptPayload {
+  event: AsrTranscriptEvent | string;
+  provider?: string | null;
+  seq?: number;
+  revision?: number;
+  turnId?: string | null;
+  committedText: string;
+  draftText: string;
+  displayText: string;
+  isTurnFinal: boolean;
+  isSessionFinal: boolean;
+  bufferedMs?: number;
+  latencyMs?: number;
+  meta?: AsrMeta;
+}
+
 export interface AudioRecorderOptions {
+  /** 统一转写协议回调 */
+  onTranscriptUpdate?: (payload: AsrTranscriptPayload) => void;
   /** ASR partial 结果回调（实时识别中间结果） */
   onPartialResult?: (text: string, meta?: AsrMeta) => void;
   /** ASR final 结果回调（断连时最终结果） */
@@ -101,16 +121,101 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
   const SILENCE_DURATION = options.silenceDuration || 10000;
   const SPEECH_HOLD_DURATION = options.speechHoldDuration || 1200;
 
-  let sentTextLength = 0;
-  let lastKnownFullText = '';
+  let textOffset = 0;
+  let lastKnownDisplayText = '';
   let prevPartialText = '';
+  let lastTranscriptSeq = 0;
 
   // ==================== 工具方法 ====================
 
   const resetSentOffset = (): void => {
-    sentTextLength = lastKnownFullText.length;
+    textOffset = lastKnownDisplayText.length;
     prevPartialText = '';
   };
+
+  function shouldInsertSpace(before: string, after: string): boolean {
+    return /[a-zA-Z0-9]$/.test(before) && /^[a-zA-Z0-9]/.test(after);
+  }
+
+  function findTextOverlap(before: string, after: string): number {
+    const beforeChars = Array.from(before);
+    const afterChars = Array.from(after);
+    const maxOverlap = Math.min(beforeChars.length, afterChars.length, 40);
+
+    for (let length = maxOverlap; length > 0; length--) {
+      const beforeTail = beforeChars.slice(-length).join('');
+      const afterHead = afterChars.slice(0, length).join('');
+      if (beforeTail === afterHead) return length;
+    }
+
+    return 0;
+  }
+
+  function mergeTranscriptText(before: string, after: string): string {
+    const base = before.trim();
+    const next = after.trim();
+    if (!base) return next;
+    if (!next || next === base || base.includes(next)) return base;
+    if (next.startsWith(base) || next.includes(base)) return next;
+
+    const overlap = findTextOverlap(base, next);
+    const nextChars = Array.from(next);
+    const separator = overlap === 0 && shouldInsertSpace(base, next) ? ' ' : '';
+    return `${base}${separator}${nextChars.slice(overlap).join('')}`;
+  }
+
+  function applyTextOffset(text: string): string {
+    if (!text) return '';
+    if (textOffset <= 0) return text;
+    if (textOffset >= text.length) return '';
+    return text.substring(textOffset);
+  }
+
+  function buildTranscriptPayload(data: Record<string, unknown>, meta: AsrMeta): AsrTranscriptPayload | null {
+    const hasUnifiedTranscript =
+      typeof data.transcript_event === 'string' ||
+      typeof data.committed_text === 'string' ||
+      typeof data.draft_text === 'string' ||
+      typeof data.display_text === 'string';
+
+    if (!hasUnifiedTranscript) return null;
+
+    const committedText = typeof data.committed_text === 'string' ? data.committed_text : '';
+    const draftText = typeof data.draft_text === 'string' ? data.draft_text : '';
+    const fullDisplayText =
+      typeof data.display_text === 'string' ? data.display_text : mergeTranscriptText(committedText, draftText);
+    const visibleCommittedText = applyTextOffset(committedText);
+    const visibleDisplayText = applyTextOffset(fullDisplayText);
+    const visibleDraftText =
+      visibleCommittedText && visibleDisplayText.startsWith(visibleCommittedText)
+        ? visibleDisplayText.substring(visibleCommittedText.length)
+        : visibleDisplayText;
+
+    lastKnownDisplayText = fullDisplayText;
+
+    return {
+      event: typeof data.transcript_event === 'string' ? data.transcript_event : 'update',
+      provider: typeof data.provider === 'string' ? data.provider : null,
+      seq: typeof data.seq === 'number' ? data.seq : undefined,
+      revision: typeof data.revision === 'number' ? data.revision : undefined,
+      turnId: typeof data.turn_id === 'string' ? data.turn_id : null,
+      committedText: visibleCommittedText,
+      draftText: visibleDraftText,
+      displayText: visibleDisplayText,
+      isTurnFinal: Boolean(data.is_final_turn),
+      isSessionFinal: Boolean(data.is_final_session),
+      bufferedMs: typeof data.buffered_ms === 'number' ? data.buffered_ms : undefined,
+      latencyMs: typeof data.latency_ms === 'number' ? data.latency_ms : undefined,
+      meta
+    };
+  }
+
+  function shouldIgnoreTranscriptPayload(payload: AsrTranscriptPayload): boolean {
+    if (typeof payload.seq !== 'number') return false;
+    if (payload.seq <= lastTranscriptSeq) return true;
+    lastTranscriptSeq = payload.seq;
+    return false;
+  }
 
   function downsample(samples: Float32Array, inputRate: number, outputRate: number): Float32Array {
     if (inputRate === outputRate) return samples;
@@ -219,9 +324,24 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
         });
       }
 
+      const transcriptPayload = buildTranscriptPayload(data, meta);
+      if (transcriptPayload && !isMuted.value) {
+        if (shouldIgnoreTranscriptPayload(transcriptPayload)) {
+          return;
+        }
+
+        options.onTranscriptUpdate?.(transcriptPayload);
+
+        if (transcriptPayload.displayText.trim() && transcriptPayload.displayText !== prevPartialText) {
+          prevPartialText = transcriptPayload.displayText;
+          resetTextIdleTimer();
+        }
+        return;
+      }
+
       if (partial) {
-        lastKnownFullText = partial;
-        const currentTurnText = partial.substring(sentTextLength);
+        lastKnownDisplayText = partial;
+        const currentTurnText = partial.substring(textOffset);
         if (currentTurnText.trim() && !isMuted.value) {
           options.onPartialResult?.(currentTurnText, meta);
 
@@ -234,7 +354,8 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
       }
 
       if (finalText) {
-        const currentTurnText = finalText.substring(sentTextLength);
+        lastKnownDisplayText = finalText;
+        const currentTurnText = finalText.substring(textOffset);
         if (currentTurnText.trim() && !isMuted.value) {
           options.onFinalResult?.(currentTurnText, meta);
         }
@@ -389,7 +510,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
 
   const unmute = (): void => {
     isMuted.value = false;
-    sentTextLength = lastKnownFullText.length;
+    textOffset = lastKnownDisplayText.length;
     prevPartialText = '';
   };
 
@@ -402,6 +523,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
       ws = null;
     }
     isConnected.value = false;
+    lastTranscriptSeq = 0;
   };
 
   return {

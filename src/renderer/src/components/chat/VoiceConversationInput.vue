@@ -230,6 +230,25 @@ function updateLiveCaptionFromStatus(payload: AsrStatusPayload): void {
 }
 
 const recorder = useAudioRecorder({
+  onTranscriptUpdate: (payload) => {
+    const displayText = payload.displayText.trim();
+    if (!displayText) return;
+
+    partialText.value = displayText;
+    lastRecognitionAt.value = Date.now();
+    clearAsrBusy();
+
+    if (payload.isTurnFinal || payload.isSessionFinal) {
+      liveCaptionTone.value = 'recognized';
+      liveCaptionText.value = `识别到：${getTextTail(displayText)}`;
+      schedulePendingSubmit(AUTO_SUBMIT_RETRY_MS);
+      return;
+    }
+
+    liveCaptionTone.value = 'active';
+    liveCaptionText.value = `当前识别：${getTextTail(displayText)}`;
+    schedulePendingSubmit();
+  },
   onPartialResult: (text) => {
     queueRecognizedText(text);
   },

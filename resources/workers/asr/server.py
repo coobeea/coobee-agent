@@ -594,6 +594,37 @@ def extract_aliyun_text(event: dict) -> str:
     return ""
 
 
+def should_insert_space(before: str, after: str) -> bool:
+    return bool(re.search(r"[a-zA-Z0-9]$", before)) and bool(re.search(r"^[a-zA-Z0-9]", after))
+
+
+def find_text_overlap(before: str, after: str, max_chars: int = 40) -> int:
+    before_chars = list(before)
+    after_chars = list(after)
+    max_overlap = min(len(before_chars), len(after_chars), max_chars)
+
+    for length in range(max_overlap, 0, -1):
+        if before_chars[-length:] == after_chars[:length]:
+            return length
+
+    return 0
+
+
+def merge_transcript_text(before: str, after: str) -> str:
+    base = (before or "").strip()
+    next_text = (after or "").strip()
+    if not base:
+        return next_text
+    if not next_text or next_text == base or next_text in base:
+        return base
+    if next_text.startswith(base) or base in next_text:
+        return next_text
+
+    overlap = find_text_overlap(base, next_text)
+    separator = " " if overlap == 0 and should_insert_space(base, next_text) else ""
+    return f"{base}{separator}{next_text[overlap:]}"
+
+
 def build_aliyun_session_update() -> dict:
     """构建百炼实时识别 session 配置。前端仍然固定发送 16k PCM。"""
     return {
@@ -727,6 +758,52 @@ async def aliyun_asr_stream(ws: WebSocket):
         return
 
     last_partial = ""
+    committed_text = ""
+    current_turn_id = ""
+    current_revision = 0
+    transcript_seq = 0
+    turn_count = 0
+
+    def next_turn_id() -> str:
+        nonlocal turn_count
+        turn_count += 1
+        return f"turn-{turn_count}"
+
+    async def send_transcript_event(
+        transcript_event: str,
+        *,
+        committed: str,
+        draft: str = "",
+        turn_id: str = "",
+        revision: int = 0,
+        is_final_turn: bool = False,
+        is_final_session: bool = False,
+        legacy_partial: str | None = None,
+        legacy_final: str | None = None,
+        **payload,
+    ) -> bool:
+        nonlocal transcript_seq
+
+        transcript_seq += 1
+        display_text = merge_transcript_text(committed, draft)
+        message = {
+            "transcript_event": transcript_event,
+            "provider": "aliyun",
+            "seq": transcript_seq,
+            "turn_id": turn_id or None,
+            "revision": revision,
+            "committed_text": committed,
+            "draft_text": draft,
+            "display_text": display_text,
+            "is_final_turn": is_final_turn,
+            "is_final_session": is_final_session,
+            **payload,
+        }
+        if legacy_partial is not None:
+            message["partial"] = legacy_partial
+        if legacy_final is not None:
+            message["final"] = legacy_final
+        return await safe_send_json(ws, message)
 
     async def forward_audio():
         try:
@@ -764,7 +841,7 @@ async def aliyun_asr_stream(ws: WebSocket):
                 )
 
     async def forward_events():
-        nonlocal last_partial
+        nonlocal committed_text, current_revision, current_turn_id, last_partial
         try:
             async for raw in aliyun_ws:
                 if not isinstance(raw, str):
@@ -796,12 +873,36 @@ async def aliyun_asr_stream(ws: WebSocket):
                     continue
 
                 if event_type.endswith(".completed"):
+                    if not current_turn_id:
+                        current_turn_id = next_turn_id()
+                    revision = current_revision or 1
+                    committed_text = merge_transcript_text(committed_text, text)
                     last_partial = ""
-                    if not await safe_send_json(ws, {"final": text}):
+                    if not await send_transcript_event(
+                        "turn_final",
+                        committed=committed_text,
+                        draft="",
+                        turn_id=current_turn_id,
+                        revision=revision,
+                        is_final_turn=True,
+                        legacy_final=text,
+                    ):
                         break
+                    current_turn_id = ""
+                    current_revision = 0
                 elif text != last_partial:
+                    if not current_turn_id:
+                        current_turn_id = next_turn_id()
+                    current_revision += 1
                     last_partial = text
-                    if not await safe_send_json(ws, {"partial": text}):
+                    if not await send_transcript_event(
+                        "update",
+                        committed=committed_text,
+                        draft=text,
+                        turn_id=current_turn_id,
+                        revision=current_revision,
+                        legacy_partial=text,
+                    ):
                         break
         except Exception as e:
             log.debug(f"阿里云实时 ASR 事件转发结束: {type(e).__name__}: {e}")
@@ -824,6 +925,21 @@ async def aliyun_asr_stream(ws: WebSocket):
         for task in done:
             with contextlib.suppress(Exception):
                 await task
+        if last_partial:
+            if not current_turn_id:
+                current_turn_id = next_turn_id()
+            current_revision = current_revision or 1
+            committed_text = merge_transcript_text(committed_text, last_partial)
+            last_partial = ""
+        if committed_text:
+            await send_transcript_event(
+                "session_final",
+                committed=committed_text,
+                turn_id=current_turn_id,
+                revision=current_revision,
+                is_final_session=True,
+                legacy_final=committed_text,
+            )
     finally:
         with contextlib.suppress(Exception):
             await aliyun_ws.close()
@@ -873,6 +989,9 @@ async def local_asr_stream(ws: WebSocket):
     pending = asyncio.Event()
     send_lock = asyncio.Lock()
     last_status_sent_at = 0.0
+    transcript_seq = 0
+    transcript_revision = 0
+    turn_count = 0
     
     # VAD 状态
     speech_start_pos = -1      # 当前语音段的起始位置（-1=没在说话）
@@ -885,6 +1004,11 @@ async def local_asr_stream(ws: WebSocket):
             return True
         except Exception:
             return False
+
+    def next_turn_id() -> str:
+        nonlocal turn_count
+        turn_count += 1
+        return f"turn-{turn_count}"
 
     async def send_asr_status(asr_status: str, throttle_ms: int = 0, **payload) -> bool:
         """向前端推送 ASR 处理状态，文本结果仍走 partial/final。"""
@@ -899,6 +1023,42 @@ async def local_asr_stream(ws: WebSocket):
             "asr_status": asr_status,
             **payload,
         }
+        return await send_json(message)
+
+    async def send_transcript_event(
+        transcript_event: str,
+        *,
+        committed: str,
+        draft: str = "",
+        turn_id: str = "",
+        is_final_turn: bool = False,
+        is_final_session: bool = False,
+        legacy_partial: str | None = None,
+        legacy_final: str | None = None,
+        **payload,
+    ) -> bool:
+        nonlocal transcript_seq, transcript_revision
+
+        transcript_seq += 1
+        transcript_revision += 1
+        display_text = merge_transcript_text(committed, draft)
+        message = {
+            "transcript_event": transcript_event,
+            "provider": "local",
+            "seq": transcript_seq,
+            "turn_id": turn_id or None,
+            "revision": transcript_revision,
+            "committed_text": committed,
+            "draft_text": draft,
+            "display_text": display_text,
+            "is_final_turn": is_final_turn,
+            "is_final_session": is_final_session,
+            **payload,
+        }
+        if legacy_partial is not None:
+            message["partial"] = legacy_partial
+        if legacy_final is not None:
+            message["final"] = legacy_final
         return await send_json(message)
     
     async def receive_chunks():
@@ -1007,20 +1167,23 @@ async def local_asr_stream(ws: WebSocket):
                 
                 text = result["text"]
                 if text:
-                    committed_text = (
-                        committed_text + text if committed_text else text
-                    )
-                    msg = {
-                        "partial": committed_text,
-                        "latency_ms": result["latency_ms"],
-                    }
+                    turn_id = next_turn_id()
+                    committed_text = merge_transcript_text(committed_text, text)
+                    msg = {"latency_ms": result["latency_ms"]}
                     if result.get("lang"):
                         msg["lang"] = result["lang"]
                     if result.get("emotion"):
                         msg["emotion"] = result["emotion"]
                     if result.get("event"):
                         msg["event"] = result["event"]
-                    if not await send_json(msg):
+                    if not await send_transcript_event(
+                        "turn_final",
+                        committed=committed_text,
+                        turn_id=turn_id,
+                        is_final_turn=True,
+                        legacy_partial=committed_text,
+                        **msg,
+                    ):
                         break
                     if not await send_asr_status(
                         "recognized",
@@ -1052,12 +1215,17 @@ async def local_asr_stream(ws: WebSocket):
         try:
             result = await transcribe_async(segment)
             if result["text"]:
-                committed_text = (committed_text + result["text"]).strip()
+                committed_text = merge_transcript_text(committed_text, result["text"])
         except Exception:
             pass
     
     if committed_text:
-        await send_json({"final": committed_text})
+        await send_transcript_event(
+            "session_final",
+            committed=committed_text,
+            is_final_session=True,
+            legacy_final=committed_text,
+        )
     
     log.debug(
         f"会话结束: {len(buffer)} bytes, "
