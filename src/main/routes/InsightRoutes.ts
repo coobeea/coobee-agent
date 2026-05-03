@@ -15,11 +15,15 @@ import type {
   CreateInsightTemplateRespVO,
   CreateInsightSessionReqVO,
   CreateInsightSessionRespVO,
+  DeleteInsightTemplateRespVO,
+  GetInsightTemplateRespVO,
   GetInsightSessionRespVO,
   ListActiveInsightSessionsRespVO,
   ListInsightSessionsRespVO,
   ListInsightSnapshotsRespVO,
   ListInsightTemplatesRespVO,
+  UpdateInsightTemplateReqVO,
+  UpdateInsightTemplateRespVO,
   ResumeInsightSessionRespVO
 } from '@shared/api/insight-types';
 
@@ -67,22 +71,7 @@ export function registerInsightRoutes(router: Router): void {
     }
 
     try {
-      const template = await insightOrchestrator.createTemplate({
-        name: body.name,
-        description: body.description,
-        icon: typeof body.icon === 'string' ? body.icon : undefined,
-        analysisPrompt: typeof body.analysisPrompt === 'string' ? body.analysisPrompt : undefined,
-        refreshStrategy: isRefreshStrategy(body.refreshStrategy) ? body.refreshStrategy : undefined,
-        dimensions: body.dimensions.filter(isTemplateDimension).map((dimension) => ({
-          label: dimension.label,
-          prompt: dimension.prompt,
-          type: dimension.type,
-          options: Array.isArray(dimension.options) ? dimension.options.filter(isString) : undefined,
-          maxItems: typeof dimension.maxItems === 'number' ? dimension.maxItems : undefined,
-          showTrend: typeof dimension.showTrend === 'boolean' ? dimension.showTrend : undefined,
-          required: typeof dimension.required === 'boolean' ? dimension.required : undefined
-        }))
-      });
+      const template = await insightOrchestrator.createTemplate(normalizeTemplateInput(body));
 
       const response: ApiResponse<CreateInsightTemplateRespVO> = {
         success: true,
@@ -91,6 +80,74 @@ export function registerInsightRoutes(router: Router): void {
       ctx.body = response;
     } catch (error) {
       ctx.status = 500;
+      ctx.body = toErrorResponse(error);
+    }
+  });
+
+  router.get('/insight/templates/:id', async (ctx) => {
+    try {
+      const template = await insightOrchestrator.getTemplate(ctx.params.id);
+      const response: ApiResponse<GetInsightTemplateRespVO> = {
+        success: true,
+        data: { template }
+      };
+      ctx.body = response;
+    } catch (error) {
+      ctx.status = isNotFoundError(error) ? 404 : 500;
+      ctx.body = toErrorResponse(error);
+    }
+  });
+
+  router.put('/insight/templates/:id', async (ctx) => {
+    const body = (ctx.request.body ?? {}) as Partial<UpdateInsightTemplateReqVO>;
+    if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
+      ctx.status = 400;
+      ctx.body = {
+        success: false,
+        error: 'name is required and must be a non-empty string'
+      } satisfies ApiResponse;
+      return;
+    }
+    if (!body.description || typeof body.description !== 'string' || !body.description.trim()) {
+      ctx.status = 400;
+      ctx.body = {
+        success: false,
+        error: 'description is required and must be a non-empty string'
+      } satisfies ApiResponse;
+      return;
+    }
+    if (!Array.isArray(body.dimensions) || body.dimensions.length === 0) {
+      ctx.status = 400;
+      ctx.body = {
+        success: false,
+        error: 'dimensions is required and must contain at least one item'
+      } satisfies ApiResponse;
+      return;
+    }
+
+    try {
+      const template = await insightOrchestrator.updateTemplate(ctx.params.id, normalizeTemplateInput(body));
+      const response: ApiResponse<UpdateInsightTemplateRespVO> = {
+        success: true,
+        data: { template }
+      };
+      ctx.body = response;
+    } catch (error) {
+      ctx.status = isNotFoundError(error) ? 404 : isTemplateReadonlyError(error) ? 400 : 500;
+      ctx.body = toErrorResponse(error);
+    }
+  });
+
+  router.delete('/insight/templates/:id', async (ctx) => {
+    try {
+      await insightOrchestrator.deleteTemplate(ctx.params.id);
+      const response: ApiResponse<DeleteInsightTemplateRespVO> = {
+        success: true,
+        data: { templateId: ctx.params.id }
+      };
+      ctx.body = response;
+    } catch (error) {
+      ctx.status = isNotFoundError(error) ? 404 : isTemplateReadonlyError(error) ? 400 : 500;
       ctx.body = toErrorResponse(error);
     }
   });
@@ -306,6 +363,10 @@ function isNotFoundError(error: unknown): boolean {
   return error instanceof Error && /not found/i.test(error.message);
 }
 
+function isTemplateReadonlyError(error: unknown): boolean {
+  return error instanceof Error && /不支持(编辑|删除)/.test(error.message);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -336,4 +397,23 @@ function isRefreshStrategy(value: unknown): value is {
   debounceMs?: number;
 } {
   return isRecord(value) && typeof value.trigger === 'string';
+}
+
+function normalizeTemplateInput(body: Partial<CreateInsightTemplateReqVO | UpdateInsightTemplateReqVO>) {
+  return {
+    name: body.name ?? '',
+    description: body.description ?? '',
+    icon: typeof body.icon === 'string' ? body.icon : undefined,
+    analysisPrompt: typeof body.analysisPrompt === 'string' ? body.analysisPrompt : undefined,
+    refreshStrategy: isRefreshStrategy(body.refreshStrategy) ? body.refreshStrategy : undefined,
+    dimensions: (body.dimensions ?? []).filter(isTemplateDimension).map((dimension) => ({
+      label: dimension.label,
+      prompt: dimension.prompt,
+      type: dimension.type,
+      options: Array.isArray(dimension.options) ? dimension.options.filter(isString) : undefined,
+      maxItems: typeof dimension.maxItems === 'number' ? dimension.maxItems : undefined,
+      showTrend: typeof dimension.showTrend === 'boolean' ? dimension.showTrend : undefined,
+      required: typeof dimension.required === 'boolean' ? dimension.required : undefined
+    }))
+  };
 }

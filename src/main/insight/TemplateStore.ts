@@ -67,6 +67,65 @@ export class TemplateStore {
     return template;
   }
 
+  async update(
+    templateId: string,
+    params: {
+      name: string;
+      description: string;
+      icon?: string;
+      analysisPrompt?: string;
+      refreshStrategy?: RefreshStrategy;
+      dimensions: Array<{
+        label: string;
+        prompt: string;
+        type?: AnalysisDimension['type'];
+        options?: string[];
+        maxItems?: number;
+        showTrend?: boolean;
+        required?: boolean;
+      }>;
+    }
+  ): Promise<AnalysisTemplate> {
+    const existing = await this.get(templateId);
+    if (!existing) {
+      throw new Error(`Insight template "${templateId}" not found`);
+    }
+    if (existing.builtIn) {
+      throw new Error('内置模板不支持编辑');
+    }
+
+    const dimensions = normalizeDimensions(params.dimensions);
+    if (!dimensions.length) {
+      throw new Error('自定义模板至少需要一个有效的分析模块');
+    }
+
+    const updated: AnalysisTemplate = {
+      ...existing,
+      name: params.name.trim(),
+      description: params.description.trim(),
+      icon: params.icon?.trim() || existing.icon || 'i-carbon-document-preliminary',
+      dimensions,
+      analysisPrompt: buildAnalysisPrompt(params.analysisPrompt, dimensions),
+      refreshStrategy: normalizeRefreshStrategy(params.refreshStrategy),
+      updatedAt: Date.now()
+    };
+
+    await writeJsonFile(getTemplatePath(templateId), updated);
+    return updated;
+  }
+
+  async delete(templateId: string): Promise<void> {
+    const existing = await this.get(templateId);
+    if (!existing) {
+      throw new Error(`Insight template "${templateId}" not found`);
+    }
+    if (existing.builtIn) {
+      throw new Error('内置模板不支持删除');
+    }
+
+    await fsp.unlink(getTemplatePath(templateId));
+  }
+
   private async listCustomTemplates(): Promise<AnalysisTemplate[]> {
     await ensureDir(getInsightTemplatesDir());
     const templatesDir = getInsightTemplatesDir();

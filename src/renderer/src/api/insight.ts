@@ -8,13 +8,17 @@ import type {
   CreateInsightTemplateRespVO,
   CreateInsightSessionReqVO,
   CreateInsightSessionRespVO,
+  DeleteInsightTemplateRespVO,
+  GetInsightTemplateRespVO,
   GetInsightSessionRespVO,
   ListActiveInsightSessionsRespVO,
   ListInsightSessionsRespVO,
   ListInsightSnapshotsRespVO,
   ListInsightTemplatesRespVO,
   PauseInsightSessionRespVO,
-  ResumeInsightSessionRespVO
+  ResumeInsightSessionRespVO,
+  UpdateInsightTemplateReqVO,
+  UpdateInsightTemplateRespVO
 } from '@shared/api/insight-types';
 import type { InsightAnalysisTrigger } from '@shared/types/insight';
 import { apiClient } from './client';
@@ -27,6 +31,23 @@ export async function createInsightTemplate(
   body: CreateInsightTemplateReqVO
 ): Promise<ApiResponse<CreateInsightTemplateRespVO>> {
   return apiClient.post<CreateInsightTemplateRespVO>('/gateway/insight/templates', body);
+}
+
+export async function getInsightTemplate(templateId: string): Promise<ApiResponse<GetInsightTemplateRespVO>> {
+  return apiClient.get<GetInsightTemplateRespVO>(`/gateway/insight/templates/${templateId}`);
+}
+
+export async function updateInsightTemplate(
+  templateId: string,
+  body: UpdateInsightTemplateReqVO
+): Promise<ApiResponse<UpdateInsightTemplateRespVO>> {
+  return apiClient.put<UpdateInsightTemplateRespVO>(`/gateway/insight/templates/${templateId}`, body);
+}
+
+export async function deleteInsightTemplate(
+  templateId: string
+): Promise<ApiResponse<DeleteInsightTemplateRespVO>> {
+  return apiClient.delete<DeleteInsightTemplateRespVO>(`/gateway/insight/templates/${templateId}`);
 }
 
 export async function createInsightSession(

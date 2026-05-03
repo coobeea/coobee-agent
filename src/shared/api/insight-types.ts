@@ -44,6 +44,27 @@ export interface CreateInsightTemplateRespVO {
   template: AnalysisTemplate;
 }
 
+export interface GetInsightTemplateRespVO {
+  template: AnalysisTemplate;
+}
+
+export interface UpdateInsightTemplateReqVO {
+  name: string;
+  description: string;
+  icon?: string;
+  analysisPrompt?: string;
+  refreshStrategy?: RefreshStrategy;
+  dimensions: CreateInsightTemplateDimensionReqVO[];
+}
+
+export interface UpdateInsightTemplateRespVO {
+  template: AnalysisTemplate;
+}
+
+export interface DeleteInsightTemplateRespVO {
+  templateId: string;
+}
+
 export interface CreateInsightSessionReqVO {
   templateId: string;
   agentId?: string;

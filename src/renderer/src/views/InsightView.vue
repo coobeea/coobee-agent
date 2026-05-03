@@ -17,6 +17,7 @@ import {
   appendInsightTranscript,
   completeInsightSession,
   createInsightSession,
+  deleteInsightTemplate,
   getInsightSession,
   getInsightSessions,
   getInsightSnapshots,
@@ -42,6 +43,7 @@ const copySuccess = ref('');
 const loading = ref(false);
 const creating = ref(false);
 const analyzing = ref(false);
+const deletingTemplateId = ref('');
 const error = ref('');
 const recorderVolume = ref(0);
 
@@ -49,9 +51,6 @@ const currentTemplate = computed<AnalysisTemplate | null>(() => {
   if (!currentSession.value) return null;
   return templates.value.find((t) => t.id === currentSession.value?.templateId) ?? null;
 });
-const recommendedAgent = computed<AgentEntry | null>(
-  () => agents.value.find((agent) => agent.id === resolveDefaultAgentId(agents.value)) ?? null
-);
 const selectedAgent = computed<AgentEntry | null>(
   () => agents.value.find((agent) => agent.id === selectedAgentId.value) ?? null
 );
@@ -156,10 +155,9 @@ async function init(): Promise<void> {
       throw new Error(agentsResp.error || '加载智能体列表失败');
     }
 
-    templates.value = templatesResp.data.templates;
+    applyTemplateCollection(templatesResp.data.templates);
     agents.value = agentsResp.data.agents;
     sessions.value = sessionsResp.data.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
-    selectedTemplateId.value = templates.value[0]?.id ?? '';
     selectedAgentId.value = resolveDefaultAgentId(agents.value);
     applyTemplateSelectionFromRoute();
 
@@ -191,11 +189,34 @@ function applyTemplateSelectionFromRoute(): void {
   }
 }
 
+function applyTemplateCollection(nextTemplates: AnalysisTemplate[], preferredTemplateId?: string): void {
+  templates.value = nextTemplates;
+
+  if (preferredTemplateId && nextTemplates.some((item) => item.id === preferredTemplateId)) {
+    selectedTemplateId.value = preferredTemplateId;
+    return;
+  }
+
+  if (selectedTemplateId.value && nextTemplates.some((item) => item.id === selectedTemplateId.value)) {
+    return;
+  }
+
+  selectedTemplateId.value = nextTemplates[0]?.id ?? '';
+}
+
 async function refreshSessions(): Promise<void> {
   const response = await getInsightSessions();
   if (response.success && response.data) {
     sessions.value = response.data.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
   }
+}
+
+async function refreshTemplates(preferredTemplateId?: string): Promise<void> {
+  const response = await getInsightTemplates();
+  if (!response.success || !response.data) {
+    throw new Error(response.error || '加载模板失败');
+  }
+  applyTemplateCollection(response.data.templates, preferredTemplateId);
 }
 
 async function loadSessionDetail(sessionId: string): Promise<void> {
@@ -418,9 +439,40 @@ function closeTemplateSelector(): void {
   showTemplateSelector.value = false;
 }
 
+function selectTemplate(templateId: string): void {
+  selectedTemplateId.value = templateId;
+}
+
 function goToTemplateCreate(): void {
   closeTemplateSelector();
   router.push('/insight/templates/create');
+}
+
+function goToTemplateEdit(templateId: string): void {
+  closeTemplateSelector();
+  router.push(`/insight/templates/${templateId}/edit`);
+}
+
+async function removeTemplate(templateId: string): Promise<void> {
+  const template = templates.value.find((item) => item.id === templateId);
+  if (!template || template.builtIn || deletingTemplateId.value) return;
+  if (!window.confirm(`确定要删除模板“${template.name}”吗？此操作无法撤销。`)) return;
+
+  deletingTemplateId.value = templateId;
+  error.value = '';
+  try {
+    const response = await deleteInsightTemplate(templateId);
+    if (!response.success || !response.data) {
+      throw new Error(response.error || '删除模板失败');
+    }
+
+    const preferredTemplateId = selectedTemplateId.value === templateId ? undefined : selectedTemplateId.value;
+    await refreshTemplates(preferredTemplateId);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '删除模板失败';
+  } finally {
+    deletingTemplateId.value = '';
+  }
 }
 
 function startElapsedTimer(): void {
@@ -554,10 +606,10 @@ function isIconClass(icon?: string): boolean {
           </div>
 
           <div class="grid w-full grid-cols-2 gap-3">
-            <button
+            <div
               v-for="(tpl, idx) in templates"
               :key="tpl.id"
-              class="group flex items-start gap-3 rounded-2xl border border-border/80 bg-card/94 p-4 text-left shadow-[0_12px_34px_-24px_rgba(0,0,0,0.24)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card hover:shadow-[0_22px_46px_-28px_rgba(0,0,0,0.3)] active:scale-[0.98]"
+              class="group flex items-start gap-3 rounded-2xl border border-border/80 bg-card/94 p-4 text-left shadow-[0_12px_34px_-24px_rgba(0,0,0,0.24)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card hover:shadow-[0_22px_46px_-28px_rgba(0,0,0,0.3)]"
               :style="{ animationDelay: `${idx * 60}ms` }"
               @click="
                 selectedTemplateId = tpl.id;
@@ -570,14 +622,43 @@ function isIconClass(icon?: string): boolean {
               <span v-else class="mt-0.5 text-2xl transition-transform group-hover:scale-110">
                 {{ tpl.icon || '📊' }}
               </span>
-              <div class="min-w-0">
-                <div class="text-sm font-bold text-card-foreground/85">{{ tpl.name }}</div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-sm font-bold text-card-foreground/85">{{ tpl.name }}</div>
+                  </div>
+                  <div
+                    v-if="!tpl.builtIn"
+                    class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      class="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      @click.stop="goToTemplateEdit(tpl.id)">
+                      <span class="i-carbon-edit inline-block h-3 w-3" />
+                      编辑
+                    </button>
+                    <button
+                      class="inline-flex items-center gap-1 rounded-md border border-destructive/20 bg-destructive/6 px-2 py-1 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      :disabled="deletingTemplateId === tpl.id"
+                      @click.stop="removeTemplate(tpl.id)">
+                      <span
+                        v-if="deletingTemplateId === tpl.id"
+                        class="h-3 w-3 animate-spin rounded-full border border-destructive/30 border-t-destructive" />
+                      <span v-else class="i-carbon-trash-can inline-block h-3 w-3" />
+                      {{ deletingTemplateId === tpl.id ? '删除中' : '删除' }}
+                    </button>
+                  </div>
+                </div>
                 <div class="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground/55">
                   {{ tpl.description }}
                 </div>
-                <div class="mt-2 text-[10px] font-medium text-primary/50"> {{ tpl.dimensions.length }} 个维度 </div>
+                <div class="mt-2 flex items-center gap-2 text-[10px] font-medium text-primary/50">
+                  <span>{{ tpl.dimensions.length }} 个维度</span>
+                  <span v-if="!tpl.builtIn" class="rounded-full bg-success/10 px-1.5 py-0.5 text-success">
+                    自定义
+                  </span>
+                </div>
               </div>
-            </button>
+            </div>
           </div>
         </div>
       </div>
@@ -921,37 +1002,6 @@ function isIconClass(icon?: string): boolean {
             </span>
           </div>
 
-          <div
-            v-if="recommendedAgent"
-            class="mb-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/8 via-primary/4 to-transparent px-4 py-3">
-            <div class="flex min-w-0 items-start gap-3">
-              <span
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
-                <span class="i-carbon-star inline-block h-4 w-4" />
-              </span>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-semibold text-popover-foreground">{{ recommendedAgent.name }}</span>
-                  <span class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                    默认推荐
-                  </span>
-                </div>
-                <p class="mt-1 text-[11px] leading-5 text-muted-foreground/60">
-                  {{
-                    recommendedAgent.id === 'app-copilot'
-                      ? '适合通用实时洞察场景，默认推荐优先使用。'
-                      : '当前可用智能体中优先推荐这一项，适合作为默认分析智能体。'
-                  }}
-                </p>
-              </div>
-            </div>
-            <button
-              class="shrink-0 rounded-xl border border-primary/20 bg-background/80 px-3 py-1.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary/10"
-              @click="selectedAgentId = recommendedAgent.id">
-              使用推荐
-            </button>
-          </div>
-
           <div class="flex flex-col gap-2">
             <button
               v-for="agent in agents"
@@ -970,11 +1020,6 @@ function isIconClass(icon?: string): boolean {
               <span class="min-w-0 flex-1">
                 <span class="flex items-center gap-1.5">
                   <span class="block truncate text-sm font-semibold text-popover-foreground">{{ agent.name }}</span>
-                  <span
-                    v-if="recommendedAgent?.id === agent.id"
-                    class="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                    推荐
-                  </span>
                 </span>
                 <span class="mt-0.5 block line-clamp-2 text-[11px] leading-5 text-muted-foreground/55">
                   {{ agent.description || '用于实时洞察分析' }}
@@ -1011,38 +1056,46 @@ function isIconClass(icon?: string): boolean {
               自定义模板
             </button>
           </div>
-          <button
+          <div
             v-for="tpl in templates"
             :key="tpl.id"
-            class="group flex items-start gap-4 rounded-2xl border p-4 text-left transition-all"
+            class="group flex items-start gap-4 rounded-2xl border px-4 py-3.5 text-left transition-colors"
             :class="
               selectedTemplateId === tpl.id
-                ? 'border-primary/30 bg-primary/5 shadow-[0_12px_28px_-20px_hsl(var(--primary)/0.3)]'
-                : 'border-border/60 bg-background/55 hover:border-primary/20 hover:bg-accent/30'
+                ? 'border-primary/30 bg-primary/[0.04]'
+                : 'border-border/60 bg-background/55 hover:border-primary/20 hover:bg-accent/20'
             "
-            @click="selectedTemplateId = tpl.id">
+            @click="selectTemplate(tpl.id)">
             <span
               v-if="isIconClass(tpl.icon)"
-              class="mt-0.5 inline-block h-8 w-8 shrink-0 text-primary/80 transition-transform group-hover:scale-110"
-              :class="tpl.icon" />
-            <span v-else class="mt-0.5 text-3xl transition-transform group-hover:scale-110">
+              class="mt-0.5 inline-block h-7 w-7 shrink-0"
+              :class="[tpl.icon, selectedTemplateId === tpl.id ? 'text-primary' : 'text-primary/80']" />
+            <span v-else class="mt-0.5 text-2xl">
               {{ tpl.icon || '📊' }}
             </span>
             <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <div class="text-sm font-bold text-popover-foreground">{{ tpl.name }}</div>
-                <span
-                  v-if="!tpl.builtIn"
-                  class="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">
-                  自定义
-                </span>
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                  <div class="text-sm font-bold text-popover-foreground">{{ tpl.name }}</div>
+                  <span
+                    v-if="!tpl.builtIn"
+                    class="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
+                    自定义
+                  </span>
+                  <span
+                    v-if="selectedTemplateId === tpl.id"
+                    class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    当前选择
+                  </span>
+                </div>
               </div>
-              <div class="mt-0.5 text-xs leading-relaxed text-muted-foreground/55">
+              <div class="mt-1 text-xs leading-5 text-muted-foreground/60">
                 {{ tpl.description }}
               </div>
-              <div class="mt-2 flex items-center gap-3">
-                <span class="text-[10px] font-medium text-primary/40"> {{ tpl.dimensions.length }} 个维度 </span>
-                <span class="text-[10px] text-muted-foreground/30">
+              <div class="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground/45">
+                <span>{{ tpl.dimensions.length }} 个维度</span>
+                <span class="text-muted-foreground/25">·</span>
+                <span>
                   {{
                     tpl.refreshStrategy.trigger === 'silence'
                       ? '静默触发'
@@ -1055,10 +1108,10 @@ function isIconClass(icon?: string): boolean {
             </div>
             <div
               v-if="selectedTemplateId === tpl.id"
-              class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
               <span class="i-carbon-checkmark inline-block h-3 w-3" />
             </div>
-          </button>
+          </div>
         </div>
 
         <div class="flex items-center justify-end gap-2.5 border-t border-border/50 px-7 py-4">
@@ -1066,11 +1119,6 @@ function isIconClass(icon?: string): boolean {
             class="rounded-xl px-5 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-accent"
             @click="closeTemplateSelector">
             取消
-          </button>
-          <button
-            class="rounded-xl border border-border/60 bg-background/70 px-4 py-2 text-xs font-semibold text-foreground transition-all hover:border-primary/20 hover:bg-accent"
-            @click="goToTemplateCreate">
-            自定义模板
           </button>
           <button
             class="flex items-center gap-2 rounded-xl bg-primary px-6 py-2 text-xs font-bold text-primary-foreground shadow-[0_10px_24px_-14px_hsl(var(--primary)/0.55)] transition-all hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"

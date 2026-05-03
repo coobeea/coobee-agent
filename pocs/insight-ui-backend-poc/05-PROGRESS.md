@@ -75,6 +75,16 @@
   - `src/renderer/src/views/InsightView.vue` 在新建弹窗中改为提供“自定义模板”跳转入口，不再在弹窗内直接定义模板
   - 新增独立页面 `src/renderer/src/views/InsightTemplateEditorView.vue`，专门用于定义模板和分析模块
   - 自定义模板支持配置多个分析模块，每个模块可独立填写名称、提示词和基础展示类型，保存后会返回实时洞察页并自动预选新模板
+- 补齐了自定义模板 CRUD 的后续链路：
+  - `src/main/insight/InsightOrchestrator.ts` 暴露了模板单条查询、更新、删除能力
+  - `src/main/routes/InsightRoutes.ts` 新增 `GET /gateway/insight/templates/:id`、`PUT /gateway/insight/templates/:id`、`DELETE /gateway/insight/templates/:id`
+  - `src/renderer/src/api/insight.ts` 增加模板查询、更新、删除 API 封装
+  - `src/renderer/src/router/index.ts` 新增 `insight/templates/:id/edit` 路由
+  - `src/renderer/src/views/InsightTemplateEditorView.vue` 改为支持新建/编辑共用，并在编辑态提供删除入口
+  - `src/renderer/src/views/InsightView.vue` 在模板选择弹窗中为自定义模板增加了“编辑”“删除”操作，删除后会自动刷新模板列表并回退到可用模板
+  - 内置模板继续保持只读，不允许编辑或删除
+- 验证情况补充：
+  - 本轮修改的 `InsightRoutes.ts`、`InsightOrchestrator.ts`、`insight.ts`、`router/index.ts`、`InsightTemplateEditorView.vue`、`InsightView.vue` 已通过 IDE diagnostics 检查
 
 ## 下一步
 

@@ -17,6 +17,10 @@ export class InsightOrchestrator {
     return this.templateStore.list();
   }
 
+  async getTemplate(templateId: string): Promise<AnalysisTemplate> {
+    return this.requireTemplate(templateId);
+  }
+
   async createSession(params: {
     templateId: string;
     agentId?: string;
@@ -132,6 +136,32 @@ export class InsightOrchestrator {
     }>;
   }): Promise<AnalysisTemplate> {
     return this.templateStore.create(params);
+  }
+
+  async updateTemplate(
+    templateId: string,
+    params: {
+      name: string;
+      description: string;
+      icon?: string;
+      analysisPrompt?: string;
+      refreshStrategy?: AnalysisTemplate['refreshStrategy'];
+      dimensions: Array<{
+        label: string;
+        prompt: string;
+        type?: AnalysisTemplate['dimensions'][number]['type'];
+        options?: string[];
+        maxItems?: number;
+        showTrend?: boolean;
+        required?: boolean;
+      }>;
+    }
+  ): Promise<AnalysisTemplate> {
+    return this.templateStore.update(templateId, params);
+  }
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await this.templateStore.delete(templateId);
   }
 
   private async requireTemplate(templateId: string): Promise<AnalysisTemplate> {

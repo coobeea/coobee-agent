@@ -245,3 +245,32 @@
   - [x] 新建模板保存后可立即用于创建实时洞察会话
   - [x] 模板定义使用独立路由页面，不在创建弹窗内二次编辑
 - **状态**：[x]
+
+### 13. 补齐自定义模板编辑与删除能力
+
+- **目标**：让用户不仅能新建自定义模板，还能重新编辑已有模板，或在不需要时直接删除。
+- **背景**：当前自定义模板已经支持独立路由创建和本地持久化，但仍缺少完整 CRUD；用户无法修改已保存模板，也无法从模板选择入口清理旧模板。
+- **涉及范围**：
+  - `src/shared/api/insight-types.ts`
+  - `src/main/insight/TemplateStore.ts`
+  - `src/main/insight/InsightOrchestrator.ts`
+  - `src/main/routes/InsightRoutes.ts`
+  - `src/renderer/src/api/insight.ts`
+  - `src/renderer/src/router/index.ts`
+  - `src/renderer/src/views/InsightTemplateEditorView.vue`
+  - `src/renderer/src/views/InsightView.vue`
+- **具体动作**：
+  - 新增单模板查询、模板更新、模板删除接口
+  - 在后端限制内置模板只读，自定义模板才允许编辑和删除
+  - 让模板编辑页支持根据路由参数加载已有模板，并复用原页面完成保存修改
+  - 在模板选择弹窗中为自定义模板增加“编辑”“删除”入口
+  - 删除当前选中模板后，自动回退到可用模板，避免前端保留失效选中态
+- **非目标**：
+  - 本项不新增独立模板管理列表页
+  - 本项不实现模板版本历史或回收站
+- **验收标准**：
+  - [x] 自定义模板可通过独立路由打开并编辑保存
+  - [x] 自定义模板可在模板选择入口删除
+  - [x] 内置模板仍保持只读，不提供编辑删除能力
+  - [x] 修改文件通过 IDE 诊断检查，无新增错误
+- **状态**：[x]

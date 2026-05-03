@@ -43,6 +43,11 @@ const router = createRouter({
           component: () => import('@/views/InsightTemplateEditorView.vue')
         },
         {
+          path: 'insight/templates/:id/edit',
+          name: 'insight-template-edit',
+          component: () => import('@/views/InsightTemplateEditorView.vue')
+        },
+        {
           path: 'agents/create',
           name: 'agent-create',
           component: () => import('@/views/AgentEditorView.vue')
