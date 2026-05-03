@@ -687,10 +687,34 @@ describe('Ollama 最简测试', () => {
       console.log(`  第${i + 1}轮完成: totalTokens=${roundTokens}, 耗时=${result.duration}ms`);
 
       if (hasCompressionStart && hasCompressionDone) {
-        console.log('  压缩已完成，提前结束');
+        console.log('  压缩已完成，继续跑一轮验证压缩后上下文可用');
         break;
       }
     }
+
+    expect(hasCompressionStart).toBe(true);
+    expect(hasCompressionDone).toBe(true);
+
+    // 压缩完成后再跑一轮，验证压缩后的上下文仍然可用
+    console.log('\n步骤7 压缩后验证轮: 请总结一下你之前介绍过的景点。');
+    const verifyGen = runtime.stream('请简要总结你之前介绍过的景点名称。');
+    let vr = await verifyGen.next();
+    let verifyOutput = '';
+    while (!vr.done) {
+      const chunk = vr.value;
+      allEventTypes.add(chunk.type);
+      fs.appendFileSync(streamLogFile, JSON.stringify(chunk) + '\n', 'utf-8');
+      vr = await verifyGen.next();
+    }
+    const verifyResult = vr.value;
+    verifyOutput = verifyResult.output || '';
+    roundSummaries.push(
+      `验证轮: output=${verifyOutput.slice(0, 100) || '(空)'}, duration=${verifyResult.duration}ms`
+    );
+    console.log(`  验证轮完成: 耗时=${verifyResult.duration}ms`);
+    console.log(`  验证轮输出: ${verifyOutput.slice(0, 300)}`);
+
+    expect(verifyOutput.length).toBeGreaterThan(0);
 
     console.log('\n=== 步骤7 强制压缩测试结果 ===');
     console.log('流输出文件:', streamLogFile);
@@ -701,9 +725,6 @@ describe('Ollama 最简测试', () => {
     if (compressionContent) {
       console.log('压缩内容:', compressionContent.slice(0, 300));
     }
-
-    expect(hasCompressionStart).toBe(true);
-    expect(hasCompressionDone).toBe(true);
-    console.log('压缩验证通过！');
+    console.log('压缩验证通过！压缩后对话仍然正常。');
   });
 });
