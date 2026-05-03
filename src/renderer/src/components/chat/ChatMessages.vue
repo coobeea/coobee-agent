@@ -55,9 +55,7 @@ const currentActivity = computed<string>(() => {
     if (lastBlock.tool.status === 'approval-pending') return `等待审批 ${toolName}...`;
   }
   if (lastBlock.type === 'thinking') return '推理中...';
-  if (lastBlock.type === 'delegate' && 'delegate' in lastBlock) {
-    return `委派给 ${lastBlock.delegate.agentName || '子智能体'}...`;
-  }
+  if (lastBlock.type === 'compression') return '压缩上下文...';
   return '生成中...';
 });
 

@@ -17,15 +17,12 @@ export interface ToolCallInfo {
 }
 
 /**
- * 委派信息
+ * 上下文压缩信息
  */
-export interface DelegateInfo {
-  agentId: string;
-  agentName?: string;
-  task?: string;
-  status: 'running' | 'done';
-  output?: string;
-  duration?: number;
+export interface CompressionInfo {
+  status: 'compressing' | 'done' | 'error';
+  reason?: string;
+  error?: string;
 }
 
 /**
@@ -68,8 +65,7 @@ export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'tool'; tool: ToolCallInfo }
-  | { type: 'delegate'; delegate: DelegateInfo }
-  | { type: 'quality'; status: string; detail?: string }
+  | { type: 'compression'; compression: CompressionInfo }
   | { type: 'audio'; src: string; title?: string };
 
 /**

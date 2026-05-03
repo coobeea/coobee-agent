@@ -603,4 +603,107 @@ describe('Ollama 最简测试', () => {
       console.log('ℹ️  压缩未触发（需 >188K tokens），但压缩配置传递和事件映射已验证正确。');
     }
   });
+
+  it('步骤7：小窗口强制压缩验证', { timeout: 300_000 }, async () => {
+    // 使用极小的 contextWindow 使压缩必然触发。
+    // contextWindow=4096, reserveTokens=1024 → 阈值 3072 tokens
+    // 几轮对话后 totalTokens 即可超过阈值，SDK 自动触发 compaction。
+
+    const sessionId = `pimono-force-compact-${Date.now()}`;
+    const sessionDir = path.join(process.cwd(), 'test-results', 'sessions', 'pimono-step7-force-compact');
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const streamLogFile = path.join(process.cwd(), 'test-results', `pimono-step7-force-compact-${Date.now()}.jsonl`);
+    fs.writeFileSync(streamLogFile, '', 'utf-8');
+
+    const workspaceRoot = path.join(process.cwd(), 'test-results', 'workspace-step7');
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+
+    const runtime = new PiMonoAgentRuntime({
+      type: 'pi-mono',
+      name: 'OllamaForceCompactTest',
+      instructions: '你是一个简洁的助手。回答尽量简短。',
+      provider: 'ollama',
+      apiType: 'openai-compatible',
+      apiKey: 'ollama',
+      baseURL: OLLAMA_CONFIG.baseURL,
+      model: OLLAMA_CONFIG.model,
+      sessionId,
+      sessionDir,
+      sessionMode: 'file',
+      workspaceRoot,
+      thinkingLevel: 'off',
+      compaction: { enabled: true, reserveTokens: 256, keepRecentTokens: 512 },
+      modelMeta: { reasoning: false, contextWindow: 2048, maxOutputTokens: 2048 },
+      maxTurns: 5
+    });
+
+    const allEventTypes = new Set<string>();
+    let hasCompressionStart = false;
+    let hasCompressionDone = false;
+    let compressionContent = '';
+    const roundSummaries: string[] = [];
+
+    const prompts = [
+      '请用大约200字介绍一下中国的长城。',
+      '请用大约200字介绍一下法国的埃菲尔铁塔。',
+      '请用大约200字介绍一下美国的自由女神像。',
+      '请用大约200字介绍一下埃及的金字塔。',
+      '请用大约200字介绍一下印度的泰姬陵。',
+      '请用大约200字介绍一下澳大利亚的悉尼歌剧院。'
+    ];
+
+    for (let i = 0; i < prompts.length; i++) {
+      console.log(`\n步骤7 第${i + 1}轮: ${prompts[i]}`);
+
+      const gen = runtime.stream(prompts[i]);
+      let r = await gen.next();
+      let roundTokens = 0;
+      while (!r.done) {
+        const chunk = r.value;
+        allEventTypes.add(chunk.type);
+
+        if (chunk.type === 'compression:start') {
+          hasCompressionStart = true;
+          console.log(`  >>> COMPRESSION:START: ${chunk.content}`);
+        }
+        if (chunk.type === 'compression:done') {
+          hasCompressionDone = true;
+          compressionContent = chunk.content || '';
+          console.log(`  >>> COMPRESSION:DONE: ${chunk.content}`);
+        }
+        if (chunk.type === 'llm:done') {
+          const data = chunk.data as { usage?: { totalTokens?: number } } | undefined;
+          roundTokens = data?.usage?.totalTokens || 0;
+        }
+
+        fs.appendFileSync(streamLogFile, JSON.stringify(chunk) + '\n', 'utf-8');
+        r = await gen.next();
+      }
+      const result = r.value;
+      roundSummaries.push(
+        `第${i + 1}轮: tokens=${roundTokens}, output=${result.output?.slice(0, 60) || '(空)'}, duration=${result.duration}ms`
+      );
+      console.log(`  第${i + 1}轮完成: totalTokens=${roundTokens}, 耗时=${result.duration}ms`);
+
+      if (hasCompressionStart && hasCompressionDone) {
+        console.log('  压缩已完成，提前结束');
+        break;
+      }
+    }
+
+    console.log('\n=== 步骤7 强制压缩测试结果 ===');
+    console.log('流输出文件:', streamLogFile);
+    roundSummaries.forEach((s) => console.log(' ', s));
+    console.log('所有事件类型:', [...allEventTypes].sort());
+    console.log('compression:start:', hasCompressionStart);
+    console.log('compression:done:', hasCompressionDone);
+    if (compressionContent) {
+      console.log('压缩内容:', compressionContent.slice(0, 300));
+    }
+
+    expect(hasCompressionStart).toBe(true);
+    expect(hasCompressionDone).toBe(true);
+    console.log('压缩验证通过！');
+  });
 });

@@ -289,39 +289,28 @@ export const useChatStore = defineStore(
           break;
         }
 
-        case 'delegate:start': {
-          // 委派开始
+        case 'compression:start': {
           if (!threadState.currentAssistantMsg) break;
 
           threadState.currentAssistantMsg.blocks.push({
-            type: 'delegate',
-            delegate: {
-              agentId: (msg.data?.agentId as string) || 'unknown',
-              agentName: msg.data?.agentName as string | undefined,
-              task: msg.data?.task as string | undefined,
-              status: 'running'
+            type: 'compression',
+            compression: {
+              status: 'compressing',
+              reason: msg.content || undefined
             }
           });
           break;
         }
 
-        case 'delegate:done': {
-          // 委派完成
+        case 'compression:done': {
           if (!threadState.currentAssistantMsg) break;
 
-          const agentId = msg.data?.agentId as string | undefined;
-          // 从后往前找到对应的 delegate block
-          for (let i = threadState.currentAssistantMsg.blocks.length - 1; i >= 0; i--) {
-            const block = threadState.currentAssistantMsg.blocks[i];
-            if (
-              block.type === 'delegate' &&
-              block.delegate.status === 'running' &&
-              (!agentId || block.delegate.agentId === agentId)
-            ) {
-              block.delegate.status = 'done';
-              block.delegate.output = msg.content || undefined;
-              block.delegate.duration = msg.data?.duration as number | undefined;
-              break;
+          const lastBlock = threadState.currentAssistantMsg.blocks.at(-1);
+          if (lastBlock && lastBlock.type === 'compression') {
+            const hasError = msg.data?.error || msg.content?.toLowerCase().includes('error');
+            lastBlock.compression.status = hasError ? 'error' : 'done';
+            if (hasError) {
+              lastBlock.compression.error = (msg.data?.error as string) || msg.content || undefined;
             }
           }
           break;
@@ -361,28 +350,6 @@ export const useChatStore = defineStore(
             if (approval) {
               approval.decision = decision;
             }
-          }
-          break;
-        }
-
-        case 'quality:round_start':
-        case 'quality:validating':
-        case 'quality:score':
-        case 'quality:repairing':
-        case 'quality:done': {
-          // 质量检查
-          if (!threadState.currentAssistantMsg) break;
-
-          const lastBlock = threadState.currentAssistantMsg.blocks.at(-1);
-          if (lastBlock && lastBlock.type === 'quality') {
-            lastBlock.status = msg.content;
-            lastBlock.detail = msg.data ? JSON.stringify(msg.data) : undefined;
-          } else {
-            threadState.currentAssistantMsg.blocks.push({
-              type: 'quality',
-              status: msg.content,
-              detail: msg.data ? JSON.stringify(msg.data) : undefined
-            });
           }
           break;
         }

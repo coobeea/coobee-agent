@@ -591,9 +591,9 @@
     description: '本地部署的AI模型服务，支持私有化部署',
     api: 'openai-compatible',
     baseUrl: 'http://127.0.0.1:11434/v1',
-    apiKey: 'ollama', // 占位符
-    requiresApiKey: false, // 标记为不需要配置凭证
-    enabled: false,
+    apiKey: 'ollama',
+    requiresApiKey: false,
+    enabled: true,
     websites: {
       official: 'https://ollama.com/',
       docs: 'https://github.com/ollama/ollama/tree/main/docs',
@@ -601,14 +601,14 @@
     },
     models: [
       {
-        id: 'qwen3.5:9b',
-        name: 'Qwen3.5 9B',
-        contextWindow: 32768,
-        maxInputTokens: 32768,
+        id: 'qwen3.6:35b-a3b-q4_K_M',
+        name: 'Qwen3.6 35B (Q4)',
+        contextWindow: 131072,
+        maxInputTokens: 131072,
         maxOutputTokens: 8192,
         reasoning: true,
         free: true,
-        features: ['本地已安装', '推理', '9B', '6.6GB']
+        features: ['本地已安装', 'MoE 35B/3B', '推理', '量化Q4', '23GB']
       },
       {
         id: 'gemma4:e4b',
@@ -620,15 +620,6 @@
         features: ['本地已安装', 'Google', '4B', '9.6GB']
       },
       {
-        id: 'gemma4:26b-a4b-it-q8_0',
-        name: 'Gemma4 26B (Q8)',
-        contextWindow: 128000,
-        maxInputTokens: 128000,
-        maxOutputTokens: 2048,
-        free: true,
-        features: ['本地已安装', 'Google', '26B', '量化版', '28GB']
-      },
-      {
         id: 'gemma4:e4b-it-bf16',
         name: 'Gemma4 E4B (BF16)',
         contextWindow: 128000,
@@ -636,42 +627,33 @@
         maxOutputTokens: 2048,
         free: true,
         features: ['本地已安装', 'Google', '4B', 'BF16精度', '16GB']
-      },
-      {
-        id: 'gemma4:e4b-it-q8_0',
-        name: 'Gemma4 E4B (Q8)',
-        contextWindow: 128000,
-        maxInputTokens: 128000,
-        maxOutputTokens: 2048,
-        free: true,
-        features: ['本地已安装', 'Google', '4B', '量化版', '11GB']
       }
     ]
   },
   lmstudio: {
     id: 'lmstudio',
     name: 'LM Studio',
-    description: 'LM Studio本地模型运行环境，支持加载本地LLM并通过OpenAI兼容API访问',
+    description: 'LM Studio本地模型运行环境',
     api: 'openai-compatible',
     baseUrl: 'http://localhost:1234/v1',
-    apiKey: 'lm-studio', // 占位符
-    requiresApiKey: false, // 标记为不需要配置凭证
-    enabled: false,
+    apiKey: 'lm-studio',
+    requiresApiKey: false,
+    enabled: true,
     websites: {
-      official: 'https://lmstudio.ai/',
-      docs: 'https://lmstudio.ai/docs/basics/server',
+      official: 'https://lmstudio.ai/docs/app',
+      docs: 'https://lmstudio.ai/docs/app',
       models: 'https://lmstudio.ai/models'
     },
     models: [
       {
         id: 'google/gemma-4-e4b',
-        name: 'Gemma 4 E4B (LM Studio)',
+        name: 'Gemma 4 E4B (Local)',
         contextWindow: 128000,
         maxInputTokens: 128000,
         maxOutputTokens: 2048,
         reasoning: true,
         free: true,
-        features: ['LM Studio', '本地运行', 'Google', '思维链', '4B参数']
+        features: ['LM Studio', '本地运行', 'Google', '思维链', '4B']
       }
     ]
   }

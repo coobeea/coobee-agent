@@ -285,13 +285,27 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           if (executionSignal) {
             executionSignal.removeEventListener('abort', abortListener);
           }
+
+          // 等待 SDK 内部事件队列排空（含 auto-compaction 检查）
+          // prompt() 不会 await 内部 _agentEventQueue，compaction 在其中异步执行
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const eventQueue = (piSession as any)._agentEventQueue as Promise<void> | undefined;
+          if (eventQueue) {
+            await eventQueue;
+          }
+
+          // 若 compaction 已触发（异步 LLM 调用），等待其完成
+          const pollInterval = 500;
+          const maxWait = 120_000;
+          const start = Date.now();
+          while (piSession.isCompacting && Date.now() - start < maxWait) {
+            await new Promise((r) => setTimeout(r, pollInterval));
+          }
+
           unsubscribe();
-          // 等待一个微任务周期，确保 SDK 已排队的事件回调有机会执行完毕
-          // （pi-SDK 内部可能通过 Promise/microtask 分发最后的 delta 事件）
           await Promise.resolve();
 
           if (apiError) {
-            // API 返回了错误（如 usage limit exceeded）但 SDK 没有 throw — 转为异常传播给调用方
             capturedError = new Error(apiError);
           } else {
             queue.push({ type: 'run:done', content: '' });
@@ -385,7 +399,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
   private createSettingsManager(options: AgentRuntimeOptions): SettingsManager {
     return SettingsManager.inMemory({
       compaction: {
-        enabled: options.compaction?.enabled ?? false,
+        enabled: true,
         reserveTokens: options.compaction?.reserveTokens,
         keepRecentTokens: options.compaction?.keepRecentTokens
       },
