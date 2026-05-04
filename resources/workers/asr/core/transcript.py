@@ -39,24 +39,8 @@ def text_similarity(text1: str, text2: str) -> float:
 
 
 def merge_transcript_text(before: str, after: str) -> str:
-    base = (before or "").strip()
-    next_text = (after or "").strip()
-    if not base:
-        return next_text
-    if not next_text or next_text == base or next_text in base:
-        return base
-    if next_text.startswith(base) or base in next_text:
-        return next_text
-
-    # 检查高相似度（可能是重连后的重复识别）
-    similarity = text_similarity(base, next_text)
-    if similarity > 0.85:
-        # 高度相似，保留较长的文本
-        return next_text if len(next_text) > len(base) else base
-
-    overlap = find_text_overlap(base, next_text)
-    separator = " " if overlap == 0 and should_insert_space(base, next_text) else ""
-    return f"{base}{separator}{next_text[overlap:]}"
+    """直接返回新文本，不做合并处理。"""
+    return (after or "").strip()
 
 
 def get_text_tail(text: str, max_chars: int = 48) -> str:
