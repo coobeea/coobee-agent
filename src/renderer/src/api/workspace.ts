@@ -132,6 +132,26 @@ export async function getFileContent(filePath: string): Promise<FileContentRespo
 }
 
 /**
+ * 保存文件内容
+ */
+export async function saveFileContent(filePath: string, content: string): Promise<{ success: boolean; path: string }> {
+  const url = `${BASE_URL}/gateway/files/save`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: filePath, content })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
+  }
+
+  return data;
+}
+
+/**
  * 读取本地文件（用于预览）
  */
 export async function readLocalFile(filePath: string): Promise<string> {

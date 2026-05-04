@@ -562,6 +562,59 @@ export function registerFileRoutes(router: Router): void {
     }
   });
 
+  // ==================== SAVE ====================
+  router.post('/files/save', async (ctx) => {
+    const body = ctx.request.body as { path?: string; content?: string } | undefined;
+    const filePath = body?.path;
+    const content = body?.content;
+
+    if (!filePath) {
+      ctx.status = 400;
+      ctx.body = { error: 'path is required' };
+      return;
+    }
+
+    if (content === undefined || content === null) {
+      ctx.status = 400;
+      ctx.body = { error: 'content is required' };
+      return;
+    }
+
+    const agentHomesDir = Env.paths.agentsDir;
+
+    if (!isPathSafe(filePath, agentHomesDir)) {
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid path: directory traversal not allowed' };
+      return;
+    }
+
+    try {
+      const exists = await fs.promises
+        .stat(filePath)
+        .then(() => true)
+        .catch(() => false);
+
+      if (!exists) {
+        ctx.status = 404;
+        ctx.body = { error: 'File not found' };
+        return;
+      }
+
+      await fs.promises.writeFile(filePath, content, 'utf-8');
+
+      log.info(`[files.save] 保存成功: ${filePath} (${Buffer.byteLength(content, 'utf-8')} bytes)`);
+
+      ctx.body = {
+        success: true,
+        path: filePath
+      };
+    } catch (err) {
+      log.error('[files.save] Error:', err);
+      ctx.status = 500;
+      ctx.body = { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
   log.info('[files] HTTP routes registered');
 }
 
