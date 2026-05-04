@@ -55,6 +55,22 @@ MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
 API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
 API_URL = ""
 
+
+def get_configured_api_key(config: dict, model_name: str) -> str:
+    raw_credentials = config.get("model_credentials")
+    if isinstance(raw_credentials, dict):
+        model_config = raw_credentials.get(model_name)
+        if isinstance(model_config, dict):
+            api_key = model_config.get("api_key")
+            if isinstance(api_key, str) and api_key.strip():
+                return api_key.strip()
+
+    legacy_api_key = config.get("api_key")
+    if isinstance(legacy_api_key, str) and legacy_api_key.strip():
+        return legacy_api_key.strip()
+
+    return ""
+
 # 一次性读取运行时配置（所有配置项）
 local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
 local_config_base_dir = os.path.dirname(os.path.abspath(local_config_path))
@@ -76,13 +92,10 @@ if os.path.exists(local_config_path):
                 MODEL_NAME = _cfg["model_name"].strip()
                 print(f"[TTS Config] MODEL_NAME -> {MODEL_NAME}")
 
-            if "api_key" in _cfg and isinstance(_cfg["api_key"], str) and _cfg["api_key"].strip():
-                API_KEY = _cfg["api_key"].strip()
+            configured_api_key = get_configured_api_key(_cfg, MODEL_NAME)
+            if configured_api_key:
+                API_KEY = configured_api_key
                 print("[TTS Config] API_KEY loaded from runtime config")
-
-            if "api_url" in _cfg and isinstance(_cfg["api_url"], str) and _cfg["api_url"].strip():
-                API_URL = _cfg["api_url"].strip()
-                print(f"[TTS Config] API_URL -> {API_URL}")
     except Exception as e:
         print(f"[TTS Config] 读取本地配置失败: {e}", file=sys.stderr)
 

@@ -46,6 +46,22 @@ API_KEY = (
 )
 API_URL = DEFAULT_AISTUDIO_OCR_API_URL
 
+
+def get_configured_api_key(config: dict, model_name: str) -> str:
+    raw_credentials = config.get("model_credentials")
+    if isinstance(raw_credentials, dict):
+        model_config = raw_credentials.get(model_name)
+        if isinstance(model_config, dict):
+            api_key = model_config.get("api_key")
+            if isinstance(api_key, str) and api_key.strip():
+                return api_key.strip()
+
+    legacy_api_key = config.get("api_key")
+    if isinstance(legacy_api_key, str) and legacy_api_key.strip():
+        return legacy_api_key.strip()
+
+    return ""
+
 # 尝试读取运行时配置覆盖 (WORKER_CONFIG_PATH)，local_config.json 仅作兼容兜底
 local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
 local_config_base_dir = os.path.dirname(os.path.abspath(local_config_path))
@@ -66,13 +82,10 @@ if os.path.exists(local_config_path):
                 MODEL_NAME = config["model_name"].strip()
                 print(f"[OCR Config] MODEL_NAME -> {MODEL_NAME}")
 
-            if "api_key" in config and isinstance(config["api_key"], str) and config["api_key"].strip():
-                API_KEY = config["api_key"].strip()
+            configured_api_key = get_configured_api_key(config, MODEL_NAME)
+            if configured_api_key:
+                API_KEY = configured_api_key
                 print("[OCR Config] API_KEY loaded from runtime config")
-
-            if "api_url" in config and isinstance(config["api_url"], str) and config["api_url"].strip():
-                API_URL = config["api_url"].strip()
-                print(f"[OCR Config] API_URL -> {API_URL}")
     except Exception as e:
         print(f"[OCR Config] 读取本地配置失败: {e}", file=sys.stderr)
 

@@ -74,7 +74,6 @@ const modelSwitching = ref<Record<string, ModelSwitchState>>({});
 const pollingTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({});
 
 const apiKeyInputs = ref<Record<string, string>>({});
-const apiUrlInputs = ref<Record<string, string>>({});
 const apiKeyVisible = ref<Record<string, boolean>>({});
 const workerTesting = ref<Record<string, boolean>>({});
 const workerTestResults = ref<Record<string, WorkerTestResult | undefined>>({});
@@ -298,13 +297,39 @@ async function loadWorkerConfig(name: string): Promise<void> {
     console.warn(`[WorkersSettings] Failed to load config for ${name}:`, err);
     workerConfigs.value[name] = {};
     apiKeyInputs.value[name] = '';
-    apiUrlInputs.value[name] = '';
   }
 }
 
-function syncApiInputsFromConfig(name: string, config: Record<string, unknown>): void {
-  apiKeyInputs.value[name] = typeof config.api_key === 'string' ? config.api_key : '';
-  apiUrlInputs.value[name] = typeof config.api_url === 'string' ? config.api_url : '';
+function getModelCredentials(config: Record<string, unknown>): Record<string, { api_key?: string }> {
+  const raw = config.model_credentials;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw as Record<string, { api_key?: string }>;
+}
+
+function getSavedApiKeyForModel(workerName: string, modelKey?: string): string {
+  const config = workerConfigs.value[workerName] ?? {};
+  const resolvedModelKey = modelKey || getSelectedModel(workerName);
+  if (!resolvedModelKey) {
+    return typeof config.api_key === 'string' ? config.api_key : '';
+  }
+
+  const credentials = getModelCredentials(config);
+  const saved = credentials[resolvedModelKey];
+  if (saved && typeof saved.api_key === 'string') {
+    return saved.api_key;
+  }
+
+  const activeModel = typeof config.model_name === 'string' ? config.model_name : '';
+  if (resolvedModelKey === activeModel && typeof config.api_key === 'string') {
+    return config.api_key;
+  }
+
+  return '';
+}
+
+function syncApiInputsFromConfig(name: string, _config: Record<string, unknown>): void {
+  const selectedModel = getSelectedModel(name);
+  apiKeyInputs.value[name] = getSavedApiKeyForModel(name, selectedModel);
 }
 
 function getSelectedModel(workerName: string): string | undefined {
@@ -333,21 +358,6 @@ function getModelName(option?: ModelOption): string {
 
 function getApiKeyLabel(option?: ModelOption): string {
   return option?.apiKeyLabel || 'API Key';
-}
-
-function getApiEndpoint(workerName: string): string {
-  const option = getSelectedModelOption(workerName);
-  if (option?.defaultApiUrl) return option.defaultApiUrl;
-  return apiUrlInputs.value[workerName] ?? '';
-}
-
-function getApiEndpointLabel(workerName: string): string {
-  const endpoint = getApiEndpoint(workerName);
-  return endpoint.startsWith('ws') ? 'WebSocket 地址' : 'API 地址';
-}
-
-function isApiUrlLocked(workerName: string): boolean {
-  return getSelectedModelOption(workerName)?.lockApiUrl === true;
 }
 
 function isModelSelected(workerName: string, option: ModelOption): boolean {
@@ -438,8 +448,7 @@ async function selectModel(workerName: string, option: ModelOption): Promise<voi
       {
         name: workerName,
         config: {
-          [def.configField]: option.configKey,
-          ...(option.lockApiUrl && option.defaultApiUrl ? { api_url: option.defaultApiUrl } : {})
+          [def.configField]: option.configKey
         }
       }
     );
@@ -473,17 +482,30 @@ async function saveApiConfig(workerName: string): Promise<void> {
   if (configSaving.value === workerName) return;
   configSaving.value = workerName;
   setSwitchState(workerName, 'saving', '正在保存 API 配置');
-  const option = getSelectedModelOption(workerName);
-  const lockedApiUrl = option?.lockApiUrl === true;
 
   try {
+    const selectedModel = getSelectedModel(workerName);
+    if (!selectedModel) {
+      throw new Error('当前没有可保存的模型配置');
+    }
+
+    const existingConfig = workerConfigs.value[workerName] ?? {};
+    const existingCredentials = getModelCredentials(existingConfig);
+    const currentEntry = existingCredentials[selectedModel] ?? {};
+    const nextCredentials = {
+      ...existingCredentials,
+      [selectedModel]: {
+        ...currentEntry,
+        api_key: apiKeyInputs.value[workerName] ?? ''
+      }
+    };
+
     const result = await request<{ name: string; config: Record<string, unknown>; restarted?: boolean }>(
       'worker.configUpdate',
       {
         name: workerName,
         config: {
-          api_key: apiKeyInputs.value[workerName] ?? '',
-          api_url: lockedApiUrl ? (option?.defaultApiUrl ?? '') : (apiUrlInputs.value[workerName] ?? '')
+          model_credentials: nextCredentials
         }
       }
     );
@@ -541,17 +563,8 @@ async function openApiKeyPage(workerName: string): Promise<void> {
 }
 
 function hasUnsavedApiConfig(workerName: string): boolean {
-  const saved = workerConfigs.value[workerName] ?? {};
-  const savedKey = typeof saved.api_key === 'string' ? saved.api_key : '';
-  const savedUrl = typeof saved.api_url === 'string' ? saved.api_url : '';
-  const option = getSelectedModelOption(workerName);
-  const lockedApiUrl = option?.lockApiUrl === true;
-
-  if (lockedApiUrl) {
-    return (apiKeyInputs.value[workerName] ?? '') !== savedKey;
-  }
-
-  return (apiKeyInputs.value[workerName] ?? '') !== savedKey || (apiUrlInputs.value[workerName] ?? '') !== savedUrl;
+  const savedKey = getSavedApiKeyForModel(workerName);
+  return (apiKeyInputs.value[workerName] ?? '') !== savedKey;
 }
 
 async function startWorker(worker: WorkerInfo): Promise<void> {
@@ -1172,25 +1185,6 @@ onBeforeUnmount(() => {
                         </button>
                       </span>
                     </label>
-
-                    <label v-if="!isApiUrlLocked(selectedWorker.name)" class="grid gap-1.5">
-                      <span class="text-[11px] font-medium text-muted-foreground">API 地址</span>
-                      <input
-                        v-model="apiUrlInputs[selectedWorker.name]"
-                        type="text"
-                        class="h-9 w-full rounded-lg border border-border bg-card px-3 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60"
-                        placeholder="留空使用默认地址" />
-                    </label>
-
-                    <div v-else class="grid gap-1.5">
-                      <span class="text-[11px] font-medium text-muted-foreground">
-                        {{ getApiEndpointLabel(selectedWorker.name) }}
-                      </span>
-                      <div
-                        class="flex h-9 min-w-0 items-center rounded-lg border border-border bg-muted px-3 font-mono text-xs text-muted-foreground">
-                        <span class="truncate">{{ getApiEndpoint(selectedWorker.name) }}</span>
-                      </div>
-                    </div>
 
                     <div class="flex items-center justify-end gap-2">
                       <span v-if="hasUnsavedApiConfig(selectedWorker.name)" class="text-[11px] text-warning">

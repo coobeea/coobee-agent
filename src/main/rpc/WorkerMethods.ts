@@ -19,6 +19,11 @@ const log = createLogger('worker-methods');
 
 const WORKER_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const SENSITIVE_KEYS = new Set(['api_key', 'apiKey', 'password', 'secret', 'token']);
+const MODEL_CREDENTIAL_WORKERS = new Set(['asr', 'tts', 'ocr']);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
 
 function validateWorkerName(name: unknown): asserts name is string {
   if (!name || typeof name !== 'string') {
@@ -129,12 +134,52 @@ function writeWorkerConfig(name: string, config: Record<string, unknown>): void 
   }
 }
 
-function redactConfig(config: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+function redactValue(key: string, value: unknown): unknown {
+  if (SENSITIVE_KEYS.has(key) && typeof value === 'string' && value.length > 4) {
+    return `${value.slice(0, 4)}****`;
+  }
 
-  for (const [key, value] of Object.entries(config)) {
-    if (SENSITIVE_KEYS.has(key) && typeof value === 'string' && value.length > 4) {
-      result[key] = `${value.slice(0, 4)}****`;
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue('', item));
+  }
+
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+      result[childKey] = redactValue(childKey, childValue);
+    }
+    return result;
+  }
+
+  return value;
+}
+
+function redactConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return redactValue('', config) as Record<string, unknown>;
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((item, index) => deepEqual(item, b[index]));
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every((key) => deepEqual(a[key], b[key]));
+  }
+  return false;
+}
+
+function deepMergeConfig(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...target };
+
+  for (const [key, value] of Object.entries(source)) {
+    const current = result[key];
+    if (isPlainObject(current) && isPlainObject(value)) {
+      result[key] = deepMergeConfig(current, value);
     } else {
       result[key] = value;
     }
@@ -143,8 +188,37 @@ function redactConfig(config: Record<string, unknown>): Record<string, unknown> 
   return result;
 }
 
+function normalizeWorkerRuntimeConfig(name: string, config: Record<string, unknown>): Record<string, unknown> {
+  if (!MODEL_CREDENTIAL_WORKERS.has(name)) {
+    return structuredClone(config);
+  }
+
+  const normalized = structuredClone(config);
+  const modelName = typeof normalized.model_name === 'string' ? normalized.model_name.trim() : '';
+  const legacyApiKey = typeof normalized.api_key === 'string' ? normalized.api_key.trim() : '';
+  const rawCredentials = normalized.model_credentials;
+  const modelCredentials = isPlainObject(rawCredentials) ? structuredClone(rawCredentials) : {};
+
+  if (modelName && legacyApiKey) {
+    const existingEntry = modelCredentials[modelName];
+    const nextEntry = isPlainObject(existingEntry) ? { ...existingEntry } : {};
+    if (typeof nextEntry.api_key !== 'string' || !nextEntry.api_key.trim()) {
+      nextEntry.api_key = legacyApiKey;
+    }
+    modelCredentials[modelName] = nextEntry;
+  }
+
+  normalized.model_credentials = modelCredentials;
+  delete normalized.api_key;
+  delete normalized.apiKey;
+  delete normalized.api_url;
+  delete normalized.apiUrl;
+
+  return normalized;
+}
+
 function hasMeaningfulConfigChange(existing: Record<string, unknown>, updates: Record<string, unknown>): boolean {
-  return Object.entries(updates).some(([key, value]) => existing[key] !== value);
+  return !deepEqual(existing, updates);
 }
 
 function isWorkerRunning(info: WorkerInfo | undefined): boolean {
@@ -290,7 +364,7 @@ export const workerMethods: MethodGroup = {
       validateWorkerName(name);
       ensureKnownWorker(name);
 
-      const config = readWorkerConfig(name);
+      const config = normalizeWorkerRuntimeConfig(name, readWorkerConfig(name));
       log.info(`[worker.configGet] ${name}: ${JSON.stringify(redactConfig(config))}`);
       return { name, config };
     },
@@ -314,10 +388,10 @@ export const workerMethods: MethodGroup = {
       }
 
       try {
-        const existing = readWorkerConfig(name);
+        const existing = normalizeWorkerRuntimeConfig(name, readWorkerConfig(name));
         const normalizedUpdates = updates as Record<string, unknown>;
-        const changed = hasMeaningfulConfigChange(existing, normalizedUpdates);
-        const merged = { ...existing, ...normalizedUpdates };
+        const merged = normalizeWorkerRuntimeConfig(name, deepMergeConfig(existing, normalizedUpdates));
+        const changed = hasMeaningfulConfigChange(existing, merged);
 
         writeWorkerConfig(name, merged);
         log.info(`[worker.configUpdate] ${name}: updated ${JSON.stringify(redactConfig(merged))}`);
