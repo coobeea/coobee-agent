@@ -199,6 +199,7 @@ function connectASRWebSocket(port: number): void {
       const data = JSON.parse(event.data as string);
       console.log('[VoicePanel] 收到 ASR 消息:', JSON.stringify(data, null, 2));
 
+      // 兼容旧格式（partial / final）
       if (data.partial) {
         console.log('[VoicePanel] 更新 partial:', data.partial);
         partialText.value = data.partial;
@@ -212,6 +213,29 @@ function connectASRWebSocket(port: number): void {
           chatStore.addUserMessage(currentThreadId.value, data.final.trim());
         } else {
           console.warn('[VoicePanel] 未发送消息: final为空或threadId为空');
+        }
+      }
+
+      // 处理统一格式（transcript_event）
+      if (data.transcript_event) {
+        const displayText = data.display_text || data.draft_text || '';
+        const isFinal = data.is_final_turn || data.is_final_session;
+
+        if (data.transcript_event === 'update' && displayText) {
+          console.log('[VoicePanel] 更新 draft:', displayText);
+          partialText.value = displayText;
+        }
+
+        if (isFinal && displayText.trim()) {
+          console.log('[VoicePanel] 收到 final:', displayText);
+          console.log('[VoicePanel] currentThreadId:', currentThreadId.value);
+          partialText.value = '';
+          if (currentThreadId.value) {
+            console.log('[VoicePanel] 添加用户消息:', displayText.trim());
+            chatStore.addUserMessage(currentThreadId.value, displayText.trim());
+          } else {
+            console.warn('[VoicePanel] 未发送消息: threadId为空');
+          }
         }
       }
     } catch (err) {
