@@ -11,7 +11,6 @@ import { useAgentsStore } from '@/stores/agents';
 import { useThreadsStore } from '@/stores/threads';
 import { useOpenFiles } from '@/composables/useOpenFiles';
 
-import ProjectPanel from '@/components/agent/ProjectPanel.vue';
 import WorkbenchPanel from '@/components/agent/WorkbenchPanel.vue';
 import ChatPanel from '@/components/agent/ChatPanel.vue';
 import TerminalPanel from '@/components/agent/TerminalPanel.vue';
@@ -22,11 +21,8 @@ const agentsStore = useAgentsStore();
 const threadsStore = useThreadsStore();
 const { closeAllFiles } = useOpenFiles();
 
-const leftCollapsed = ref(false);
 const terminalCollapsed = ref(true);
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
-
-const projectPath = ref<string | null>(null);
 
 // 任务会话ID
 const threadId = computed(() => route.params.id as string);
@@ -35,10 +31,6 @@ const threadId = computed(() => route.params.id as string);
 const currentThread = computed(() => {
   return threadsStore.threads.find((t) => t.id === threadId.value);
 });
-
-// 目录切换：智能体目录 / 任务目录
-type DirectoryMode = 'agent-home' | 'session';
-const directoryMode = ref<DirectoryMode>('agent-home');
 
 // 提供 addToChat 方法给 ProjectPanel/FileTreeNode
 function addToChat(node: { path: string; name: string; type: 'file' | 'directory' }): void {
@@ -50,41 +42,12 @@ function addToChat(node: { path: string; name: string; type: 'file' | 'directory
 
 provide('addToChat', addToChat);
 provide('addFileToTask', undefined);
-provide('directoryMode', directoryMode);
-provide('toggleDirectoryMode', toggleDirectoryMode);
-
-// 根据当前模式更新显示的目录路径
-function getTaskWorkspacePath(thread: { sessionPath?: string }): string {
-  // 任务目录：当前 Thread 的会话产物目录
-  // = .home/agents/{agentId}/sessions/{threadId}
-  return thread.sessionPath || '';
-}
-
-function updateProjectPathForMode(thread: { agentHomePath?: string; sessionPath?: string }): void {
-  if (directoryMode.value === 'agent-home') {
-    projectPath.value = thread.agentHomePath || '';
-  } else {
-    projectPath.value = getTaskWorkspacePath(thread);
-  }
-}
-
-// 切换目录模式
-function toggleDirectoryMode(): void {
-  const thread = currentThread.value;
-  if (!thread) return;
-
-  directoryMode.value = directoryMode.value === 'agent-home' ? 'session' : 'agent-home';
-  updateProjectPathForMode(thread);
-}
 
 function enterWorkspaceForThread(id: string): void {
   const thread = threadsStore.threads.find((t) => t.id === id);
 
-  directoryMode.value = 'agent-home';
-
   if (thread) {
     agentsStore.selectAgent(thread.agentId);
-    updateProjectPathForMode(thread);
   }
   threadsStore.selectThread(id);
   closeAllFiles();
@@ -97,7 +60,6 @@ function goBackToAgents(): void {
 }
 
 onMounted(async () => {
-  // 确保 threads 已加载
   if (threadsStore.threads.length === 0) {
     await threadsStore.fetchThreads();
   }
@@ -109,7 +71,6 @@ onMounted(async () => {
 
 watch(threadId, (newId) => {
   if (newId) {
-    projectPath.value = null;
     enterWorkspaceForThread(newId);
   }
 });
@@ -141,20 +102,6 @@ watch(threadId, (newId) => {
 
     <!-- 已选目录：三栏工作区 -->
     <div v-else class="flex min-h-0 flex-1">
-      <!-- 左侧折叠时的展开条 -->
-      <div
-        v-if="leftCollapsed"
-        class="flex w-6 flex-shrink-0 cursor-pointer items-center justify-center border-r border-border/45 bg-muted/10 text-muted-foreground/35 transition-colors hover:bg-muted/25 hover:text-muted-foreground/70"
-        title="展开文件面板"
-        @click="leftCollapsed = false">
-        <span class="i-carbon-chevron-right inline-block h-3 w-3"></span>
-      </div>
-      <ProjectPanel
-        v-if="!leftCollapsed"
-        v-model:collapsed="leftCollapsed"
-        v-model:project-path="projectPath"
-        :thread-id="threadId" />
-
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkbenchPanel />
         <!-- 终端面板（可折叠） -->

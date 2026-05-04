@@ -203,13 +203,6 @@ watch(
         </button>
         <button
           type="button"
-          title="任务目录"
-          class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-          @click="openRightPanel('session')">
-          <span class="i-carbon-folder-shared inline-block h-4 w-4" />
-        </button>
-        <button
-          type="button"
           title="项目目录"
           class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           @click="openRightPanel('project')">
@@ -243,18 +236,6 @@ watch(
               @click="openRightPanel('agent-home')">
               <span class="i-carbon-user-avatar mr-1 inline-block h-3.5 w-3.5 align-middle" />
               智能体
-            </button>
-            <button
-              type="button"
-              class="rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors"
-              :class="
-                rightTab === 'session'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
-              "
-              @click="openRightPanel('session')">
-              <span class="i-carbon-folder-shared mr-1 inline-block h-3.5 w-3.5 align-middle" />
-              任务目录
             </button>
             <button
               type="button"

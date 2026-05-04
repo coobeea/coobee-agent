@@ -11,6 +11,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { getFileContent } from '@/api/workspace';
+import configManager from '@/config';
 
 interface Props {
   visible: boolean;

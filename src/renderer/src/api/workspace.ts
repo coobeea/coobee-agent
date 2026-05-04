@@ -4,7 +4,6 @@
  * 封装工作目录文件操作相关的 HTTP API 调用
  */
 
-import type { ApiResponse } from '@shared/api';
 import configManager from '@/config';
 
 const BASE_URL = configManager.getBaseUrl();
@@ -128,8 +127,8 @@ export async function getFileContent(filePath: string): Promise<FileContentRespo
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
 
-  const content = await response.text();
-  return { content };
+  const data = await response.json();
+  return { content: data.content || '' };
 }
 
 /**
