@@ -110,3 +110,21 @@
   - 日志确认命中本地模型路径：`/.home/models/models/FunAudioLLM/Fun-ASR-Nano-2512`
   - `/health` 返回 `provider=local`、`model_loaded=true`、`resolved_model_path` 正确
   - `/api/test` 返回 `ok=true`，本地推理链路完成，`inference_latency_ms≈1905ms`
+
+### 2026-05-04（在线模型扩展）
+
+- 完成了 `fun-asr-realtime` 在线模型接入
+- 修改了文件：
+  - `resources/workers/asr/models.json`
+  - `resources/workers/asr/core/config.py`
+  - `resources/workers/asr/server.py`
+  - `resources/workers/asr/providers/aliyun_provider.py`
+  - `pocs/asr-provider-architecture/04-TODO.md`
+  - `pocs/asr-provider-architecture/05-PROGRESS.md`
+  - `pocs/asr-provider-architecture/06-BUGS.md`
+- 备注：
+  - 新增模型选项 `aliyun/fun-asr-realtime`，默认接入地址为 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`
+  - 阿里云 provider 已支持两套在线协议：`qwen3-asr-flash-realtime` 继续走 `session.update` 协议，`fun-asr-realtime` 改走 `run-task/result-generated/finish-task` 协议
+  - 默认 API URL 已按模型名自动选择，避免在线模型切换后仍沿用错误的 `api_url`
+  - 已通过 `python -m py_compile` 验证 `server.py`、`config.py`、`aliyun_provider.py`
+  - 已通过本地自检确认：`qwen3-asr-flash-realtime` 仍指向 `/api-ws/v1/realtime?model=...`，`fun-asr-realtime` 指向 `/api-ws/v1/inference`

@@ -89,3 +89,18 @@
   - 后续单独收口为兼容性清理项
   - 当前不阻塞本地 ASR 功能验证
 - **状态**：已记录
+
+### BUG-007: 阿里云在线 ASR 模型并不共用同一套 WebSocket 协议
+
+- **发现时间**：2026-05-04
+- **严重程度**：一般
+- **现象**：
+  - `qwen3-asr-flash-realtime` 使用 `/api-ws/v1/realtime` + `session.update/input_audio_buffer.*`
+  - `fun-asr-realtime` 使用 `/api-ws/v1/inference` + `run-task/result-generated/finish-task`
+  - 如果只在模型列表中新增选项而不补协议分支，切换后会直接不可用
+- **原因**：
+  - 阿里云百炼“在线 ASR”在产品层看似同类，但底层接入协议并未统一
+- **解决方案**：
+  - 在 `aliyun_provider.py` 中按模型协议分流
+  - 在 `core/config.py` 中按模型名自动选择默认 `api_url`
+- **状态**：已记录

@@ -7,14 +7,15 @@ import os
 
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_ALIYUN_ASR_API_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+DEFAULT_ALIYUN_REALTIME_API_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+DEFAULT_ALIYUN_INFERENCE_API_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
 
 # 默认路径
 DEFAULT_MODEL_DIR = os.path.join(os.environ.get("HOME", ""), ".cache", "modelscope", "hub")
 MODEL_DIR = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
 MODEL_NAME = "FunAudioLLM/Fun-ASR-Nano-2512"
 API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
-API_URL = DEFAULT_ALIYUN_ASR_API_URL
+API_URL = ""
 
 # 尝试读取运行时配置覆盖 (WORKER_CONFIG_PATH)，local_config.json 仅作兼容兜底
 local_config_path = os.environ.get("WORKER_CONFIG_PATH") or os.path.join(SCRIPT_DIR, "local_config.json")
@@ -54,5 +55,25 @@ MIN_UTTERANCE_SEC = 0.3       # 最短有效语段（低于此不值得识别）
 
 VERBOSE_LOG = os.environ.get("ASR_VERBOSE_LOG", "1").strip().lower() not in {"0", "false", "off", "no"}
 
-USE_ALIYUN_QWEN_ASR = MODEL_NAME.lower().startswith("aliyun/")
-ALIYUN_MODEL_NAME = MODEL_NAME.split("/", 1)[1] if USE_ALIYUN_QWEN_ASR and "/" in MODEL_NAME else MODEL_NAME
+USE_ALIYUN_ASR = MODEL_NAME.lower().startswith("aliyun/")
+ALIYUN_MODEL_NAME = MODEL_NAME.split("/", 1)[1] if USE_ALIYUN_ASR and "/" in MODEL_NAME else MODEL_NAME
+
+
+def get_default_aliyun_api_url(model_name: str) -> str:
+    normalized = (model_name or "").strip().lower()
+    if normalized.startswith("aliyun/"):
+        normalized = normalized.split("/", 1)[1]
+
+    if normalized.startswith("qwen3-") and normalized.endswith("-realtime"):
+        return DEFAULT_ALIYUN_REALTIME_API_URL
+
+    if normalized.endswith("-realtime"):
+        return DEFAULT_ALIYUN_INFERENCE_API_URL
+
+    return DEFAULT_ALIYUN_REALTIME_API_URL
+
+
+if USE_ALIYUN_ASR and not API_URL:
+    API_URL = get_default_aliyun_api_url(ALIYUN_MODEL_NAME)
+elif not API_URL:
+    API_URL = DEFAULT_ALIYUN_REALTIME_API_URL

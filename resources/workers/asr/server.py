@@ -38,7 +38,7 @@ from core.config import (
     MODEL_NAME,
     SAMPLE_RATE,
     SCRIPT_DIR,
-    USE_ALIYUN_QWEN_ASR,
+    USE_ALIYUN_ASR,
     VERBOSE_LOG,
     local_config_base_dir,
 )
@@ -265,7 +265,7 @@ def get_provider_registry() -> ProviderRegistry:
 
 
 def get_active_provider():
-    provider_name = "aliyun" if USE_ALIYUN_QWEN_ASR else "local"
+    provider_name = "aliyun" if USE_ALIYUN_ASR else "local"
     return get_provider_registry().get(provider_name)
 
 

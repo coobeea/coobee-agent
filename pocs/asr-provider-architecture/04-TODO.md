@@ -38,7 +38,7 @@
 ### 2. 定义统一的 Provider 抽象与注册入口
 
 - **目标**：建立“入口层选择 provider、provider 自己处理会话”的最小抽象，避免后续继续用 if/else 把所有平台堆回 `server.py`。
-- **背景**：当前 `asr_stream()` 直接判断 `USE_ALIYUN_QWEN_ASR` 后进入不同大函数，结构仍然是“分支式实现”，不利于继续扩展。
+- **背景**：当前 `asr_stream()` 直接判断“是否为阿里云在线模型”后进入不同大函数，结构仍然是“分支式实现”，不利于继续扩展。
 - **涉及范围**：
   - `resources/workers/asr/server.py`
   - 新增 `resources/workers/asr/providers/base.py`
