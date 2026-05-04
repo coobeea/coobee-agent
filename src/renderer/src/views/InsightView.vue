@@ -286,7 +286,7 @@ const audioRecorder = useAudioRecorder({
       displayLength: payload.displayText.length
     });
 
-    const liveText = payload.draftText.trim() || payload.displayText.trim();
+    const liveText = payload.displayText.trim();
     if (liveText) {
       liveCaptionTone.value = payload.isTurnFinal || payload.isSessionFinal ? 'recognized' : 'active';
       liveCaptionText.value = `${payload.isTurnFinal || payload.isSessionFinal ? '识别到' : '当前识别'}：${getTextTail(liveText)}`;
@@ -332,18 +332,6 @@ const audioRecorder = useAudioRecorder({
       .catch(() => {
         // ignore realtime transcript sync failures
       });
-  },
-  onPartialResult: (text: string) => {
-    if (!currentSession.value || !text.trim()) return;
-    liveTranscriptSegment.value = text;
-    liveCaptionTone.value = 'active';
-    liveCaptionText.value = `当前识别：${getTextTail(text)}`;
-  },
-  onFinalResult: (text: string) => {
-    if (!text.trim()) return;
-    liveTranscriptSegment.value = text;
-    liveCaptionTone.value = 'recognized';
-    liveCaptionText.value = `识别到：${getTextTail(text)}`;
   },
   onStatus: (payload) => {
     const snapshot = mapAsrStatusToCaption(payload);

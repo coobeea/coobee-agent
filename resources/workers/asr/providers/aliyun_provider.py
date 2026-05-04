@@ -227,10 +227,14 @@ class AliyunAsrProvider(BaseAsrProvider):
         forwarded_chunks = 0
         forwarded_bytes = 0
         last_audio_log_at = 0.0
+        last_event_at = time.time()
+        last_audio_at = time.time()
         emitter = TranscriptEmitter(provider=self.name, log_label="ALIYUN_TRANSCRIPT", send_json=lambda payload: safe_send_json(ws, payload))
 
+        EVENT_TIMEOUT_SECONDS = 30.0
+
         async def forward_audio():
-            nonlocal forwarded_chunks, forwarded_bytes, last_audio_log_at
+            nonlocal forwarded_chunks, forwarded_bytes, last_audio_log_at, last_audio_at
             try:
                 while True:
                     message = await ws.receive()
@@ -243,6 +247,7 @@ class AliyunAsrProvider(BaseAsrProvider):
 
                     forwarded_chunks += 1
                     forwarded_bytes += len(audio)
+                    last_audio_at = time.time()
                     now = time.time()
                     if now - last_audio_log_at >= 2.0:
                         last_audio_log_at = now
@@ -275,9 +280,10 @@ class AliyunAsrProvider(BaseAsrProvider):
                     )
 
         async def forward_events():
-            nonlocal last_partial
+            nonlocal last_partial, last_event_at
             try:
                 async for raw in aliyun_ws:
+                    last_event_at = time.time()
                     if not isinstance(raw, str):
                         continue
 
@@ -319,7 +325,6 @@ class AliyunAsrProvider(BaseAsrProvider):
                             revision=revision,
                             draft="",
                             is_final_turn=True,
-                            legacy_final=text,
                         ):
                             break
                         transcript.reset_turn()
@@ -333,18 +338,34 @@ class AliyunAsrProvider(BaseAsrProvider):
                             draft=text,
                             turn_id=turn_id,
                             revision=revision,
-                            legacy_partial=text,
                         ):
                             break
             except Exception as e:
                 log.info(f"[ALIYUN_STREAM] event_forward_end type={type(e).__name__} error={e}")
 
+        async def monitor_event_timeout():
+            while True:
+                await asyncio.sleep(5.0)
+                last_active = max(last_event_at, last_audio_at)
+                elapsed = time.time() - last_active
+                if elapsed > EVENT_TIMEOUT_SECONDS:
+                    log.warning(
+                        f"[ALIYUN_TIMEOUT] 事件超时 {elapsed:.0f}s > {EVENT_TIMEOUT_SECONDS}s，"
+                        f"chunks={forwarded_chunks} committed_len={len(transcript.committed_text)}"
+                    )
+                    await safe_send_json(ws, {
+                        "error": "阿里云 ASR 连接超时，请重试",
+                        "timeout_seconds": int(elapsed)
+                    })
+                    return
+
         await aliyun_ws.send(json.dumps(self._build_session_update(), ensure_ascii=False))
 
         audio_task = asyncio.create_task(forward_audio())
         event_task = asyncio.create_task(forward_events())
+        monitor_task = asyncio.create_task(monitor_event_timeout())
         done, pending = await asyncio.wait(
-            {audio_task, event_task},
+            {audio_task, event_task, monitor_task},
             return_when=asyncio.FIRST_COMPLETED,
         )
 
@@ -368,7 +389,6 @@ class AliyunAsrProvider(BaseAsrProvider):
                 turn_id=transcript.current_turn_id,
                 revision=transcript.revision,
                 is_final_session=True,
-                legacy_final=transcript.committed_text,
             )
         log.info(
             f"[ALIYUN_SESSION] closed forwarded_kb={forwarded_bytes / 1024:.1f} "
@@ -381,14 +401,18 @@ class AliyunAsrProvider(BaseAsrProvider):
         forwarded_chunks = 0
         forwarded_bytes = 0
         last_audio_log_at = 0.0
+        last_event_at = time.time()
+        last_audio_at = time.time()
         task_id = self._create_task_id()
         emitter = TranscriptEmitter(provider=self.name, log_label="ALIYUN_TRANSCRIPT", send_json=lambda payload: safe_send_json(ws, payload))
+
+        EVENT_TIMEOUT_SECONDS = 30.0
 
         await aliyun_ws.send(json.dumps(self._build_task_run_message(task_id), ensure_ascii=False))
         await self._wait_for_task_started(aliyun_ws)
 
         async def forward_audio():
-            nonlocal forwarded_chunks, forwarded_bytes, last_audio_log_at
+            nonlocal forwarded_chunks, forwarded_bytes, last_audio_log_at, last_audio_at
             try:
                 while True:
                     message = await ws.receive()
@@ -401,6 +425,7 @@ class AliyunAsrProvider(BaseAsrProvider):
 
                     forwarded_chunks += 1
                     forwarded_bytes += len(audio)
+                    last_audio_at = time.time()
                     now = time.time()
                     if now - last_audio_log_at >= 2.0:
                         last_audio_log_at = now
@@ -416,9 +441,10 @@ class AliyunAsrProvider(BaseAsrProvider):
                     await aliyun_ws.send(json.dumps(self._build_task_finish_message(task_id), ensure_ascii=False))
 
         async def forward_events():
-            nonlocal last_partial
+            nonlocal last_partial, last_event_at
             try:
                 async for raw in aliyun_ws:
+                    last_event_at = time.time()
                     if not isinstance(raw, str):
                         continue
 
@@ -455,7 +481,6 @@ class AliyunAsrProvider(BaseAsrProvider):
                             revision=revision,
                             draft="",
                             is_final_turn=True,
-                            legacy_final=text,
                         ):
                             break
                         transcript.reset_turn()
@@ -469,16 +494,32 @@ class AliyunAsrProvider(BaseAsrProvider):
                             draft=text,
                             turn_id=turn_id,
                             revision=revision,
-                            legacy_partial=text,
                         ):
                             break
             except Exception as e:
                 log.info(f"[ALIYUN_STREAM] event_forward_end type={type(e).__name__} error={e}")
 
+        async def monitor_event_timeout():
+            while True:
+                await asyncio.sleep(5.0)
+                last_active = max(last_event_at, last_audio_at)
+                elapsed = time.time() - last_active
+                if elapsed > EVENT_TIMEOUT_SECONDS:
+                    log.warning(
+                        f"[ALIYUN_TIMEOUT] 事件超时 {elapsed:.0f}s > {EVENT_TIMEOUT_SECONDS}s，"
+                        f"chunks={forwarded_chunks} committed_len={len(transcript.committed_text)}"
+                    )
+                    await safe_send_json(ws, {
+                        "error": "阿里云 ASR 连接超时，请重试",
+                        "timeout_seconds": int(elapsed)
+                    })
+                    return
+
         audio_task = asyncio.create_task(forward_audio())
         event_task = asyncio.create_task(forward_events())
+        monitor_task = asyncio.create_task(monitor_event_timeout())
         done, pending = await asyncio.wait(
-            {audio_task, event_task},
+            {audio_task, event_task, monitor_task},
             return_when=asyncio.FIRST_COMPLETED,
         )
 
@@ -503,7 +544,6 @@ class AliyunAsrProvider(BaseAsrProvider):
                 turn_id=transcript.current_turn_id,
                 revision=transcript.revision,
                 is_final_session=True,
-                legacy_final=transcript.committed_text,
             )
         log.info(
             f"[ALIYUN_SESSION] closed forwarded_kb={forwarded_bytes / 1024:.1f} "

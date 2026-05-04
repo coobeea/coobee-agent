@@ -266,8 +266,8 @@ class LocalAsrProvider(BaseAsrProvider):
                             "turn_final",
                             turn_id=turn_id,
                             revision=transcript.revision,
+                            draft="",
                             is_final_turn=True,
-                            legacy_partial=transcript.committed_text,
                             **msg,
                         ):
                             break
@@ -321,7 +321,6 @@ class LocalAsrProvider(BaseAsrProvider):
                 transcript,
                 "session_final",
                 is_final_session=True,
-                legacy_final=transcript.committed_text,
             )
 
         log.info(

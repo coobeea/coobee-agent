@@ -52,10 +52,6 @@ export interface AsrTranscriptPayload {
 export interface AudioRecorderOptions {
   /** 统一转写协议回调 */
   onTranscriptUpdate?: (payload: AsrTranscriptPayload) => void;
-  /** ASR partial 结果回调（实时识别中间结果） */
-  onPartialResult?: (text: string, meta?: AsrMeta) => void;
-  /** ASR final 结果回调（断连时最终结果） */
-  onFinalResult?: (text: string, meta?: AsrMeta) => void;
   /** ASR 服务端处理状态回调 */
   onStatus?: (payload: AsrStatusPayload) => void;
   /** 音量变化回调，0-100 */
@@ -319,11 +315,8 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
     try {
       const data = JSON.parse(String(rawData)) as Record<string, unknown>;
 
-      // 忽略连接准备状态，ASR 处理状态由 asr_status 单独透传。
       if (data.status === 'loading' || data.status === 'ready') return;
 
-      const partial = typeof data.partial === 'string' ? data.partial : '';
-      const finalText = typeof data.final === 'string' ? data.final.trim() : '';
       const asrStatus = typeof data.asr_status === 'string' ? data.asr_status : '';
       const meta: AsrMeta = {
         lang: typeof data.lang === 'string' ? data.lang : null,
@@ -371,29 +364,6 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}): UseAudioRe
         if (transcriptPayload.displayText.trim() && transcriptPayload.displayText !== prevPartialText) {
           prevPartialText = transcriptPayload.displayText;
           resetTextIdleTimer();
-        }
-        return;
-      }
-
-      if (partial) {
-        lastKnownDisplayText = partial;
-        const currentTurnText = partial.substring(textOffset);
-        if (currentTurnText.trim() && !isMuted.value) {
-          options.onPartialResult?.(currentTurnText, meta);
-
-          // 文本有变化 → 重置闲置计时器
-          if (currentTurnText !== prevPartialText) {
-            prevPartialText = currentTurnText;
-            resetTextIdleTimer();
-          }
-        }
-      }
-
-      if (finalText) {
-        lastKnownDisplayText = finalText;
-        const currentTurnText = finalText.substring(textOffset);
-        if (currentTurnText.trim() && !isMuted.value) {
-          options.onFinalResult?.(currentTurnText, meta);
         }
       }
     } catch {

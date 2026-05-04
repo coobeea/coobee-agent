@@ -45,6 +45,7 @@ from core.config import (
 from core.logging_utils import configure_asr_logging
 from app.provider_registry import ProviderRegistry
 from providers.aliyun_provider import AliyunAsrProvider
+from providers.aliyun_sdk_provider import AliyunSdkProvider
 from providers.local_provider import LocalAsrProvider
 
 os.environ["TQDM_DISABLE"] = "1"
@@ -244,6 +245,14 @@ def build_provider_registry() -> ProviderRegistry:
         )
     )
     registry.register(
+        AliyunSdkProvider(
+            model_name=ALIYUN_MODEL_NAME,
+            model_dir=MODEL_DIR,
+            api_url=API_URL,
+            api_key=API_KEY,
+        )
+    )
+    registry.register(
         LocalAsrProvider(
             model_name=MODEL_NAME,
             model_dir=MODEL_DIR,
@@ -265,7 +274,10 @@ def get_provider_registry() -> ProviderRegistry:
 
 
 def get_active_provider():
-    provider_name = "aliyun" if USE_ALIYUN_ASR else "local"
+    if not USE_ALIYUN_ASR:
+        provider_name = "local"
+    else:
+        provider_name = "aliyun_sdk"
     return get_provider_registry().get(provider_name)
 
 

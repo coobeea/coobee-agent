@@ -31,8 +31,6 @@ class TranscriptEmitter:
         revision: int | None = None,
         is_final_turn: bool = False,
         is_final_session: bool = False,
-        legacy_partial: str | None = None,
-        legacy_final: str | None = None,
         **payload,
     ) -> bool:
         committed_text = context.committed_text if committed is None else committed
@@ -53,10 +51,6 @@ class TranscriptEmitter:
             "is_final_session": is_final_session,
             **payload,
         }
-        if legacy_partial is not None:
-            message["partial"] = legacy_partial
-        if legacy_final is not None:
-            message["final"] = legacy_final
 
         log.info(
             f"[{self.log_label}] event={transcript_event} seq={seq} turn_id={turn_id or '-'} "

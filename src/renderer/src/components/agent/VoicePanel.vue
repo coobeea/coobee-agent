@@ -197,15 +197,25 @@ function connectASRWebSocket(port: number): void {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data as string);
-      if (data.partial) partialText.value = data.partial;
+      console.log('[VoicePanel] 收到 ASR 消息:', JSON.stringify(data, null, 2));
+
+      if (data.partial) {
+        console.log('[VoicePanel] 更新 partial:', data.partial);
+        partialText.value = data.partial;
+      }
       if (data.final) {
+        console.log('[VoicePanel] 收到 final:', data.final);
+        console.log('[VoicePanel] currentThreadId:', currentThreadId.value);
         partialText.value = '';
         if (data.final.trim() && currentThreadId.value) {
-          chatStore.sendMessage(currentThreadId.value, data.final.trim());
+          console.log('[VoicePanel] 添加用户消息:', data.final.trim());
+          chatStore.addUserMessage(currentThreadId.value, data.final.trim());
+        } else {
+          console.warn('[VoicePanel] 未发送消息: final为空或threadId为空');
         }
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error('[VoicePanel] 解析 ASR 消息失败:', err);
     }
   };
 

@@ -55,7 +55,6 @@ let resumeDelayTimer: ReturnType<typeof setTimeout> | null = null;
 // ==================== ASR 录音 Composable ====================
 
 const MIN_EFFECTIVE_CHARS = 4;
-const MAX_MERGE_OVERLAP_CHARS = 40;
 const AUTO_SUBMIT_IDLE_MS = 3500;
 const AUTO_SUBMIT_RETRY_MS = 500;
 const RESUME_LISTEN_DELAY_MS = 3000;
@@ -72,37 +71,6 @@ function trySendOrQueue(text: string): boolean {
   if (props.disabled) return false;
   emit('send', { text: cleaned, files: [] });
   return true;
-}
-
-function shouldInsertSpace(before: string, after: string): boolean {
-  return /[a-zA-Z0-9]$/.test(before) && /^[a-zA-Z0-9]/.test(after);
-}
-
-function findTextOverlap(before: string, after: string): number {
-  const beforeChars = Array.from(before);
-  const afterChars = Array.from(after);
-  const maxOverlap = Math.min(beforeChars.length, afterChars.length, MAX_MERGE_OVERLAP_CHARS);
-
-  for (let length = maxOverlap; length > 0; length--) {
-    const beforeTail = beforeChars.slice(-length).join('');
-    const afterHead = afterChars.slice(0, length).join('');
-    if (beforeTail === afterHead) return length;
-  }
-
-  return 0;
-}
-
-function mergeRecognizedText(current: string, incoming: string): string {
-  const base = current.trim();
-  const next = incoming.trim();
-  if (!base) return next;
-  if (!next || next === base || base.includes(next)) return base;
-  if (next.startsWith(base) || next.includes(base)) return next;
-
-  const overlap = findTextOverlap(base, next);
-  const nextChars = Array.from(next);
-  const separator = overlap === 0 && shouldInsertSpace(base, next) ? ' ' : '';
-  return `${base}${separator}${nextChars.slice(overlap).join('')}`;
 }
 
 function clearAutoSubmitTimer(): void {
@@ -165,19 +133,6 @@ function schedulePendingSubmit(delayMs = AUTO_SUBMIT_IDLE_MS): void {
   autoSubmitTimer = setTimeout(() => {
     trySubmitPendingText();
   }, delayMs);
-}
-
-function queueRecognizedText(text: string): void {
-  const cleaned = text.trim();
-  if (!cleaned) return;
-
-  const mergedText = mergeRecognizedText(partialText.value, cleaned);
-  partialText.value = mergedText;
-  lastRecognitionAt.value = Date.now();
-  clearAsrBusy();
-  liveCaptionTone.value = 'recognized';
-  liveCaptionText.value = `识别到：${getTextTail(mergedText)}`;
-  schedulePendingSubmit();
 }
 
 function trySubmitPendingText(): void {
@@ -248,14 +203,6 @@ const recorder = useAudioRecorder({
     liveCaptionTone.value = 'active';
     liveCaptionText.value = `当前识别：${getTextTail(displayText)}`;
     schedulePendingSubmit();
-  },
-  onPartialResult: (text) => {
-    queueRecognizedText(text);
-  },
-  onFinalResult: (text) => {
-    if (text) {
-      queueRecognizedText(text);
-    }
   },
   onStatus: updateLiveCaptionFromStatus,
   onVolumeChange: (vol) => {
