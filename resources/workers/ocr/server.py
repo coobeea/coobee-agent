@@ -21,9 +21,13 @@ import os
 import sys
 import time
 
+from app.provider_registry import ProviderRegistry
+from providers.aistudio_provider import AistudioOcrProvider
+from providers.local_provider import LocalOcrProvider
+
 # FastAPI / uvicorn 按需导入
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket
     from fastapi.responses import JSONResponse
     import uvicorn
 except ImportError:
@@ -93,6 +97,7 @@ logging.basicConfig(level=logging.INFO, format="[OCR] %(message)s")
 log = logging.getLogger("ocr")
 
 app = FastAPI(title="OCR Worker", version="0.2.0")
+_provider_registry = None
 
 _model_lower = MODEL_NAME.lower()
 USE_AISTUDIO_OCR = _model_lower.startswith("aistudio/") or _model_lower.startswith("online/")
@@ -161,20 +166,47 @@ def load_ocr_model():
     log.info(f"模型加载完成，耗时 {elapsed:.1f}s")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时加载模型（在线程池中执行，不阻塞事件循环）"""
-    global model_loaded
-    if USE_AISTUDIO_OCR:
-        model_loaded = True
-        log.info(
-            f"使用在线 OCR: model={AISTUDIO_OCR_MODEL}, "
-            f"api_url={API_URL}, api_key={'已配置' if API_KEY else '未配置'}"
-        )
-        return
-
+async def startup_local_provider() -> None:
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, load_ocr_model)
+
+
+def build_provider_registry() -> ProviderRegistry:
+    registry = ProviderRegistry()
+    registry.register(
+        LocalOcrProvider(
+            model_name=MODEL_NAME,
+            model_dir=MODEL_DIR,
+            get_model_loaded=lambda: model_loaded,
+            startup_cb=startup_local_provider,
+            recognize_cb=recognize_local_image_async,
+            create_test_image_cb=create_test_image,
+        )
+    )
+    registry.register(
+        AistudioOcrProvider(
+            model_name=AISTUDIO_OCR_MODEL,
+            model_dir=MODEL_DIR,
+            api_key=API_KEY,
+            api_url=API_URL,
+            recognize_cb=recognize_aistudio_image_async,
+            create_test_image_cb=create_test_image,
+        )
+    )
+    return registry
+
+
+def get_provider_registry() -> ProviderRegistry:
+    global _provider_registry
+    if _provider_registry is None:
+        _provider_registry = build_provider_registry()
+    return _provider_registry
+
+
+def get_active_provider():
+    if USE_AISTUDIO_OCR:
+        return get_provider_registry().get("aistudio")
+    return get_provider_registry().get("local")
 
 
 # ==================== HTTP 接口 ====================
@@ -182,49 +214,28 @@ async def startup_event():
 @app.get("/health")
 async def health():
     """健康检查（RuntimeManager 轮询此接口判断是否就绪）"""
-    resp = {
-        "status": "ok",
-        "model_loaded": model_loaded,
-        "provider": "aistudio" if USE_AISTUDIO_OCR else "local",
-        "model_name": AISTUDIO_OCR_MODEL if USE_AISTUDIO_OCR else MODEL_NAME,
-        "model_dir": MODEL_DIR,
-    }
-    if USE_AISTUDIO_OCR:
-        resp["api_key_configured"] = bool(API_KEY)
-        resp["api_url"] = API_URL
-    return JSONResponse(resp)
+    return JSONResponse(await get_active_provider().health())
 
 
 @app.post("/api/test")
 async def test_ocr(request: dict = None):
     """实际测试 OCR Worker：生成一张测试图片并执行一次识别。"""
     started_at = time.time()
-    payload = request or {}
-    sample_text = payload.get("text") or "OCR TEST 123"
+    provider = get_active_provider()
 
     try:
-        if not model_loaded:
-            raise RuntimeError("OCR 模型尚未加载完成")
-
-        image_bytes = create_test_image(sample_text)
-        text, inference_latency_ms = await recognize_image_async(image_bytes, "text")
-
+        result = await provider.run_test(request)
         return JSONResponse({
             "ok": True,
-            "provider": "aistudio" if USE_AISTUDIO_OCR else "local",
-            "model_name": AISTUDIO_OCR_MODEL if USE_AISTUDIO_OCR else MODEL_NAME,
-            "sample_text": sample_text,
-            "text": text[:500],
-            "inference_latency_ms": inference_latency_ms,
+            **result,
             "latency_ms": int((time.time() - started_at) * 1000),
-            "message": "OCR 识别测试完成",
         })
     except Exception as e:
         return JSONResponse(
             {
                 "ok": False,
-                "provider": "aistudio" if USE_AISTUDIO_OCR else "local",
-                "model_name": AISTUDIO_OCR_MODEL if USE_AISTUDIO_OCR else MODEL_NAME,
+                "provider": provider.name,
+                "model_name": provider.model_name,
                 "latency_ms": int((time.time() - started_at) * 1000),
                 "error": str(e),
             },
@@ -247,35 +258,8 @@ async def ocr_sync(request: dict):
         "error": "错误信息（如果有）"
     }
     """
-    if not model_loaded:
-        return JSONResponse({
-            "success": False,
-            "error": "模型加载中..."
-        }, status_code=503)
-    
-    # 获取图片数据
-    image_data = request.get("image", "")
-    task = request.get("task", "text")
-    
-    if not image_data:
-        return JSONResponse({
-            "success": False,
-            "error": "缺少 image 字段"
-        }, status_code=400)
-    
     try:
-        # 解码 base64 图片
-        image_bytes = base64.b64decode(image_data)
-        
-        # 调用 OCR
-        text, latency_ms = await recognize_image_async(image_bytes, task)
-        
-        return JSONResponse({
-            "success": True,
-            "text": text,
-            "latency_ms": latency_ms
-        })
-            
+        return JSONResponse(await get_active_provider().recognize(request))
     except Exception as e:
         log.error(f"OCR 处理异常: {e}")
         return JSONResponse({
@@ -298,63 +282,7 @@ async def ocr_stream(ws: WebSocket):
         { "status": "success", "text": "识别结果", "latency_ms": 1234 }
         或 { "status": "error", "error": "错误信息" }
     """
-    await ws.accept()
-    log.info("WebSocket 客户端已连接")
-    
-    if not model_loaded:
-        await ws.send_json({
-            "status": "loading",
-            "message": "模型加载中..."
-        })
-        while not model_loaded:
-            await asyncio.sleep(0.5)
-    
-    await ws.send_json({
-        "status": "ready",
-        "message": "OCR 服务已就绪"
-    })
-    
-    try:
-        while True:
-            data = await ws.receive_json()
-            
-            image_data = data.get("image", "")
-            task = data.get("task", "text")
-            
-            if not image_data:
-                await ws.send_json({
-                    "status": "error",
-                    "error": "缺少 image 字段"
-                })
-                continue
-            
-            await ws.send_json({
-                "status": "processing",
-                "message": "正在识别..."
-            })
-            
-            try:
-                # 解码 base64 图片
-                image_bytes = base64.b64decode(image_data)
-                
-                # 调用 OCR
-                text, latency_ms = await recognize_image_async(image_bytes, task)
-                
-                await ws.send_json({
-                    "status": "success",
-                    "text": text,
-                    "latency_ms": latency_ms
-                })
-                    
-            except Exception as e:
-                log.error(f"OCR 处理异常: {e}")
-                await ws.send_json({
-                    "status": "error",
-                    "error": str(e)
-                })
-    
-    except (WebSocketDisconnect, Exception) as e:
-        log.info(f"WebSocket 断开: {type(e).__name__}")
+    await get_active_provider().handle_ws(ws)
 
 
 # ==================== OCR 处理 ====================
@@ -468,7 +396,7 @@ def do_aistudio_ocr(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
     raise RuntimeError(last_error)
 
 
-def do_recognize(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
+def do_local_recognize(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
     """
     同步识别，返回 (文本, 推理耗时ms)
     
@@ -479,9 +407,6 @@ def do_recognize(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
     Returns:
         (识别文本, 推理耗时ms)
     """
-    if USE_AISTUDIO_OCR:
-        return do_aistudio_ocr(image_bytes, task)
-
     if not ocr_model or not ocr_processor:
         return "", 0
     
@@ -535,9 +460,28 @@ def do_recognize(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
 
 
 async def recognize_image_async(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
-    """异步版本：在线程池中执行识别"""
+    """兼容旧调用的统一异步识别入口。"""
+    if USE_AISTUDIO_OCR:
+        return await recognize_aistudio_image_async(image_bytes, task)
+    return await recognize_local_image_async(image_bytes, task)
+
+
+async def recognize_local_image_async(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
+    """本地 OCR 异步版本：在线程池中执行识别"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, do_recognize, image_bytes, task)
+    return await loop.run_in_executor(None, do_local_recognize, image_bytes, task)
+
+
+async def recognize_aistudio_image_async(image_bytes: bytes, task: str = "text") -> tuple[str, int]:
+    """AI Studio OCR 异步版本：在线程池中执行识别"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, do_aistudio_ocr, image_bytes, task)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时加载当前 provider（在线程池中执行，不阻塞事件循环）"""
+    await get_active_provider().startup()
 
 
 # ==================== 启动 ====================
