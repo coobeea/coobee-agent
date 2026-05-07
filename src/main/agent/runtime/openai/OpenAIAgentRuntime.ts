@@ -101,8 +101,7 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
       compressionOpts.contextWindowSize = runtimeOptions.compaction.contextWindowSize;
     if (runtimeOptions.compaction?.thresholdRatio != null)
       compressionOpts.thresholdRatio = runtimeOptions.compaction.thresholdRatio;
-    if (runtimeOptions.compaction?.keepRatio != null)
-      compressionOpts.keepRatio = runtimeOptions.compaction.keepRatio;
+    if (runtimeOptions.compaction?.keepRatio != null) compressionOpts.keepRatio = runtimeOptions.compaction.keepRatio;
     if (runtimeOptions.compaction?.minMessageCount != null)
       compressionOpts.minMessageCount = runtimeOptions.compaction.minMessageCount;
     if (runtimeOptions.compaction?.debug != null) compressionOpts.debug = runtimeOptions.compaction.debug;
@@ -705,52 +704,78 @@ export class OpenAIAgentRuntime extends AbstractAgentRuntime {
     const sandboxContext = options.sandboxContext;
 
     return defs.map((def) => {
+      type NonStrictJsonSchema = {
+        type: 'object';
+        properties: Record<string, unknown>;
+        required: string[];
+        additionalProperties: true;
+        [key: string]: unknown;
+      };
       // Zod .optional() without .nullable() 不兼容 OpenAI Structured Outputs (strict: true)。
       // 使用 strict: false + JSON Schema 绕过此限制。
-      let jsonSchema: Record<string, unknown> | undefined;
+      let jsonSchema: NonStrictJsonSchema | undefined;
       if (def.parameters) {
         try {
-          jsonSchema = zodToJsonSchema(def.parameters, { target: 'openApi3_1' }) as Record<string, unknown>;
+          const rawSchema = zodToJsonSchema(def.parameters as unknown as Parameters<typeof zodToJsonSchema>[0], {
+            target: 'openApi3'
+          }) as Record<string, unknown>;
+          const rawRequired = rawSchema.required;
+          jsonSchema = {
+            ...rawSchema,
+            type: 'object',
+            properties:
+              rawSchema.properties && typeof rawSchema.properties === 'object'
+                ? (rawSchema.properties as Record<string, unknown>)
+                : {},
+            required: Array.isArray(rawRequired)
+              ? rawRequired.filter((item): item is string => typeof item === 'string')
+              : [],
+            additionalProperties: true
+          };
         } catch {
           // 回退：直接传 Zod schema（strict: true），可能在部分工具上报错
         }
       }
 
-      const toolOptions = jsonSchema
-        ? {
-            name: def.name,
-            description: def.description,
-            parameters: jsonSchema,
-            strict: false as const
-          }
-        : {
-            name: def.name,
-            description: def.description,
-            parameters: def.parameters
-          };
+      const execute = async (
+        params: unknown,
+        _context?: unknown,
+        details?: { toolCall?: { callId?: string } }
+      ): Promise<string> => {
+        // 从 SDK 的 details.toolCall.callId 获取工具调用 ID
+        const callId: string | undefined = details?.toolCall?.callId;
+        // 使用共享管线：hook + policy + execute + post-hooks
+        const { executeToolPipeline } = await import('../shared/ToolExecutionPipeline');
+        const result = await executeToolPipeline(def, params as Record<string, unknown>, {
+          sandboxContext,
+          onUpdate: (update) => {
+            // 工具增量输出也回到 yield 链路，由 AgentExecutor 统一广播和持久化。
+            pendingRuntimeChunks.push({
+              type: 'tool:delta',
+              content: update.content,
+              data: { callId, details }
+            });
+          },
+          signal
+        });
+        return result.resultText;
+      };
+
+      if (jsonSchema) {
+        return tool({
+          name: def.name,
+          description: def.description,
+          parameters: jsonSchema,
+          strict: false,
+          execute
+        } as unknown as Parameters<typeof tool>[0]);
+      }
 
       return tool({
-        ...toolOptions,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (params: any, _context?: any, details?: any) => {
-          // 从 SDK 的 details.toolCall.callId 获取工具调用 ID
-          const callId: string | undefined = details?.toolCall?.callId;
-          // 使用共享管线：hook + policy + execute + post-hooks
-          const { executeToolPipeline } = await import('../shared/ToolExecutionPipeline');
-          const result = await executeToolPipeline(def, params as Record<string, unknown>, {
-            sandboxContext,
-            onUpdate: (update) => {
-              // 工具增量输出也回到 yield 链路，由 AgentExecutor 统一广播和持久化。
-              pendingRuntimeChunks.push({
-                type: 'tool:delta',
-                content: update.content,
-                data: { callId, details }
-              });
-            },
-            signal
-          });
-          return result.resultText;
-        }
+        name: def.name,
+        description: def.description,
+        parameters: def.parameters,
+        execute
       });
     });
   }
