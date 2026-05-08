@@ -311,22 +311,23 @@
     },
     models: [
       {
-        id: 'deepseek-chat',
-        name: 'DeepSeek Chat',
-        contextWindow: 128000,
-        maxInputTokens: 128000,
-        maxOutputTokens: 8192,
+        id: 'deepseek-v4-flash',
+        name: 'DeepSeek-V4-Flash',
+        contextWindow: 1000000,
+        maxInputTokens: 1000000,
+        maxOutputTokens: 100000,
         functionCalling: true,
-        features: ['上下文128k', '输出8k', '工具调用']
+        features: ['上下文1M', '输出100k', '工具调用', '极速']
       },
       {
-        id: 'deepseek-reasoner',
-        name: 'DeepSeek Reasoner',
-        contextWindow: 128000,
-        maxInputTokens: 128000,
-        maxOutputTokens: 65536,
+        id: 'deepseek-v4-pro',
+        name: 'DeepSeek-V4-Pro',
+        contextWindow: 1000000,
+        maxInputTokens: 1000000,
+        maxOutputTokens: 100000,
         reasoning: true,
-        features: ['上下文128k', '输出64k', '深度推理']
+        functionCalling: true,
+        features: ['上下文1M', '输出100k', '深度推理', '工具调用']
       }
     ]
   },
