@@ -105,7 +105,32 @@ function copyConfigAssetsPlugin(): Plugin {
 
 export default defineConfig({
   main: {
-    plugins: [copyLibsPlugin(), copyWasmAssetsPlugin(), copyConfigAssetsPlugin()],
+    plugins: [
+      {
+        name: 'rewrite-jiti-static',
+        enforce: 'pre' as const,
+        resolveId(source) {
+          if (source === 'jiti/static') {
+            return 'jiti';
+          }
+
+          return undefined;
+        },
+        renderChunk(code) {
+          if (!code.includes('jiti/static')) {
+            return null;
+          }
+
+          return {
+            code: code.replace(/(['"])jiti\/static\1/g, '$1jiti$1'),
+            map: null
+          };
+        }
+      },
+      copyLibsPlugin(),
+      copyWasmAssetsPlugin(),
+      copyConfigAssetsPlugin()
+    ],
     resolve: {
       alias: {
         '@': resolve('src/main/'),

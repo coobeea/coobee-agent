@@ -18,8 +18,6 @@ declare module 'vue' {
     BaseButton: typeof import('./../components/Form/BaseButton.vue')['default']
     BlockAudio: typeof import('./../components/chat/blocks/BlockAudio.vue')['default']
     BlockCompression: typeof import('./../components/chat/blocks/BlockCompression.vue')['default']
-    BlockDelegate: typeof import('./../components/chat/blocks/BlockDelegate.vue')['default']
-    BlockQuality: typeof import('./../components/chat/blocks/BlockQuality.vue')['default']
     BlockStats: typeof import('./../components/chat/blocks/BlockStats.vue')['default']
     BlockText: typeof import('./../components/chat/blocks/BlockText.vue')['default']
     BlockThinking: typeof import('./../components/chat/blocks/BlockThinking.vue')['default']
