@@ -15,7 +15,7 @@
  */
 
 import { z } from 'zod';
-import type { ToolDefinition as PiToolDefinition } from '@mariozechner/pi-coding-agent';
+import type { ToolDefinition as PiToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '../../tools/types';
 import type { ToolExecutionContext } from '../../tools/types';
 import { executeToolPipeline } from '../shared/ToolExecutionPipeline';

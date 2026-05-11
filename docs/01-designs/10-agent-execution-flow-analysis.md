@@ -51,7 +51,7 @@
 系统目前支持两种底层运行时，它们都继承自 `AbstractAgentRuntime`。
 
 ### 1. PiMonoAgentRuntime (`piMono`)
-- **定位**：高级代码 Agent 引擎，基于 `@mariozechner/pi-coding-agent` SDK。
+- **定位**：高级代码 Agent 引擎，基于 `@earendil-works/pi-coding-agent` SDK。
 - **特点**：
   - **自定义模型对象**：手动构造 `openai-completions` 兼容的 Model 对象，支持任意 OpenAI 兼容的 API（如 DashScope、DeepSeek）。
   - **高级事件流**：支持独立的 `thinking_delta`（思考流）和 `tool_execution_update`（工具执行进度）。

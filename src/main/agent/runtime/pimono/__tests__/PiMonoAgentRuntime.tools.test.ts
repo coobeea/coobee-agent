@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CreateAgentSessionOptions, ToolDefinition as PiToolDefinition } from '@mariozechner/pi-coding-agent';
+import type { CreateAgentSessionOptions, ToolDefinition as PiToolDefinition } from '@earendil-works/pi-coding-agent';
 import { applyPiMonoCustomTools } from '../PiMonoAgentRuntime';
 
 describe('applyPiMonoCustomTools', () => {

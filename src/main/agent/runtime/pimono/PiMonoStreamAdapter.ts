@@ -15,7 +15,7 @@
  * @module runtime/pimono/PiMonoStreamAdapter
  */
 
-import type { AgentSession, AgentSessionEvent } from '@mariozechner/pi-coding-agent';
+import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import type { AgentStreamChunk, AgentExecutionResult } from '../types';
 
 // ========== Types ==========

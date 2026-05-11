@@ -29,13 +29,13 @@
  * - types.ts                — 类型定义
  */
 
-import type { Model } from '@mariozechner/pi-ai';
+import type { Model } from '@earendil-works/pi-ai';
 import type {
   AgentSession,
   CreateAgentSessionOptions,
   ToolDefinition as PiToolDefinition,
   ResourceLoader
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import {
   AuthStorage,
   createAgentSession,
@@ -44,7 +44,7 @@ import {
   ModelRegistry,
   SessionManager,
   SettingsManager
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import { AbstractAgentRuntime, createRuntimeLogger } from '../AbstractAgentRuntime';
 import type { AgentRuntimeOptions, AgentExecutionResult, AgentStreamChunk } from '../types';
 import { ChunkQueue } from './ChunkQueue';

@@ -128,7 +128,7 @@ export default defineConfig({
     build: {
       // ESM-only 的包从自动外部化中排除，强制打包进 bundle
       externalizeDeps: {
-        exclude: ['@mariozechner/pi-coding-agent', '@mariozechner/pi-ai', 'ws']
+        exclude: ['@earendil-works/pi-coding-agent', '@earendil-works/pi-ai', 'ws']
       },
       rollupOptions: {
         // 原生模块标记为外部依赖
