@@ -34,7 +34,7 @@ const SUMMARY_INSTRUCTIONS = `总结以下对话的关键信息，包括：用�
 
 export class SessionCompressor {
   private readonly options: Omit<Required<SessionCompressionOptions>, 'summaryModel' | 'onEvent'> & {
-    summaryModel?: Model;
+    summaryModel?: string | Model;
     onEvent?: (type: 'compression:start' | 'compression:done', data: Record<string, unknown>) => void;
   };
 
@@ -57,7 +57,7 @@ export class SessionCompressor {
    * @param model 默认模型名称（当 summaryModel 未配置时使用）
    * @returns 压缩结果
    */
-  async compressIfNeeded(session: FileSession, model: Model): Promise<CompressionResult> {
+  async compressIfNeeded(session: FileSession, model: string | Model): Promise<CompressionResult> {
     if (!this.options.enabled) {
       return { compressed: false };
     }
@@ -128,7 +128,7 @@ export class SessionCompressor {
     session: FileSession,
     unsummarized: SessionItem[],
     lastSummary: SessionItem | undefined,
-    model: Model,
+    model: string | Model,
     totalTokens: number,
     _threshold: number
   ): Promise<CompressionResult> {
@@ -243,7 +243,7 @@ export class SessionCompressor {
   /**
    * 调用 LLM 生成总结
    */
-  private async generateSummary(content: string, model: Model): Promise<string> {
+  private async generateSummary(content: string, model: string | Model): Promise<string> {
     const summaryAgent = new Agent({
       name: 'SessionSummarizer',
       instructions: SUMMARY_INSTRUCTIONS,

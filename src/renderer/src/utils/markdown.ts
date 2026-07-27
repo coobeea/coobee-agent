@@ -61,9 +61,11 @@ md.renderer.rules.code_inline = (tokens, idx) => {
 };
 
 // 自定义链接渲染，添加 target="_blank"
-const defaultLinkRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
-  return self.renderToken(tokens, idx, options);
-};
+const defaultLinkRender =
+  md.renderer.rules.link_open ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
 
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const aIndex = tokens[idx].attrIndex('target');
@@ -89,17 +91,52 @@ export function renderMarkdown(markdown: string): string {
     // 使用 DOMPurify 清理 HTML，防止 XSS 攻击
     return DOMPurify.sanitize(html, {
       ALLOWED_TAGS: [
-        'p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre', 'blockquote',
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'ul', 'ol', 'li',
-        'a', 'img',
-        'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'div', 'span',
-        'hr', 'del', 'ins', 'sup', 'sub'
+        'p',
+        'br',
+        'strong',
+        'em',
+        'u',
+        's',
+        'code',
+        'pre',
+        'blockquote',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'ul',
+        'ol',
+        'li',
+        'a',
+        'img',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+        'div',
+        'span',
+        'hr',
+        'del',
+        'ins',
+        'sup',
+        'sub'
       ],
       ALLOWED_ATTR: [
-        'href', 'target', 'rel', 'src', 'alt', 'title', 'class', 'id',
-        'data-language', 'data-code-id', 'data-code'
+        'href',
+        'target',
+        'rel',
+        'src',
+        'alt',
+        'title',
+        'class',
+        'id',
+        'data-language',
+        'data-code-id',
+        'data-code'
       ]
     });
   } catch (error) {
@@ -116,10 +153,10 @@ export function renderMarkdown(markdown: string): string {
 export function getCodeFromElement(codeId: string): string {
   const element = document.getElementById(codeId);
   if (!element) return '';
-  
+
   const encodedCode = element.getAttribute('data-code');
   if (!encodedCode) return '';
-  
+
   try {
     return decodeURIComponent(encodedCode);
   } catch {

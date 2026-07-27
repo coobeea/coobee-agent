@@ -91,7 +91,7 @@ async function handleDelete(agentId: string): Promise<void> {
     return;
   }
   confirmDeleteId.value = null;
-  await agentsStore.deleteAgent(agentId);
+  await agentsStore.removeAgent(agentId);
 }
 
 function cancelDelete(): void {
@@ -113,7 +113,7 @@ function toggleCreateForm(): void {
 async function handleCreate(): Promise<void> {
   if (!newAgent.id.trim() || !newAgent.name.trim() || !newAgent.instructions.trim()) return;
 
-  const ok = await agentsStore.createAgent({
+  const ok = await agentsStore.createNewAgent({
     id: newAgent.id.trim(),
     name: newAgent.name.trim(),
     description: newAgent.description.trim() || newAgent.name.trim(),

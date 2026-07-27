@@ -41,7 +41,7 @@ vi.mock('electron', () => {
 
 import { todoWriteTool, getSessionTodos, clearSessionTodos } from '../todo-write';
 import type { ToolResult, ToolStreamUpdate, ToolExecutionContext } from '../../types';
-import { createTestToolContext } from '../../../testing/TestToolContext';
+import { createTestToolContext } from '../../__tests__/TestToolContext';
 
 // ===== 辅助函数 =====
 

@@ -12,6 +12,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
+import { readLocalFile } from '@/api/workspace';
 
 const props = defineProps<{
   filePath: string;

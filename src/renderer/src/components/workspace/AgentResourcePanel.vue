@@ -57,7 +57,7 @@ async function loadPersonalityFiles(): Promise<void> {
   loadingFiles.value = true;
   try {
     const files = await agentsStore.getPersonalityFiles(props.agentId);
-    personalityFiles.value = files;
+    personalityFiles.value = files ?? {};
   } catch (err) {
     console.error('[AgentResourcePanel] Failed to load personality files:', err);
   } finally {

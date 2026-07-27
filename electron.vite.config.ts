@@ -105,37 +105,14 @@ function copyConfigAssetsPlugin(): Plugin {
 
 export default defineConfig({
   main: {
-    plugins: [
-      {
-        name: 'rewrite-jiti-static',
-        enforce: 'pre' as const,
-        resolveId(source) {
-          if (source === 'jiti/static') {
-            return 'jiti';
-          }
-
-          return undefined;
-        },
-        renderChunk(code) {
-          if (!code.includes('jiti/static')) {
-            return null;
-          }
-
-          return {
-            code: code.replace(/(['"])jiti\/static\1/g, '$1jiti$1'),
-            map: null
-          };
-        }
-      },
-      copyLibsPlugin(),
-      copyWasmAssetsPlugin(),
-      copyConfigAssetsPlugin()
-    ],
+    plugins: [copyLibsPlugin(), copyWasmAssetsPlugin(), copyConfigAssetsPlugin()],
     resolve: {
       alias: {
         '@': resolve('src/main/'),
         '@main': resolve('src/main/'),
-        '@shared': resolve('src/shared')
+        '@shared': resolve('src/shared'),
+        // pi-coding-agent 使用 jiti/static；Rolldown 需指向具体文件
+        'jiti/static': resolve('node_modules/jiti/lib/jiti-static.mjs')
       }
     },
     define: {
@@ -151,15 +128,16 @@ export default defineConfig({
       )
     },
     build: {
-      // ESM-only 的包从自动外部化中排除，强制打包进 bundle
-      externalizeDeps: {
-        exclude: ['@earendil-works/pi-coding-agent', '@earendil-works/pi-ai', 'ws']
-      },
+      // 关闭自动 externalize，避免 ESM-only 的 pi 包在运行时被 require() 加载失败
+      externalizeDeps: false,
       rollupOptions: {
         // 原生模块标记为外部依赖
         external: [
           'better-sqlite3-multiple-ciphers',
           '@anthropic-ai/claude-agent-sdk',
+          '@duckdb/node-api',
+          '@duckdb/node-bindings',
+          /^@duckdb\/node-bindings-/,
           'fs-ext',
           'node-pty',
           'electron',
@@ -172,8 +150,7 @@ export default defineConfig({
           'vitest'
         ],
         output: {
-          inlineDynamicImports: true,
-          manualChunks: undefined // 禁用自动代码分割
+          codeSplitting: false
         }
       }
     }

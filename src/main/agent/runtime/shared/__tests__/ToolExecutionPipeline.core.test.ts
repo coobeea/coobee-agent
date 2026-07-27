@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { executeToolPipeline } from '../ToolExecutionPipeline';
-import { createTestToolContext } from '../../../testing/TestToolContext';
+import { createTestToolContext } from '../../../tools/__tests__/TestToolContext';
 import type { ToolDefinition } from '../../../tools/types';
 import { ToolCategory } from '../../../tools/types';
 import { z } from 'zod';

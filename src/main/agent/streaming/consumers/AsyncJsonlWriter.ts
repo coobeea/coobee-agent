@@ -110,7 +110,7 @@ class JsonlWriteWorkerBridge {
 
     const worker = new Worker(JSONL_WRITE_WORKER_SCRIPT, { eval: true });
     worker.on('message', (message: WorkerResultMessage) => this.handleMessage(message));
-    worker.on('error', (err) => this.handleWorkerError(err));
+    worker.on('error', (err: Error) => this.handleWorkerError(err));
     worker.on('exit', (code) => {
       this.worker = undefined;
       if (code !== 0) {

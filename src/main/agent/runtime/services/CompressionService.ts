@@ -12,6 +12,7 @@ import { createLogger } from '@main/common/logger';
 import { SessionCompressor } from '../openai/SessionCompressor';
 
 const log = createLogger('CompressionService');
+import type { Model } from '@openai/agents';
 import type { FileSession } from '../openai/FileSession';
 import type { CompressionResult } from '../openai/types';
 import type { AgentStreamChunk } from '../types';
@@ -22,7 +23,7 @@ export interface CompressionConfig {
   minMessageCount?: number;
   contextWindowSize?: number;
   maxSummaryCount?: number;
-  summaryModel?: string;
+  summaryModel?: string | Model;
   debug?: boolean;
 }
 
@@ -66,10 +67,7 @@ export class CompressionService {
   /**
    * 执行压缩并返回 AgentStreamChunk
    */
-  async compressWithChunks(
-    session: FileSession,
-    model: string
-  ): Promise<AgentStreamChunk[]> {
+  async compressWithChunks(session: FileSession, model: string | Model): Promise<AgentStreamChunk[]> {
     if (!this.compressor) return [];
 
     const chunks: AgentStreamChunk[] = [];
@@ -106,7 +104,7 @@ export class CompressionService {
   /**
    * 强制压缩
    */
-  async forceCompress(session: FileSession, model: string): Promise<CompressionResult> {
+  async forceCompress(session: FileSession, model: string | Model): Promise<CompressionResult> {
     const forceCompressor = new SessionCompressor({
       enabled: true,
       minMessageCount: 2,

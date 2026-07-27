@@ -35,7 +35,7 @@ vi.mock('@main/common/env', () => ({
 import { searchTool } from '../builtin/search';
 import { globTool } from '../builtin/glob';
 import { execTool } from '../builtin/exec';
-import { createTestToolContext } from '../../testing/TestToolContext';
+import { createTestToolContext } from './TestToolContext';
 
 // ========== 辅助函数 ==========
 

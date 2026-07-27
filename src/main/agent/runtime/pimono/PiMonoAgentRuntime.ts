@@ -37,11 +37,10 @@ import type {
   ResourceLoader
 } from '@earendil-works/pi-coding-agent';
 import {
-  AuthStorage,
   createAgentSession,
   createExtensionRuntime,
   createSyntheticSourceInfo,
-  ModelRegistry,
+  ModelRuntime,
   SessionManager,
   SettingsManager
 } from '@earendil-works/pi-coding-agent';
@@ -180,10 +179,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
         : createOpenAICompatModel(options.provider, modelName, baseURL, options.modelMeta);
 
     // 2. 认证配置
-    //    通过 AuthStorage 注入 API key，使用自定义 provider 名称
-    //    新版本使用静态工厂方法 AuthStorage.inMemory() 创建实例
-    const authStorage = this.createAuthStorage(options);
-    const modelRegistry = this.createModelRegistry(authStorage, options);
+    const modelRuntime = await this.createModelRuntime(options);
     const sessionManager = await this.createSessionManager(cwd, options);
     const settingsManager = this.createSettingsManager(options);
     const { resourceLoader, piSkills } = this.createResourceLoader(options);
@@ -192,8 +188,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       cwd,
       model,
       thinkingLevel,
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       sessionManager,
       settingsManager,
       resourceLoader,
@@ -295,9 +290,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
           if (eventQueue) {
             await eventQueue;
           }
-          log.info(
-            `[PiMonoRuntime] _agentEventQueue drained, isCompacting: ${piSession.isCompacting}`
-          );
+          log.info(`[PiMonoRuntime] _agentEventQueue drained, isCompacting: ${piSession.isCompacting}`);
 
           // 若 compaction 已触发（异步 LLM 调用），等待其完成
           const pollInterval = 500;
@@ -376,14 +369,10 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     return options.workspaceRoot;
   }
 
-  private createAuthStorage(options: AgentRuntimeOptions): AuthStorage {
-    const authStorage = AuthStorage.inMemory();
-    authStorage.setRuntimeApiKey(options.provider, options.apiKey);
-    return authStorage;
-  }
-
-  private createModelRegistry(authStorage: AuthStorage, _options: AgentRuntimeOptions): ModelRegistry {
-    return ModelRegistry.inMemory(authStorage);
+  private async createModelRuntime(options: AgentRuntimeOptions): Promise<ModelRuntime> {
+    const modelRuntime = await ModelRuntime.create({ modelsPath: null });
+    await modelRuntime.setRuntimeApiKey(options.provider, options.apiKey);
+    return modelRuntime;
   }
 
   private async createSessionManager(cwd: string, options: AgentRuntimeOptions): Promise<SessionManager> {
@@ -482,8 +471,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
     cwd: string;
     model: Model<'openai-completions' | 'anthropic-messages'>;
     thinkingLevel: string;
-    authStorage: AuthStorage;
-    modelRegistry: ModelRegistry;
+    modelRuntime: ModelRuntime;
     sessionManager: SessionManager;
     settingsManager: SettingsManager;
     resourceLoader: ResourceLoader;
@@ -493,8 +481,7 @@ export class PiMonoAgentRuntime extends AbstractAgentRuntime {
       cwd: args.cwd,
       model: args.model,
       thinkingLevel: args.thinkingLevel as CreateAgentSessionOptions['thinkingLevel'],
-      authStorage: args.authStorage,
-      modelRegistry: args.modelRegistry,
+      modelRuntime: args.modelRuntime,
       sessionManager: args.sessionManager,
       settingsManager: args.settingsManager,
       resourceLoader: args.resourceLoader

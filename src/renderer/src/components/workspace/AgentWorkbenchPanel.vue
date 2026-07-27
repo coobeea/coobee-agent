@@ -42,11 +42,11 @@ async function loadPersonalityFiles(): Promise<void> {
   loadingFiles.value = true;
   try {
     const files = await agentsStore.getPersonalityFiles(props.agentId);
-    personalityFiles.value = files;
+    personalityFiles.value = files ?? {};
 
     // 如果当前选中的是人格文件，更新内容
     if (selectedResource.value.type === 'personality' && selectedResource.value.name) {
-      currentFileContent.value = files[selectedResource.value.name] || '';
+      currentFileContent.value = personalityFiles.value[selectedResource.value.name] || '';
     }
   } catch (err) {
     console.error('[AgentWorkbenchPanel] Failed to load personality files:', err);

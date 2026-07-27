@@ -43,7 +43,7 @@ async function loadPDF(): Promise<void> {
   error.value = null;
 
   try {
-    const loadingTask = pdfjsLib.getDocument(props.filePath);
+    const loadingTask = pdfjsLib.getDocument({ url: props.filePath });
     const pdf = await loadingTask.promise;
 
     numPages.value = pdf.numPages;

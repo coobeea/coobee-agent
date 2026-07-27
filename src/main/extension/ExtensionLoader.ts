@@ -359,7 +359,7 @@ export class ExtensionLoader {
    */
   async loadWorkspaceExtensions(threadId: string, workspaceDir?: string): Promise<void> {
     const { resolveThreadRuntimeLayoutSync } = await import('@main/agent/AgentEnv');
-    const workspace = workspaceDir || resolveThreadRuntimeLayoutSync(threadId).agentProjectPath;
+    const workspace = workspaceDir || resolveThreadRuntimeLayoutSync(threadId).projectDir;
     const workspaceExtDir = path.join(workspace, 'extensions');
 
     // 如果目录不存在，直接返回

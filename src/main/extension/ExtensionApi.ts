@@ -121,11 +121,11 @@ function createExtensionServices(): ExtensionServices {
     paths: {
       async getProject(sessionId) {
         const { resolveThreadRuntimeLayoutSync } = await import('../agent/AgentEnv');
-        return resolveThreadRuntimeLayoutSync(sessionId).agentProjectPath;
+        return resolveThreadRuntimeLayoutSync(sessionId).projectDir;
       },
       async getWorkspace(sessionId) {
         const { resolveThreadRuntimeLayoutSync } = await import('../agent/AgentEnv');
-        return resolveThreadRuntimeLayoutSync(sessionId).agentProjectPath;
+        return resolveThreadRuntimeLayoutSync(sessionId).projectDir;
       },
       async getAgentHome(agentId) {
         // 这里先保持与主运行时一致的 home 路径来源；AgentsConfig 仍在单独收敛中。

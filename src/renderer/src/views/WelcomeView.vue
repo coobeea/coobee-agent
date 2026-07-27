@@ -109,11 +109,6 @@ function isProviderSelected(providerId: string): boolean {
   return selectedProviderIds.value.includes(providerId);
 }
 
-// 检查供应商是否已配置
-function isProviderConfigured(providerId: string): boolean {
-  return configuredProviderIds.value.includes(providerId);
-}
-
 // 测试当前供应商连接
 async function handleTestProvider(): Promise<void> {
   if (!currentProvider.value) return;

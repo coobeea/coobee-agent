@@ -1,6 +1,6 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentStreamChunk } from '../../types';
+import type { AgentStreamChunk, LlmDoneData } from '../../types';
 import { setupEventSubscription } from '../PiMonoStreamAdapter';
 
 const log = {
@@ -46,7 +46,8 @@ describe('PiMonoStreamAdapter', () => {
     unsubscribe();
 
     const done = chunks.find((chunk) => chunk.type === 'llm:done');
-    expect(done?.data?.usage).toMatchObject({
+    const doneData = done?.data as LlmDoneData | undefined;
+    expect(doneData?.usage).toMatchObject({
       inputTokens: 120,
       outputTokens: 30,
       totalTokens: 150,

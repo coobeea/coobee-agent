@@ -87,7 +87,7 @@ export interface SessionCompressionOptions {
   /** 触发压缩的最小消息数（默认 10，低于此数不压缩） */
   minMessageCount?: number;
   /** 用于生成总结的模型（不传则使用 Agent 自身的模型） */
-  summaryModel?: Model;
+  summaryModel?: string | Model;
   /** 是否调试模式 */
   debug?: boolean;
   /**
